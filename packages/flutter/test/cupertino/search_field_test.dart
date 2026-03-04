@@ -9,7 +9,7 @@ void main() {
   testWidgets('default search field has a border radius', (WidgetTester tester) async {
     await tester.pumpWidget(const CupertinoApp(home: Center(child: CupertinoSearchTextField())));
 
-    final BoxDecoration decoration =
+    final decoration =
         tester
                 .widget<DecoratedBox>(
                   find.descendant(
@@ -34,7 +34,7 @@ void main() {
       ),
     );
 
-    final BoxDecoration decoration =
+    final decoration =
         tester
                 .widget<DecoratedBox>(
                   find.descendant(
@@ -59,7 +59,7 @@ void main() {
       ),
     );
 
-    final BoxDecoration decoration =
+    final decoration =
         tester
                 .widget<DecoratedBox>(
                   find.descendant(
@@ -74,16 +74,18 @@ void main() {
   });
 
   testWidgets('text entries are padded by default', (WidgetTester tester) async {
-    final TextEditingController controller = TextEditingController(text: 'initial');
+    final controller = TextEditingController(text: 'initial');
     addTearDown(controller.dispose);
     await tester.pumpWidget(
-      CupertinoApp(home: Center(child: CupertinoSearchTextField(controller: controller))),
+      CupertinoApp(
+        home: Center(child: CupertinoSearchTextField(controller: controller)),
+      ),
     );
 
     expect(
       tester.getTopLeft(find.text('initial')) -
           tester.getTopLeft(find.byType(CupertinoSearchTextField)),
-      const Offset(31.5, 8.0),
+      const Offset(31.5, 9.5),
     );
   });
 
@@ -102,11 +104,13 @@ void main() {
   });
 
   testWidgets('can control text content via controller', (WidgetTester tester) async {
-    final TextEditingController controller = TextEditingController();
+    final controller = TextEditingController();
     addTearDown(controller.dispose);
 
     await tester.pumpWidget(
-      CupertinoApp(home: Center(child: CupertinoSearchTextField(controller: controller))),
+      CupertinoApp(
+        home: Center(child: CupertinoSearchTextField(controller: controller)),
+      ),
     );
 
     controller.text = 'controller text';
@@ -129,7 +133,7 @@ void main() {
     );
 
     Text placeholder = tester.widget(find.text('Search'));
-    expect(placeholder.style!.color!.value, CupertinoColors.systemGrey.darkColor.value);
+    expect(placeholder.style!.color!.value, CupertinoColors.secondaryLabel.darkColor.value);
 
     await tester.pumpAndSettle();
 
@@ -141,7 +145,7 @@ void main() {
     );
 
     placeholder = tester.widget(find.text('Search'));
-    expect(placeholder.style!.color!.value, CupertinoColors.systemGrey.color.value);
+    expect(placeholder.style!.color!.value, CupertinoColors.secondaryLabel.color.value);
   });
 
   testWidgets("placeholderStyle modifies placeholder's style and doesn't affect text's style", (
@@ -172,11 +176,13 @@ void main() {
   });
 
   testWidgets('prefix widget is in front of the text', (WidgetTester tester) async {
-    final TextEditingController controller = TextEditingController(text: 'input');
+    final controller = TextEditingController(text: 'input');
     addTearDown(controller.dispose);
 
     await tester.pumpWidget(
-      CupertinoApp(home: Center(child: CupertinoSearchTextField(controller: controller))),
+      CupertinoApp(
+        home: Center(child: CupertinoSearchTextField(controller: controller)),
+      ),
     );
 
     expect(
@@ -193,11 +199,13 @@ void main() {
   });
 
   testWidgets('suffix widget is after the text', (WidgetTester tester) async {
-    final TextEditingController controller = TextEditingController(text: 'Hi');
+    final controller = TextEditingController(text: 'Hi');
     addTearDown(controller.dispose);
 
     await tester.pumpWidget(
-      CupertinoApp(home: Center(child: CupertinoSearchTextField(controller: controller))),
+      CupertinoApp(
+        home: Center(child: CupertinoSearchTextField(controller: controller)),
+      ),
     );
 
     expect(
@@ -214,7 +222,7 @@ void main() {
   });
 
   testWidgets('prefix widget visibility', (WidgetTester tester) async {
-    const Key prefixIcon = Key('prefix');
+    const prefixIcon = Key('prefix');
 
     await tester.pumpWidget(
       const CupertinoApp(
@@ -253,8 +261,34 @@ void main() {
     expect(find.byIcon(CupertinoIcons.xmark_circle_fill), findsNothing);
   });
 
+  testWidgets('Default prefix and suffix insets are aligned', (WidgetTester tester) async {
+    await tester.pumpWidget(const CupertinoApp(home: Center(child: CupertinoSearchTextField())));
+
+    expect(find.byIcon(CupertinoIcons.search), findsOneWidget);
+    expect(find.byIcon(CupertinoIcons.xmark_circle_fill), findsNothing);
+
+    await tester.enterText(find.byType(CupertinoSearchTextField), 'text input');
+    await tester.pump();
+
+    expect(find.text('text input'), findsOneWidget);
+    expect(find.byIcon(CupertinoIcons.search), findsOneWidget);
+    expect(find.byIcon(CupertinoIcons.xmark_circle_fill), findsOneWidget);
+
+    expect(tester.getTopLeft(find.byIcon(CupertinoIcons.search)), const Offset(6.0, 290.0));
+    expect(
+      tester.getTopLeft(find.byIcon(CupertinoIcons.xmark_circle_fill)),
+      const Offset(775.0, 290.0),
+    );
+
+    expect(tester.getBottomRight(find.byIcon(CupertinoIcons.search)), const Offset(26.0, 310.0));
+    expect(
+      tester.getBottomRight(find.byIcon(CupertinoIcons.xmark_circle_fill)),
+      const Offset(795.0, 310.0),
+    );
+  });
+
   testWidgets('clear button shows with right visibility mode', (WidgetTester tester) async {
-    TextEditingController controller = TextEditingController();
+    var controller = TextEditingController();
     addTearDown(controller.dispose);
     await tester.pumpWidget(
       CupertinoApp(
@@ -297,10 +331,12 @@ void main() {
   });
 
   testWidgets('clear button removes text', (WidgetTester tester) async {
-    final TextEditingController controller = TextEditingController();
+    final controller = TextEditingController();
     addTearDown(controller.dispose);
     await tester.pumpWidget(
-      CupertinoApp(home: Center(child: CupertinoSearchTextField(controller: controller))),
+      CupertinoApp(
+        home: Center(child: CupertinoSearchTextField(controller: controller)),
+      ),
     );
 
     controller.text = 'text entry';
@@ -318,8 +354,8 @@ void main() {
   testWidgets('tapping clear button also calls onChanged when text not empty', (
     WidgetTester tester,
   ) async {
-    String value = 'text entry';
-    final TextEditingController controller = TextEditingController();
+    var value = 'text entry';
+    final controller = TextEditingController();
     addTearDown(controller.dispose);
     await tester.pumpWidget(
       CupertinoApp(
@@ -380,11 +416,13 @@ void main() {
   testWidgets('custom suffix onTap overrides default clearing behavior', (
     WidgetTester tester,
   ) async {
-    final TextEditingController controller = TextEditingController(text: 'Text');
+    final controller = TextEditingController(text: 'Text');
     addTearDown(controller.dispose);
     await tester.pumpWidget(
       CupertinoApp(
-        home: Center(child: CupertinoSearchTextField(controller: controller, onSuffixTap: () {})),
+        home: Center(
+          child: CupertinoSearchTextField(controller: controller, onSuffixTap: () {}),
+        ),
       ),
     );
 
@@ -398,7 +436,7 @@ void main() {
   });
 
   testWidgets('onTap is properly forwarded to the inner text field', (WidgetTester tester) async {
-    int onTapCallCount = 0;
+    var onTapCallCount = 0;
 
     // onTap can be null.
     await tester.pumpWidget(const CupertinoApp(home: Center(child: CupertinoSearchTextField())));
@@ -451,7 +489,7 @@ void main() {
   });
 
   testWidgets('autofocus:true gives focus to the widget', (WidgetTester tester) async {
-    final FocusNode focusNode = FocusNode();
+    final focusNode = FocusNode();
     addTearDown(focusNode.dispose);
     await tester.pumpWidget(
       CupertinoApp(
@@ -597,7 +635,7 @@ void main() {
     expect(suffixIconFinder, findsOneWidget);
     expect(placeholderFinder, findsOneWidget);
 
-    // Initially, the icons and placeholder text are fully opaque.
+    // Initially, the icons are fully opaque.
     expect(
       tester
           .widget<Opacity>(find.ancestor(of: prefixIconFinder, matching: find.byType(Opacity)))
@@ -610,7 +648,8 @@ void main() {
           .opacity,
       equals(1.0),
     );
-    expect(tester.widget<Text>(placeholderFinder).style?.color?.a, equals(1.0));
+    // The default placeholder color is semi-transparent.
+    expect(tester.widget<Text>(placeholderFinder).style?.color?.a, equals(0.6));
 
     final double searchTextFieldHeight = tester.getSize(searchTextFieldFinder).height;
 
@@ -693,14 +732,13 @@ void main() {
     final Finder searchTextFieldFinder = find.byType(CupertinoSearchTextField);
     expect(searchTextFieldFinder, findsOneWidget);
 
-    final double initialPadding =
-        tester
-            .widget<CupertinoTextField>(
-              find.descendant(of: searchTextFieldFinder, matching: find.byType(CupertinoTextField)),
-            )
-            .padding
-            .resolve(direction)
-            .top;
+    final double initialPadding = tester
+        .widget<CupertinoTextField>(
+          find.descendant(of: searchTextFieldFinder, matching: find.byType(CupertinoTextField)),
+        )
+        .padding
+        .resolve(direction)
+        .top;
     expect(initialPadding, equals(8.0));
 
     final double searchTextFieldHeight = tester.getSize(searchTextFieldFinder).height;
@@ -722,5 +760,145 @@ void main() {
           .top,
       lessThan(initialPadding),
     );
+  });
+
+  testWidgets('Fades and animates insets on scroll if search field starts out collapsed', (
+    WidgetTester tester,
+  ) async {
+    const TextDirection direction = TextDirection.ltr;
+    const double scrollOffset = 200;
+    await tester.pumpWidget(
+      const Directionality(
+        textDirection: direction,
+        child: CupertinoApp(
+          home: CupertinoPageScaffold(
+            child: CustomScrollView(
+              slivers: <Widget>[
+                CupertinoSliverNavigationBar.search(
+                  largeTitle: Text('Large title'),
+                  searchField: CupertinoSearchTextField(),
+                ),
+                SliverToBoxAdapter(child: SizedBox(height: 1000)),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final Finder searchTextFieldFinder = find.byType(CupertinoSearchTextField);
+    expect(searchTextFieldFinder, findsOneWidget);
+
+    final double searchTextFieldHeight = tester.getSize(searchTextFieldFinder).height;
+    await tester.tap(find.widgetWithText(CupertinoSearchTextField, 'Search'), warnIfMissed: false);
+
+    final TestGesture scrollGesture1 = await tester.startGesture(
+      tester.getCenter(find.byType(CustomScrollView)),
+    );
+    await scrollGesture1.moveBy(const Offset(0, -scrollOffset));
+    await scrollGesture1.up();
+    await tester.pumpAndSettle();
+
+    expect(find.text('Cancel'), findsOneWidget);
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+
+    final TestGesture scrollGesture2 = await tester.startGesture(
+      tester.getCenter(find.byType(CustomScrollView)),
+    );
+    await scrollGesture2.moveBy(Offset(0, scrollOffset - searchTextFieldHeight / 2));
+    await scrollGesture2.up();
+    await tester.pump();
+
+    final Finder prefixIconFinder = find.descendant(
+      of: searchTextFieldFinder,
+      matching: find.byIcon(CupertinoIcons.search),
+    );
+
+    // The prefix icon has faded.
+    expect(prefixIconFinder, findsOneWidget);
+    expect(
+      tester
+          .widget<Opacity>(find.ancestor(of: prefixIconFinder, matching: find.byType(Opacity)))
+          .opacity,
+      lessThan(1.0),
+    );
+  });
+
+  testWidgets('Focused search field hides prefix in higher accessibility text scale modes', (
+    WidgetTester tester,
+  ) async {
+    var scaleFactor = 3.0;
+    const iconSize = 10.0;
+    final focusNode = FocusNode();
+    addTearDown(focusNode.dispose);
+    late StateSetter setState;
+
+    await tester.pumpWidget(
+      CupertinoApp(
+        home: StatefulBuilder(
+          builder: (BuildContext context, StateSetter setter) {
+            setState = setter;
+            return MediaQuery.withClampedTextScaling(
+              minScaleFactor: scaleFactor,
+              maxScaleFactor: scaleFactor,
+              child: CupertinoPageScaffold(
+                child: Center(
+                  child: CupertinoSearchTextField(
+                    placeholder: 'Search',
+                    focusNode: focusNode,
+                    prefixIcon: const Icon(CupertinoIcons.add),
+                    suffixIcon: const Icon(CupertinoIcons.xmark),
+                    suffixMode: OverlayVisibilityMode.always,
+                    itemSize: iconSize,
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+
+    final Iterable<RichText> barItems = tester.widgetList<RichText>(
+      find.descendant(of: find.byType(CupertinoSearchTextField), matching: find.byType(RichText)),
+    );
+    expect(barItems.length, greaterThan(0));
+
+    for (final icon in <IconData>[CupertinoIcons.add, CupertinoIcons.xmark]) {
+      expect(tester.getSize(find.byIcon(icon)), Size.square(scaleFactor * iconSize));
+    }
+
+    focusNode.requestFocus();
+    await tester.pumpAndSettle();
+
+    // The prefix icon shrinks at higher accessibility text scale modes.
+    expect(tester.getSize(find.byIcon(CupertinoIcons.add)), Size.zero);
+    expect(tester.getSize(find.byIcon(CupertinoIcons.xmark)), Size.square(scaleFactor * iconSize));
+
+    setState(() {
+      scaleFactor = 2.9;
+    });
+    await tester.pumpAndSettle();
+
+    // Below the threshold, the prefix icon is displayed.
+    for (final icon in <IconData>[CupertinoIcons.add, CupertinoIcons.xmark]) {
+      expect(tester.getSize(find.byIcon(icon)), Size.square(scaleFactor * iconSize));
+    }
+  });
+
+  testWidgets('CupertinoSearchTextField does not crash at zero area', (WidgetTester tester) async {
+    tester.view.physicalSize = Size.zero;
+    final controller = TextEditingController(text: 'X');
+    addTearDown(tester.view.reset);
+    addTearDown(controller.dispose);
+    await tester.pumpWidget(
+      CupertinoApp(
+        home: Center(child: CupertinoSearchTextField(controller: controller)),
+      ),
+    );
+    expect(tester.getSize(find.byType(CupertinoSearchTextField)), Size.zero);
+    controller.selection = const TextSelection.collapsed(offset: 0);
+    await tester.pump();
   });
 }

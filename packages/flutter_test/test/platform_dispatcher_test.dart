@@ -83,6 +83,21 @@ void main() {
     );
   });
 
+  testWidgets('TestPlatformDispatcher can fake supportsShowingSystemContextMenu', (
+    WidgetTester tester,
+  ) async {
+    verifyPropertyFaked<bool>(
+      tester: tester,
+      realValue: PlatformDispatcher.instance.supportsShowingSystemContextMenu,
+      fakeValue: !PlatformDispatcher.instance.supportsShowingSystemContextMenu,
+      propertyRetriever: () =>
+          WidgetsBinding.instance.platformDispatcher.supportsShowingSystemContextMenu,
+      propertyFaker: (TestWidgetsFlutterBinding binding, bool fakeValue) {
+        binding.platformDispatcher.supportsShowingSystemContextMenu = fakeValue;
+      },
+    );
+  });
+
   testWidgets('TestPlatformDispatcher can fake brieflyShowPassword', (WidgetTester tester) async {
     verifyPropertyFaked<bool>(
       tester: tester,
@@ -144,8 +159,9 @@ void main() {
   ) async {
     final Locale originalLocale = PlatformDispatcher.instance.locale;
     final double originalTextScaleFactor = PlatformDispatcher.instance.textScaleFactor;
-    final TestPlatformDispatcher testPlatformDispatcher =
-        retrieveTestBinding(tester).platformDispatcher;
+    final TestPlatformDispatcher testPlatformDispatcher = retrieveTestBinding(
+      tester,
+    ).platformDispatcher;
 
     // Set fake values for window properties.
     testPlatformDispatcher.localeTestValue = const Locale('foobar');
@@ -163,9 +179,9 @@ void main() {
     'TestPlatformDispatcher sends fake locales when WidgetsBindingObserver notifiers are called',
     (WidgetTester tester) async {
       final List<Locale> defaultLocales = WidgetsBinding.instance.platformDispatcher.locales;
-      final TestObserver observer = TestObserver();
+      final observer = TestObserver();
       retrieveTestBinding(tester).addObserver(observer);
-      final List<Locale> expectedValue = <Locale>[const Locale('fake_language_code')];
+      final expectedValue = <Locale>[const Locale('fake_language_code')];
       retrieveTestBinding(tester).platformDispatcher.localesTestValue = expectedValue;
       expect(observer.locales, equals(expectedValue));
       retrieveTestBinding(tester).platformDispatcher.localesTestValue = defaultLocales;
@@ -178,6 +194,20 @@ void main() {
     expect(
       WidgetsBinding.instance.platformDispatcher.view(id: tester.view.viewId),
       same(tester.view),
+    );
+  });
+
+  testWidgets('TestPlatformDispatcher has a working scaleFontSize implementation', (
+    WidgetTester tester,
+  ) async {
+    expect(
+      TestPlatformDispatcher(
+        platformDispatcher: _FakePlatformDispatcher(
+          displays: <Display>[_FakeDisplay(id: 2)],
+          views: <FlutterView>[_FakeFlutterView(display: _FakeDisplay(id: 1))],
+        ),
+      ).scaleFontSize(2.0),
+      2.0,
     );
   });
 
@@ -210,17 +240,15 @@ void main() {
         displays: <Display>[],
         views: <FlutterView>[_FakeFlutterView()],
       );
-      final TestPlatformDispatcher testDispatcher = TestPlatformDispatcher(
-        platformDispatcher: backingDispatcher,
-      );
+      final testDispatcher = TestPlatformDispatcher(platformDispatcher: backingDispatcher);
 
       expect(testDispatcher.views.length, backingDispatcher.views.length);
     });
 
     group('creates TestFlutterViews', () {
       testWidgets('that defaults to the correct devicePixelRatio', (WidgetTester tester) async {
-        const double expectedDpr = 2.5;
-        final TestPlatformDispatcher testDispatcher = TestPlatformDispatcher(
+        const expectedDpr = 2.5;
+        final testDispatcher = TestPlatformDispatcher(
           platformDispatcher: _FakePlatformDispatcher(
             displays: <Display>[],
             views: <FlutterView>[_FakeFlutterView(devicePixelRatio: expectedDpr)],
@@ -231,9 +259,9 @@ void main() {
       });
 
       testWidgets('with working devicePixelRatio setter', (WidgetTester tester) async {
-        const double expectedDpr = 2.5;
+        const expectedDpr = 2.5;
         const double defaultDpr = 4;
-        final TestPlatformDispatcher testDispatcher = TestPlatformDispatcher(
+        final testDispatcher = TestPlatformDispatcher(
           platformDispatcher: _FakePlatformDispatcher(
             displays: <Display>[],
             views: <FlutterView>[_FakeFlutterView(devicePixelRatio: defaultDpr)],
@@ -246,9 +274,9 @@ void main() {
       });
 
       testWidgets('with working resetDevicePixelRatio', (WidgetTester tester) async {
-        const double changedDpr = 2.5;
+        const changedDpr = 2.5;
         const double defaultDpr = 4;
-        final TestPlatformDispatcher testDispatcher = TestPlatformDispatcher(
+        final testDispatcher = TestPlatformDispatcher(
           platformDispatcher: _FakePlatformDispatcher(
             displays: <Display>[],
             views: <FlutterView>[_FakeFlutterView(devicePixelRatio: defaultDpr)],
@@ -314,4 +342,7 @@ class _FakePlatformDispatcher extends Fake implements PlatformDispatcher {
 
   @override
   ViewFocusChangeCallback? onViewFocusChange;
+
+  @override
+  double get textScaleFactor => 1.0;
 }

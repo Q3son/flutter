@@ -10,8 +10,8 @@ import 'package:file_testing/file_testing.dart';
 import 'package:flutter_tools/src/artifacts.dart';
 import 'package:flutter_tools/src/base/file_system.dart';
 import 'package:flutter_tools/src/base/logger.dart';
+import 'package:flutter_tools/src/base/os.dart' show HostPlatform, OperatingSystemUtils;
 import 'package:flutter_tools/src/base/platform.dart';
-import 'package:flutter_tools/src/base/process.dart';
 import 'package:flutter_tools/src/build_info.dart';
 import 'package:flutter_tools/src/build_system/build_system.dart';
 import 'package:flutter_tools/src/cache.dart';
@@ -26,10 +26,11 @@ import 'package:unified_analytics/unified_analytics.dart';
 import '../../src/common.dart';
 import '../../src/context.dart';
 import '../../src/fake_process_manager.dart';
-import '../../src/fake_pub_deps.dart';
 import '../../src/fakes.dart';
+import '../../src/package_config.dart';
 import '../../src/test_build_system.dart';
 import '../../src/test_flutter_command_runner.dart';
+import '../../src/throwing_pub.dart';
 
 class FakeXcodeProjectInterpreterWithProfile extends FakeXcodeProjectInterpreter {
   @override
@@ -40,12 +41,34 @@ class FakeXcodeProjectInterpreterWithProfile extends FakeXcodeProjectInterpreter
   }
 }
 
+class FakeXcodeProjectInterpreterWithBuildSettings extends FakeXcodeProjectInterpreter {
+  FakeXcodeProjectInterpreterWithBuildSettings({this.overrides = const <String, String>{}});
+
+  final Map<String, String> overrides;
+
+  @override
+  Future<XcodeProjectInfo> getInfo(String projectPath, {String? projectFilename}) async {
+    return XcodeProjectInfo(<String>['Runner'], <String>['Debug', 'Release'], <String>[
+      'Runner',
+    ], BufferLogger.test());
+  }
+
+  @override
+  Future<Map<String, String>> getBuildSettings(
+    String projectPath, {
+    XcodeProjectBuildContext? buildContext,
+    Duration timeout = const Duration(minutes: 1),
+  }) async {
+    return <String, String>{...overrides, 'PRODUCT_BUNDLE_IDENTIFIER': 'com.example.test'};
+  }
+}
+
 final Platform macosPlatform = FakePlatform(
   operatingSystem: 'macos',
   environment: <String, String>{'FLUTTER_ROOT': '/', 'HOME': '/'},
 );
 
-final FakePlatform macosPlatformCustomEnv = FakePlatform(
+final macosPlatformCustomEnv = FakePlatform(
   operatingSystem: 'macos',
   environment: <String, String>{'FLUTTER_ROOT': '/', 'HOME': '/'},
 );
@@ -55,10 +78,8 @@ final Platform notMacosPlatform = FakePlatform(environment: <String, String>{'FL
 void main() {
   late MemoryFileSystem fileSystem;
   late FakeProcessManager fakeProcessManager;
-  late ProcessUtils processUtils;
   late BufferLogger logger;
   late XcodeProjectInterpreter xcodeProjectInterpreter;
-  late Artifacts artifacts;
   late FakeAnalytics fakeAnalytics;
 
   setUpAll(() {
@@ -67,10 +88,8 @@ void main() {
 
   setUp(() {
     fileSystem = MemoryFileSystem.test();
-    artifacts = Artifacts.test(fileSystem: fileSystem);
     logger = BufferLogger.test();
     fakeProcessManager = FakeProcessManager.empty();
-    processUtils = ProcessUtils(logger: logger, processManager: fakeProcessManager);
     xcodeProjectInterpreter = FakeXcodeProjectInterpreter();
     fakeAnalytics = getInitializedFakeAnalyticsInstance(
       fs: fileSystem,
@@ -80,13 +99,17 @@ void main() {
 
   // Sets up the minimal mock project files necessary to look like a Flutter project.
   void createCoreMockProjectFiles() {
-    fileSystem.file('pubspec.yaml').createSync();
-    fileSystem.file('.dart_tool/package_config.json').createSync(recursive: true);
+    fileSystem.file('pubspec.yaml').writeAsStringSync('name: my_app');
+    writePackageConfigFiles(directory: fileSystem.currentDirectory, mainLibName: 'my_app');
+
     fileSystem.file(fileSystem.path.join('lib', 'main.dart')).createSync(recursive: true);
   }
 
   // Sets up the minimal mock project files necessary for macOS builds to succeed.
   void createMinimalMockProjectFiles() {
+    fileSystem
+        .directory(fileSystem.path.join('macos', 'Runner.xcodeproj'))
+        .createSync(recursive: true);
     fileSystem
         .directory(fileSystem.path.join('macos', 'Runner.xcworkspace'))
         .createSync(recursive: true);
@@ -100,9 +123,13 @@ void main() {
     bool verbose = false,
     void Function(List<String> command)? onRun,
     List<String>? additionalCommandArguments,
+    String hostPlatformArch = 'x86_64',
   }) {
     final FlutterProject flutterProject = FlutterProject.fromDirectory(fileSystem.currentDirectory);
     final Directory flutterBuildDir = fileSystem.directory(getMacOSBuildDirectory());
+    final destination = configuration == 'Debug'
+        ? 'platform=macOS,arch=$hostPlatformArch'
+        : 'generic/platform=macOS';
     return FakeCommand(
       command: <String>[
         '/usr/bin/env',
@@ -117,12 +144,12 @@ void main() {
         '-derivedDataPath',
         flutterBuildDir.absolute.path,
         '-destination',
-        'platform=macOS',
+        destination,
         'OBJROOT=${fileSystem.path.join(flutterBuildDir.absolute.path, 'Build', 'Intermediates.noindex')}',
         'SYMROOT=${fileSystem.path.join(flutterBuildDir.absolute.path, 'Build', 'Products')}',
         if (verbose) 'VERBOSE_SCRIPT_LOGGING=YES' else '-quiet',
         'COMPILER_INDEX_STORE_ENABLE=NO',
-        if (additionalCommandArguments != null) ...additionalCommandArguments,
+        ...?additionalCommandArguments,
       ],
       stdout: '''
 STDOUT STUFF
@@ -155,13 +182,11 @@ STDERR STUFF
   testUsingContext(
     'macOS build fails when there is no macos project',
     () async {
-      final BuildCommand command = BuildCommand(
-        artifacts: artifacts,
+      final command = BuildCommand(
         androidSdk: FakeAndroidSdk(),
         buildSystem: TestBuildSystem.all(BuildResult(success: true)),
         fileSystem: fileSystem,
         logger: logger,
-        processUtils: processUtils,
         osUtils: FakeOperatingSystemUtils(),
       );
       createCoreMockProjectFiles();
@@ -187,13 +212,11 @@ STDERR STUFF
   testUsingContext(
     'macOS build successfully with renamed .xcodeproj/.xcworkspace files',
     () async {
-      final BuildCommand command = BuildCommand(
-        artifacts: artifacts,
+      final command = BuildCommand(
         androidSdk: FakeAndroidSdk(),
         buildSystem: TestBuildSystem.all(BuildResult(success: true)),
         fileSystem: fileSystem,
         logger: logger,
-        processUtils: processUtils,
         osUtils: FakeOperatingSystemUtils(),
       );
 
@@ -219,8 +242,9 @@ STDERR STUFF
     overrides: <Type, Generator>{
       Platform: () => macosPlatform,
       FileSystem: () => fileSystem,
+      OperatingSystemUtils: () => FakeOperatingSystemUtils(hostPlatform: HostPlatform.darwin_x64),
       ProcessManager: () => FakeProcessManager.any(),
-      Pub: FakePubWithPrimedDeps.new,
+      Pub: ThrowingPub.new,
       FeatureFlags: () => TestFeatureFlags(isMacOSEnabled: true),
       Analytics: () => fakeAnalytics,
     },
@@ -229,13 +253,11 @@ STDERR STUFF
   testUsingContext(
     'macOS build fails on non-macOS platform',
     () async {
-      final BuildCommand command = BuildCommand(
-        artifacts: artifacts,
+      final command = BuildCommand(
         androidSdk: FakeAndroidSdk(),
         buildSystem: TestBuildSystem.all(BuildResult(success: true)),
         fileSystem: fileSystem,
         logger: logger,
-        processUtils: processUtils,
         osUtils: FakeOperatingSystemUtils(),
       );
       fileSystem.file('pubspec.yaml').createSync();
@@ -251,19 +273,18 @@ STDERR STUFF
       FileSystem: () => fileSystem,
       ProcessManager: () => FakeProcessManager.any(),
       FeatureFlags: () => TestFeatureFlags(isMacOSEnabled: true),
+      OperatingSystemUtils: () => FakeOperatingSystemUtils(hostPlatform: HostPlatform.darwin_x64),
     },
   );
 
   testUsingContext(
     'macOS build fails when feature is disabled',
     () async {
-      final BuildCommand command = BuildCommand(
-        artifacts: artifacts,
+      final command = BuildCommand(
         androidSdk: FakeAndroidSdk(),
         buildSystem: TestBuildSystem.all(BuildResult(success: true)),
         fileSystem: fileSystem,
         logger: logger,
-        processUtils: processUtils,
         osUtils: FakeOperatingSystemUtils(),
       );
       fileSystem.file('pubspec.yaml').createSync();
@@ -282,19 +303,18 @@ STDERR STUFF
       FileSystem: () => fileSystem,
       ProcessManager: () => FakeProcessManager.any(),
       FeatureFlags: () => TestFeatureFlags(),
+      OperatingSystemUtils: () => FakeOperatingSystemUtils(hostPlatform: HostPlatform.darwin_x64),
     },
   );
 
   testUsingContext(
     'macOS build forwards error stdout to status logger error',
     () async {
-      final BuildCommand command = BuildCommand(
-        artifacts: artifacts,
+      final command = BuildCommand(
         androidSdk: FakeAndroidSdk(),
         buildSystem: TestBuildSystem.all(BuildResult(success: true)),
         fileSystem: fileSystem,
         logger: logger,
-        processUtils: processUtils,
         osUtils: FakeOperatingSystemUtils(),
       );
       createMinimalMockProjectFiles();
@@ -320,23 +340,22 @@ STDERR STUFF
     },
     overrides: <Type, Generator>{
       FileSystem: () => fileSystem,
-      ProcessManager:
-          () => FakeProcessManager.list(<FakeCommand>[setUpFakeXcodeBuildHandler('Debug')]),
-      Pub: FakePubWithPrimedDeps.new,
+      ProcessManager: () =>
+          FakeProcessManager.list(<FakeCommand>[setUpFakeXcodeBuildHandler('Debug')]),
+      Pub: ThrowingPub.new,
       Platform: () => macosPlatform,
       FeatureFlags: () => TestFeatureFlags(isMacOSEnabled: true),
+      OperatingSystemUtils: () => FakeOperatingSystemUtils(hostPlatform: HostPlatform.darwin_x64),
     },
   );
 
   testUsingContext(
     'macOS build outputs path and size when successful',
     () async {
-      final BuildCommand command = BuildCommand(
-        artifacts: artifacts,
+      final command = BuildCommand(
         androidSdk: FakeAndroidSdk(),
         buildSystem: TestBuildSystem.all(BuildResult(success: true)),
         fileSystem: MemoryFileSystem.test(),
-        processUtils: processUtils,
         logger: BufferLogger.test(),
         osUtils: FakeOperatingSystemUtils(),
       );
@@ -350,24 +369,23 @@ STDERR STUFF
     },
     overrides: <Type, Generator>{
       FileSystem: () => fileSystem,
-      ProcessManager:
-          () => FakeProcessManager.list(<FakeCommand>[setUpFakeXcodeBuildHandler('Release')]),
+      ProcessManager: () =>
+          FakeProcessManager.list(<FakeCommand>[setUpFakeXcodeBuildHandler('Release')]),
       Platform: () => macosPlatform,
-      Pub: FakePubWithPrimedDeps.new,
+      Pub: ThrowingPub.new,
       FeatureFlags: () => TestFeatureFlags(isMacOSEnabled: true),
+      OperatingSystemUtils: () => FakeOperatingSystemUtils(hostPlatform: HostPlatform.darwin_x64),
     },
   );
 
   testUsingContext(
     'macOS build invokes xcode build (debug)',
     () async {
-      final BuildCommand command = BuildCommand(
-        artifacts: artifacts,
+      final command = BuildCommand(
         androidSdk: FakeAndroidSdk(),
         buildSystem: TestBuildSystem.all(BuildResult(success: true)),
         fileSystem: fileSystem,
         logger: logger,
-        processUtils: processUtils,
         osUtils: FakeOperatingSystemUtils(),
       );
       createMinimalMockProjectFiles();
@@ -378,24 +396,23 @@ STDERR STUFF
     },
     overrides: <Type, Generator>{
       FileSystem: () => fileSystem,
-      ProcessManager:
-          () => FakeProcessManager.list(<FakeCommand>[setUpFakeXcodeBuildHandler('Debug')]),
+      ProcessManager: () =>
+          FakeProcessManager.list(<FakeCommand>[setUpFakeXcodeBuildHandler('Debug')]),
       Platform: () => macosPlatform,
-      Pub: FakePubWithPrimedDeps.new,
+      Pub: ThrowingPub.new,
       FeatureFlags: () => TestFeatureFlags(isMacOSEnabled: true),
+      OperatingSystemUtils: () => FakeOperatingSystemUtils(hostPlatform: HostPlatform.darwin_x64),
     },
   );
 
   testUsingContext(
     'macOS build invokes xcode build (debug) with verbosity',
     () async {
-      final BuildCommand command = BuildCommand(
-        artifacts: artifacts,
+      final command = BuildCommand(
         androidSdk: FakeAndroidSdk(),
         buildSystem: TestBuildSystem.all(BuildResult(success: true)),
         fileSystem: fileSystem,
         logger: logger,
-        processUtils: processUtils,
         osUtils: FakeOperatingSystemUtils(),
       );
       createMinimalMockProjectFiles();
@@ -406,26 +423,24 @@ STDERR STUFF
     },
     overrides: <Type, Generator>{
       FileSystem: () => fileSystem,
-      ProcessManager:
-          () => FakeProcessManager.list(<FakeCommand>[
-            setUpFakeXcodeBuildHandler('Debug', verbose: true),
-          ]),
+      ProcessManager: () => FakeProcessManager.list(<FakeCommand>[
+        setUpFakeXcodeBuildHandler('Debug', verbose: true),
+      ]),
       Platform: () => macosPlatform,
-      Pub: FakePubWithPrimedDeps.new,
+      Pub: ThrowingPub.new,
       FeatureFlags: () => TestFeatureFlags(isMacOSEnabled: true),
+      OperatingSystemUtils: () => FakeOperatingSystemUtils(hostPlatform: HostPlatform.darwin_x64),
     },
   );
 
   testUsingContext(
     'macOS build invokes xcode build (profile)',
     () async {
-      final BuildCommand command = BuildCommand(
-        artifacts: artifacts,
+      final command = BuildCommand(
         androidSdk: FakeAndroidSdk(),
         buildSystem: TestBuildSystem.all(BuildResult(success: true)),
         fileSystem: fileSystem,
         logger: logger,
-        processUtils: processUtils,
         osUtils: FakeOperatingSystemUtils(),
       );
       createMinimalMockProjectFiles();
@@ -436,25 +451,24 @@ STDERR STUFF
     },
     overrides: <Type, Generator>{
       FileSystem: () => fileSystem,
-      ProcessManager:
-          () => FakeProcessManager.list(<FakeCommand>[setUpFakeXcodeBuildHandler('Profile')]),
+      ProcessManager: () =>
+          FakeProcessManager.list(<FakeCommand>[setUpFakeXcodeBuildHandler('Profile')]),
       Platform: () => macosPlatform,
-      Pub: FakePubWithPrimedDeps.new,
+      Pub: ThrowingPub.new,
       XcodeProjectInterpreter: () => FakeXcodeProjectInterpreterWithProfile(),
       FeatureFlags: () => TestFeatureFlags(isMacOSEnabled: true),
+      OperatingSystemUtils: () => FakeOperatingSystemUtils(hostPlatform: HostPlatform.darwin_x64),
     },
   );
 
   testUsingContext(
     'macOS build invokes xcode build (release)',
     () async {
-      final BuildCommand command = BuildCommand(
-        artifacts: artifacts,
+      final command = BuildCommand(
         androidSdk: FakeAndroidSdk(),
         buildSystem: TestBuildSystem.all(BuildResult(success: true)),
         fileSystem: fileSystem,
         logger: logger,
-        processUtils: processUtils,
         osUtils: FakeOperatingSystemUtils(),
       );
       createMinimalMockProjectFiles();
@@ -465,29 +479,27 @@ STDERR STUFF
     },
     overrides: <Type, Generator>{
       FileSystem: () => fileSystem,
-      ProcessManager:
-          () => FakeProcessManager.list(<FakeCommand>[setUpFakeXcodeBuildHandler('Release')]),
+      ProcessManager: () =>
+          FakeProcessManager.list(<FakeCommand>[setUpFakeXcodeBuildHandler('Release')]),
       Platform: () => macosPlatform,
-      Pub: FakePubWithPrimedDeps.new,
+      Pub: ThrowingPub.new,
       FeatureFlags: () => TestFeatureFlags(isMacOSEnabled: true),
+      OperatingSystemUtils: () => FakeOperatingSystemUtils(hostPlatform: HostPlatform.darwin_x64),
     },
   );
 
   testUsingContext(
     'macOS build supports standard desktop build options',
     () async {
-      final BuildCommand command = BuildCommand(
-        artifacts: artifacts,
+      final command = BuildCommand(
         androidSdk: FakeAndroidSdk(),
         buildSystem: TestBuildSystem.all(BuildResult(success: true)),
         fileSystem: fileSystem,
         logger: logger,
-        processUtils: processUtils,
         osUtils: FakeOperatingSystemUtils(),
       );
       createMinimalMockProjectFiles();
       fileSystem.file('lib/other.dart').createSync(recursive: true);
-      fileSystem.file('foo/bar.sksl.json').createSync(recursive: true);
 
       await createTestCommandRunner(command).run(const <String>[
         'build',
@@ -501,10 +513,10 @@ STDERR STUFF
         '--dart-define=foo.bar=2',
         '--dart-define=fizz.far=3',
         '--tree-shake-icons',
-        '--bundle-sksl-path=foo/bar.sksl.json',
       ]);
-      final List<String> contents =
-          fileSystem.file('./macos/Flutter/ephemeral/Flutter-Generated.xcconfig').readAsLinesSync();
+      final List<String> contents = fileSystem
+          .file('./macos/Flutter/ephemeral/Flutter-Generated.xcconfig')
+          .readAsLinesSync();
 
       expect(
         contents,
@@ -514,14 +526,22 @@ STDERR STUFF
           'FLUTTER_BUILD_DIR=build',
           'FLUTTER_BUILD_NAME=1.0.0',
           'FLUTTER_BUILD_NUMBER=1',
-          'DART_DEFINES=Zm9vLmJhcj0y,Zml6ei5mYXI9Mw==',
+          'DART_DEFINES=${encodeDartDefinesMap(<String, String>{
+            'foo.bar': '2', //
+            'fizz.far': '3',
+            'FLUTTER_VERSION': '0.0.0',
+            'FLUTTER_CHANNEL': 'master',
+            'FLUTTER_GIT_URL': 'https://github.com/flutter/flutter.git',
+            'FLUTTER_FRAMEWORK_REVISION': '11111',
+            'FLUTTER_ENGINE_REVISION': 'abcde',
+            'FLUTTER_DART_VERSION': '12',
+          })}',
           'DART_OBFUSCATION=true',
           'EXTRA_FRONT_END_OPTIONS=--enable-experiment=non-nullable',
           'EXTRA_GEN_SNAPSHOT_OPTIONS=--enable-experiment=non-nullable',
           'SPLIT_DEBUG_INFO=foo/',
           'TRACK_WIDGET_CREATION=true',
           'TREE_SHAKE_ICONS=true',
-          'BUNDLE_SKSL_PATH=foo/bar.sksl.json',
           'PACKAGE_CONFIG=/.dart_tool/package_config.json',
           'COCOAPODS_PARALLEL_CODE_SIGN=true',
         ]),
@@ -530,12 +550,13 @@ STDERR STUFF
     },
     overrides: <Type, Generator>{
       FileSystem: () => fileSystem,
-      ProcessManager:
-          () => FakeProcessManager.list(<FakeCommand>[setUpFakeXcodeBuildHandler('Release')]),
+      ProcessManager: () =>
+          FakeProcessManager.list(<FakeCommand>[setUpFakeXcodeBuildHandler('Release')]),
       Platform: () => macosPlatform,
-      Pub: FakePubWithPrimedDeps.new,
+      Pub: ThrowingPub.new,
       FeatureFlags: () => TestFeatureFlags(isMacOSEnabled: true),
       Artifacts: () => Artifacts.test(),
+      OperatingSystemUtils: () => FakeOperatingSystemUtils(hostPlatform: HostPlatform.darwin_x64),
     },
   );
 
@@ -567,7 +588,7 @@ STDERR STUFF
             '-derivedDataPath',
             flutterBuildDir.absolute.path,
             '-destination',
-            'platform=macOS',
+            'platform=macOS,arch=x86_64',
             'OBJROOT=${fileSystem.path.join(flutterBuildDir.absolute.path, 'Build', 'Intermediates.noindex')}',
             'SYMROOT=${fileSystem.path.join(flutterBuildDir.absolute.path, 'Build', 'Products')}',
             '-quiet',
@@ -577,13 +598,11 @@ STDERR STUFF
         ),
       ]);
 
-      final BuildCommand command = BuildCommand(
-        artifacts: artifacts,
+      final command = BuildCommand(
         androidSdk: FakeAndroidSdk(),
         buildSystem: TestBuildSystem.all(BuildResult(success: true)),
         fileSystem: fileSystem,
         logger: logger,
-        processUtils: processUtils,
         osUtils: FakeOperatingSystemUtils(),
       );
 
@@ -597,22 +616,21 @@ STDERR STUFF
       FileSystem: () => fileSystem,
       ProcessManager: () => fakeProcessManager,
       Platform: () => macosPlatformCustomEnv,
-      Pub: FakePubWithPrimedDeps.new,
+      Pub: ThrowingPub.new,
       FeatureFlags: () => TestFeatureFlags(isMacOSEnabled: true),
       XcodeProjectInterpreter: () => xcodeProjectInterpreter,
+      OperatingSystemUtils: () => FakeOperatingSystemUtils(hostPlatform: HostPlatform.darwin_x64),
     },
   );
 
   testUsingContext(
     'macOS build supports build-name and build-number',
     () async {
-      final BuildCommand command = BuildCommand(
-        artifacts: artifacts,
+      final command = BuildCommand(
         androidSdk: FakeAndroidSdk(),
         buildSystem: TestBuildSystem.all(BuildResult(success: true)),
         fileSystem: fileSystem,
         logger: logger,
-        processUtils: processUtils,
         osUtils: FakeOperatingSystemUtils(),
       );
       createMinimalMockProjectFiles();
@@ -625,21 +643,21 @@ STDERR STUFF
         '--build-name=1.2.3',
         '--build-number=42',
       ]);
-      final String contents =
-          fileSystem
-              .file('./macos/Flutter/ephemeral/Flutter-Generated.xcconfig')
-              .readAsStringSync();
+      final String contents = fileSystem
+          .file('./macos/Flutter/ephemeral/Flutter-Generated.xcconfig')
+          .readAsStringSync();
 
       expect(contents, contains('FLUTTER_BUILD_NAME=1.2.3'));
       expect(contents, contains('FLUTTER_BUILD_NUMBER=42'));
     },
     overrides: <Type, Generator>{
       FileSystem: () => fileSystem,
-      ProcessManager:
-          () => FakeProcessManager.list(<FakeCommand>[setUpFakeXcodeBuildHandler('Debug')]),
+      ProcessManager: () =>
+          FakeProcessManager.list(<FakeCommand>[setUpFakeXcodeBuildHandler('Debug')]),
       Platform: () => macosPlatform,
-      Pub: FakePubWithPrimedDeps.new,
+      Pub: ThrowingPub.new,
       FeatureFlags: () => TestFeatureFlags(isMacOSEnabled: true),
+      OperatingSystemUtils: () => FakeOperatingSystemUtils(hostPlatform: HostPlatform.darwin_x64),
     },
   );
 
@@ -648,18 +666,18 @@ STDERR STUFF
     () {
       final CommandRunner<void> runner = createTestCommandRunner(
         BuildCommand(
-          artifacts: artifacts,
           androidSdk: FakeAndroidSdk(),
           buildSystem: TestBuildSystem.all(BuildResult(success: true)),
           fileSystem: fileSystem,
           logger: logger,
-          processUtils: processUtils,
           osUtils: FakeOperatingSystemUtils(),
         ),
       );
 
-      final bool supported =
-          BuildMacosCommand(logger: BufferLogger.test(), verboseHelp: false).supported;
+      final bool supported = BuildMacosCommand(
+        logger: BufferLogger.test(),
+        verboseHelp: false,
+      ).supported;
       expect(
         () => runner.run(<String>['build', 'macos', '--no-pub']),
         supported ? throwsToolExit() : throwsA(isA<UsageException>()),
@@ -693,13 +711,11 @@ STDERR STUFF
   testUsingContext(
     'code size analysis throws StateError if no code size snapshot generated by gen_snapshot',
     () async {
-      final BuildCommand command = BuildCommand(
-        artifacts: artifacts,
+      final command = BuildCommand(
         androidSdk: FakeAndroidSdk(),
         buildSystem: TestBuildSystem.all(BuildResult(success: true)),
         fileSystem: fileSystem,
         logger: logger,
-        processUtils: processUtils,
         osUtils: FakeOperatingSystemUtils(),
       );
       createMinimalMockProjectFiles();
@@ -725,28 +741,26 @@ STDERR STUFF
     },
     overrides: <Type, Generator>{
       FileSystem: () => fileSystem,
-      ProcessManager:
-          () => FakeProcessManager.list(<FakeCommand>[
-            // we never generate code size snapshot here
-            setUpFakeXcodeBuildHandler('Release'),
-          ]),
+      ProcessManager: () => FakeProcessManager.list(<FakeCommand>[
+        // we never generate code size snapshot here
+        setUpFakeXcodeBuildHandler('Release'),
+      ]),
       Platform: () => macosPlatform,
-      Pub: FakePubWithPrimedDeps.new,
+      Pub: ThrowingPub.new,
       FeatureFlags: () => TestFeatureFlags(isMacOSEnabled: true),
       FileSystemUtils: () => FileSystemUtils(fileSystem: fileSystem, platform: macosPlatform),
       Analytics: () => fakeAnalytics,
+      OperatingSystemUtils: () => FakeOperatingSystemUtils(hostPlatform: HostPlatform.darwin_x64),
     },
   );
   testUsingContext(
     'Performs code size analysis and sends analytics from arm64 host',
     () async {
-      final BuildCommand command = BuildCommand(
-        artifacts: artifacts,
+      final command = BuildCommand(
         androidSdk: FakeAndroidSdk(),
         buildSystem: TestBuildSystem.all(BuildResult(success: true)),
         fileSystem: fileSystem,
         logger: logger,
-        processUtils: processUtils,
         osUtils: FakeOperatingSystemUtils(),
       );
       createMinimalMockProjectFiles();
@@ -768,16 +782,15 @@ STDERR STUFF
     },
     overrides: <Type, Generator>{
       FileSystem: () => fileSystem,
-      ProcessManager:
-          () => FakeProcessManager.list(<FakeCommand>[
-            // These are generated by gen_snapshot because flutter assemble passes
-            // extra flags specifying this output path
-            setUpFakeXcodeBuildHandler(
-              'Release',
-              onRun: (_) {
-                fileSystem.file('build/flutter_size_01/snapshot.arm64.json')
-                  ..createSync(recursive: true)
-                  ..writeAsStringSync('''
+      ProcessManager: () => FakeProcessManager.list(<FakeCommand>[
+        // These are generated by gen_snapshot because flutter assemble passes
+        // extra flags specifying this output path
+        setUpFakeXcodeBuildHandler(
+          'Release',
+          onRun: (_) {
+            fileSystem.file('build/flutter_size_01/snapshot.arm64.json')
+              ..createSync(recursive: true)
+              ..writeAsStringSync('''
 [
   {
     "l": "dart:_internal",
@@ -786,30 +799,29 @@ STDERR STUFF
     "s": 2400
   }
 ]''');
-                fileSystem.file('build/flutter_size_01/trace.arm64.json')
-                  ..createSync(recursive: true)
-                  ..writeAsStringSync('{}');
-              },
-            ),
-          ]),
+            fileSystem.file('build/flutter_size_01/trace.arm64.json')
+              ..createSync(recursive: true)
+              ..writeAsStringSync('{}');
+          },
+        ),
+      ]),
       Platform: () => macosPlatform,
-      Pub: FakePubWithPrimedDeps.new,
+      Pub: ThrowingPub.new,
       FeatureFlags: () => TestFeatureFlags(isMacOSEnabled: true),
       FileSystemUtils: () => FileSystemUtils(fileSystem: fileSystem, platform: macosPlatform),
       Analytics: () => fakeAnalytics,
+      OperatingSystemUtils: () => FakeOperatingSystemUtils(hostPlatform: HostPlatform.darwin_x64),
     },
   );
 
   testUsingContext(
     'macOS build overrides CODE_SIGN_ENTITLEMENTS when in CI if entitlement file exists (debug)',
     () async {
-      final BuildCommand command = BuildCommand(
-        artifacts: artifacts,
+      final command = BuildCommand(
         androidSdk: FakeAndroidSdk(),
         buildSystem: TestBuildSystem.all(BuildResult(success: true)),
         fileSystem: fileSystem,
         logger: logger,
-        processUtils: processUtils,
         osUtils: FakeOperatingSystemUtils(),
       );
       createMinimalMockProjectFiles();
@@ -852,35 +864,32 @@ STDERR STUFF
     },
     overrides: <Type, Generator>{
       FileSystem: () => fileSystem,
-      ProcessManager:
-          () => FakeProcessManager.list(<FakeCommand>[
-            setUpFakeXcodeBuildHandler(
-              'Debug',
-              additionalCommandArguments: <String>[
-                'CODE_SIGN_ENTITLEMENTS=/.tmp_rand0/flutter_disable_sandbox_entitlement.rand0/DebugProfileWithDisabledSandboxing.entitlements',
-              ],
-            ),
-          ]),
-      Platform:
-          () => FakePlatform(
-            operatingSystem: 'macos',
-            environment: <String, String>{'FLUTTER_ROOT': '/', 'HOME': '/', 'LUCI_CI': 'True'},
-          ),
-      Pub: FakePubWithPrimedDeps.new,
+      ProcessManager: () => FakeProcessManager.list(<FakeCommand>[
+        setUpFakeXcodeBuildHandler(
+          'Debug',
+          additionalCommandArguments: <String>[
+            'CODE_SIGN_ENTITLEMENTS=/.tmp_rand0/flutter_disable_sandbox_entitlement.rand0/DebugProfileWithDisabledSandboxing.entitlements',
+          ],
+        ),
+      ]),
+      Platform: () => FakePlatform(
+        operatingSystem: 'macos',
+        environment: <String, String>{'FLUTTER_ROOT': '/', 'HOME': '/', 'LUCI_CI': 'True'},
+      ),
+      Pub: ThrowingPub.new,
       FeatureFlags: () => TestFeatureFlags(isMacOSEnabled: true),
+      OperatingSystemUtils: () => FakeOperatingSystemUtils(hostPlatform: HostPlatform.darwin_x64),
     },
   );
 
   testUsingContext(
     'macOS build overrides CODE_SIGN_ENTITLEMENTS when in CI if entitlement file exists (release)',
     () async {
-      final BuildCommand command = BuildCommand(
-        artifacts: artifacts,
+      final command = BuildCommand(
         androidSdk: FakeAndroidSdk(),
         buildSystem: TestBuildSystem.all(BuildResult(success: true)),
         fileSystem: fileSystem,
         logger: logger,
-        processUtils: processUtils,
         osUtils: FakeOperatingSystemUtils(),
       );
       createMinimalMockProjectFiles();
@@ -923,22 +932,195 @@ STDERR STUFF
     },
     overrides: <Type, Generator>{
       FileSystem: () => fileSystem,
-      ProcessManager:
-          () => FakeProcessManager.list(<FakeCommand>[
-            setUpFakeXcodeBuildHandler(
-              'Release',
-              additionalCommandArguments: <String>[
-                'CODE_SIGN_ENTITLEMENTS=/.tmp_rand0/flutter_disable_sandbox_entitlement.rand0/ReleaseWithDisabledSandboxing.entitlements',
-              ],
-            ),
-          ]),
-      Platform:
-          () => FakePlatform(
-            operatingSystem: 'macos',
-            environment: <String, String>{'FLUTTER_ROOT': '/', 'HOME': '/', 'LUCI_CI': 'True'},
-          ),
-      Pub: FakePubWithPrimedDeps.new,
+      ProcessManager: () => FakeProcessManager.list(<FakeCommand>[
+        setUpFakeXcodeBuildHandler(
+          'Release',
+          additionalCommandArguments: <String>[
+            'CODE_SIGN_ENTITLEMENTS=/.tmp_rand0/flutter_disable_sandbox_entitlement.rand0/ReleaseWithDisabledSandboxing.entitlements',
+          ],
+        ),
+      ]),
+      Platform: () => FakePlatform(
+        operatingSystem: 'macos',
+        environment: <String, String>{'FLUTTER_ROOT': '/', 'HOME': '/', 'LUCI_CI': 'True'},
+      ),
+      Pub: ThrowingPub.new,
       FeatureFlags: () => TestFeatureFlags(isMacOSEnabled: true),
+      OperatingSystemUtils: () => FakeOperatingSystemUtils(hostPlatform: HostPlatform.darwin_x64),
+    },
+  );
+
+  testUsingContext(
+    'Build with x86_64 destination on if host arch is x86_64 (debug)',
+    () async {
+      createMinimalMockProjectFiles();
+
+      final command = BuildCommand(
+        androidSdk: FakeAndroidSdk(),
+        buildSystem: TestBuildSystem.all(BuildResult(success: true)),
+        fileSystem: fileSystem,
+        logger: logger,
+        osUtils: FakeOperatingSystemUtils(),
+      );
+
+      await createTestCommandRunner(
+        command,
+      ).run(const <String>['build', 'macos', '--debug', '--no-pub']);
+    },
+    overrides: <Type, Generator>{
+      Platform: () => macosPlatform,
+      FileSystem: () => fileSystem,
+      ProcessManager: () =>
+          FakeProcessManager.list(<FakeCommand>[setUpFakeXcodeBuildHandler('Debug')]),
+      Pub: ThrowingPub.new,
+      FeatureFlags: () => TestFeatureFlags(isMacOSEnabled: true),
+      XcodeProjectInterpreter: () => xcodeProjectInterpreter,
+      OperatingSystemUtils: () => FakeOperatingSystemUtils(hostPlatform: HostPlatform.darwin_x64),
+    },
+  );
+
+  testUsingContext(
+    'Build with arm64 destination on if host arch is arm64 (debug)',
+    () async {
+      createMinimalMockProjectFiles();
+
+      final command = BuildCommand(
+        androidSdk: FakeAndroidSdk(),
+        buildSystem: TestBuildSystem.all(BuildResult(success: true)),
+        fileSystem: fileSystem,
+        logger: logger,
+        osUtils: FakeOperatingSystemUtils(),
+      );
+
+      await createTestCommandRunner(
+        command,
+      ).run(const <String>['build', 'macos', '--debug', '--no-pub']);
+    },
+    overrides: <Type, Generator>{
+      Platform: () => macosPlatform,
+      ProcessManager: () => FakeProcessManager.list(<FakeCommand>[
+        setUpFakeXcodeBuildHandler('Debug', hostPlatformArch: 'arm64'),
+      ]),
+      FileSystem: () => fileSystem,
+      Pub: ThrowingPub.new,
+      FeatureFlags: () => TestFeatureFlags(isMacOSEnabled: true),
+      XcodeProjectInterpreter: () => xcodeProjectInterpreter,
+      OperatingSystemUtils: () => FakeOperatingSystemUtils(hostPlatform: HostPlatform.darwin_arm64),
+    },
+  );
+
+  testUsingContext(
+    'Build with generic destination in release mode',
+    () async {
+      createMinimalMockProjectFiles();
+
+      final command = BuildCommand(
+        androidSdk: FakeAndroidSdk(),
+        buildSystem: TestBuildSystem.all(BuildResult(success: true)),
+        fileSystem: fileSystem,
+        logger: logger,
+        osUtils: FakeOperatingSystemUtils(),
+      );
+
+      await createTestCommandRunner(command).run(const <String>['build', 'macos', '--no-pub']);
+    },
+    overrides: <Type, Generator>{
+      Platform: () => macosPlatform,
+      FileSystem: () => fileSystem,
+      ProcessManager: () =>
+          FakeProcessManager.list(<FakeCommand>[setUpFakeXcodeBuildHandler('Release')]),
+      Pub: ThrowingPub.new,
+      FeatureFlags: () => TestFeatureFlags(isMacOSEnabled: true),
+      XcodeProjectInterpreter: () => xcodeProjectInterpreter,
+      OperatingSystemUtils: () => FakeOperatingSystemUtils(hostPlatform: HostPlatform.darwin_x64),
+    },
+  );
+
+  testUsingContext(
+    'Passes EXCLUDED_ARCHS from Xcode project to xcodebuild command',
+    () async {
+      createMinimalMockProjectFiles();
+
+      fakeProcessManager.addCommands(<FakeCommand>[
+        setUpFakeXcodeBuildHandler(
+          'Release',
+          onRun: (_) {
+            fileSystem.file(fileSystem.path.join('macos', 'Flutter', 'ephemeral', '.app_filename'))
+              ..createSync(recursive: true)
+              ..writeAsStringSync('example.app');
+          },
+          additionalCommandArguments: <String>['EXCLUDED_ARCHS=x86_64'],
+        ),
+      ]);
+
+      final command = BuildCommand(
+        androidSdk: FakeAndroidSdk(),
+        buildSystem: TestBuildSystem.all(BuildResult(success: true)),
+        fileSystem: fileSystem,
+        logger: logger,
+        osUtils: FakeOperatingSystemUtils(),
+      );
+
+      await createTestCommandRunner(
+        command,
+      ).run(<String>['build', 'macos', '--release', '--no-pub']);
+
+      expect(fakeProcessManager, hasNoRemainingExpectations);
+    },
+    overrides: <Type, Generator>{
+      Platform: () => macosPlatform,
+      FileSystem: () => fileSystem,
+      ProcessManager: () => fakeProcessManager,
+      Pub: ThrowingPub.new,
+      FeatureFlags: () => TestFeatureFlags(isMacOSEnabled: true),
+      XcodeProjectInterpreter: () => FakeXcodeProjectInterpreterWithBuildSettings(
+        overrides: <String, String>{'EXCLUDED_ARCHS': 'x86_64'},
+      ),
+      OperatingSystemUtils: () => FakeOperatingSystemUtils(hostPlatform: HostPlatform.darwin_x64),
+    },
+  );
+
+  testUsingContext(
+    'Does not pass EXCLUDED_ARCHS when not set in Xcode project',
+    () async {
+      createMinimalMockProjectFiles();
+
+      fakeProcessManager.addCommands(<FakeCommand>[
+        setUpFakeXcodeBuildHandler(
+          'Release',
+          onRun: (_) {
+            fileSystem.file(fileSystem.path.join('macos', 'Flutter', 'ephemeral', '.app_filename'))
+              ..createSync(recursive: true)
+              ..writeAsStringSync('example.app');
+          },
+          // Note: No additionalCommandArguments - EXCLUDED_ARCHS should not be passed
+        ),
+      ]);
+
+      final command = BuildCommand(
+        androidSdk: FakeAndroidSdk(),
+        buildSystem: TestBuildSystem.all(BuildResult(success: true)),
+        fileSystem: fileSystem,
+        logger: logger,
+        osUtils: FakeOperatingSystemUtils(),
+      );
+
+      await createTestCommandRunner(
+        command,
+      ).run(<String>['build', 'macos', '--release', '--no-pub']);
+
+      expect(fakeProcessManager, hasNoRemainingExpectations);
+    },
+    overrides: <Type, Generator>{
+      Platform: () => macosPlatform,
+      FileSystem: () => fileSystem,
+      ProcessManager: () => fakeProcessManager,
+      Pub: ThrowingPub.new,
+      FeatureFlags: () => TestFeatureFlags(isMacOSEnabled: true),
+      XcodeProjectInterpreter: () => FakeXcodeProjectInterpreterWithBuildSettings(
+        // Empty overrides - no EXCLUDED_ARCHS
+      ),
+      OperatingSystemUtils: () => FakeOperatingSystemUtils(hostPlatform: HostPlatform.darwin_x64),
     },
   );
 }

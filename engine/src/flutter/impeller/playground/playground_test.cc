@@ -65,6 +65,9 @@ void PlaygroundTest::SetUp() {
     return;
   }
 
+  switches.flags.antialiased_lines =
+      test_name.find("ExperimentAntialiasLines/") != std::string::npos;
+
   SetupContext(GetParam(), switches);
   SetupWindow();
 }
@@ -83,12 +86,12 @@ std::unique_ptr<fml::Mapping> PlaygroundTest::OpenAssetAsMapping(
   return flutter::testing::OpenFixtureAsMapping(asset_name);
 }
 
-RuntimeStage::Map PlaygroundTest::OpenAssetAsRuntimeStage(
+absl::StatusOr<RuntimeStage::Map> PlaygroundTest::OpenAssetAsRuntimeStage(
     const char* asset_name) const {
   const std::shared_ptr<fml::Mapping> fixture =
       flutter::testing::OpenFixtureAsMapping(asset_name);
   if (!fixture || fixture->GetSize() == 0) {
-    return {};
+    return absl::NotFoundError("Asset not found or empty.");
   }
   return RuntimeStage::DecodeRuntimeStages(fixture);
 }

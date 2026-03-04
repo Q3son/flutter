@@ -10,6 +10,7 @@ Future<ui.Image> loadImage(String asset) async {
   final ui.ImmutableBuffer buffer = await ui.ImmutableBuffer.fromAsset(asset);
   final ui.Codec codec = await PaintingBinding.instance.instantiateImageCodecWithSize(buffer);
   final ui.FrameInfo frameInfo = await codec.getNextFrame();
+  codec.dispose();
   return frameInfo.image;
 }
 
@@ -72,7 +73,7 @@ class VerticesPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     canvas.translate(0, tick);
-    final ui.Vertices vertices = ui.Vertices(
+    final vertices = ui.Vertices(
       VertexMode.triangles,
       const <Offset>[
         Offset.zero,

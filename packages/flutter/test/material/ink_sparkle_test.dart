@@ -183,7 +183,7 @@ Future<void> _runTest(WidgetTester tester, String positionName, double distanceF
 
   final Offset target = topLeft + (bottomRight - topLeft) * distanceFromTopLeft;
   await tester.tapAt(target);
-  for (int i = 0; i <= 5; i++) {
+  for (var i = 0; i <= 5; i++) {
     await tester.pump(const Duration(milliseconds: 50));
     await expectLater(repaintFinder, matchesGoldenFile('m2_ink_sparkle.$positionName.$i.png'));
   }
@@ -199,7 +199,6 @@ Future<void> _runM3Test(
 
   await tester.pumpWidget(
     MaterialApp(
-      theme: ThemeData(useMaterial3: true),
       home: Scaffold(
         body: Center(
           child: RepaintBoundary(
@@ -225,7 +224,7 @@ Future<void> _runM3Test(
 
   final Offset target = topLeft + (bottomRight - topLeft) * distanceFromTopLeft;
   await tester.tapAt(target);
-  for (int i = 0; i <= 5; i++) {
+  for (var i = 0; i <= 5; i++) {
     await tester.pump(const Duration(milliseconds: 50));
     await expectLater(repaintFinder, matchesGoldenFile('m3_ink_sparkle.$positionName.$i.png'));
   }

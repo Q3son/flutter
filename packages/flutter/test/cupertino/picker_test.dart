@@ -10,6 +10,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../rendering/rendering_tester.dart';
+import '../widgets/semantics_tester.dart';
 
 class SpyFixedExtentScrollController extends FixedExtentScrollController {
   /// Override for test visibility only.
@@ -54,6 +55,120 @@ void main() {
     );
   });
 
+  testWidgets('Picker semantics', (WidgetTester tester) async {
+    final semantics = SemanticsTester(tester);
+
+    await tester.pumpWidget(
+      CupertinoApp(
+        home: SizedBox(
+          height: 300.0,
+          width: 300.0,
+          child: CupertinoPicker(
+            itemExtent: 50.0,
+            onSelectedItemChanged: (_) {},
+            children: List<Widget>.generate(13, (int index) {
+              return SizedBox(height: 50.0, width: 300.0, child: Text(index.toString()));
+            }),
+          ),
+        ),
+      ),
+    );
+    expect(
+      semantics,
+      includesNodeWith(
+        value: '0',
+        increasedValue: '1',
+        actions: <SemanticsAction>[SemanticsAction.increase],
+      ),
+    );
+
+    final hourListController =
+        tester.widget<ListWheelScrollView>(find.byType(ListWheelScrollView)).controller!
+            as FixedExtentScrollController;
+
+    hourListController.jumpToItem(11);
+    await tester.pumpAndSettle();
+    expect(
+      semantics,
+      includesNodeWith(
+        value: '11',
+        increasedValue: '12',
+        decreasedValue: '10',
+        actions: <SemanticsAction>[SemanticsAction.increase, SemanticsAction.decrease],
+      ),
+    );
+    semantics.dispose();
+  });
+
+  testWidgets('Picker semantics excludes current item with empty label', (
+    WidgetTester tester,
+  ) async {
+    // When the current item has an empty label (e.g., wrapped with ExcludeSemantics),
+    // the picker should not set any value, increasedValue, decreasedValue, or actions.
+    final semantics = SemanticsTester(tester);
+    final controller = FixedExtentScrollController(initialItem: 1);
+    addTearDown(controller.dispose);
+
+    await tester.pumpWidget(
+      CupertinoApp(
+        home: SizedBox(
+          height: 300.0,
+          width: 300.0,
+          child: CupertinoPicker(
+            scrollController: controller,
+            itemExtent: 50.0,
+            onSelectedItemChanged: (_) {},
+            children: const <Widget>[
+              Text('0'),
+              // Item at index 1 is excluded from semantics (simulating a disabled item).
+              ExcludeSemantics(child: Text('1')),
+              Text('2'),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    // When the current item (index 1) has an empty label due to ExcludeSemantics,
+    // the picker should not have any value or actions set.
+    expect(semantics, isNot(includesNodeWith(value: '1')));
+    // Also verify that no increase/decrease actions are set for this item.
+    expect(
+      semantics,
+      isNot(includesNodeWith(actions: <SemanticsAction>[SemanticsAction.increase])),
+    );
+    expect(
+      semantics,
+      isNot(includesNodeWith(actions: <SemanticsAction>[SemanticsAction.decrease])),
+    );
+
+    // Scroll to item 0 which has a valid label.
+    controller.jumpToItem(0);
+    await tester.pumpAndSettle();
+
+    // Now the picker should have value '0' but no increase action
+    // because the next item (1) has an empty label.
+    expect(semantics, includesNodeWith(value: '0'));
+    expect(
+      semantics,
+      isNot(includesNodeWith(value: '0', actions: <SemanticsAction>[SemanticsAction.increase])),
+    );
+
+    // Scroll to item 2 which has a valid label.
+    controller.jumpToItem(2);
+    await tester.pumpAndSettle();
+
+    // Now the picker should have value '2' but no decrease action
+    // because the previous item (1) has an empty label.
+    expect(semantics, includesNodeWith(value: '2'));
+    expect(
+      semantics,
+      isNot(includesNodeWith(value: '2', actions: <SemanticsAction>[SemanticsAction.decrease])),
+    );
+
+    semantics.dispose();
+  });
+
   group('layout', () {
     // Regression test for https://github.com/flutter/flutter/issues/22999
     testWidgets('CupertinoPicker.builder test', (WidgetTester tester) async {
@@ -80,7 +195,7 @@ void main() {
     });
 
     testWidgets('selected item is in the middle', (WidgetTester tester) async {
-      final FixedExtentScrollController controller = FixedExtentScrollController(initialItem: 1);
+      final controller = FixedExtentScrollController(initialItem: 1);
       addTearDown(controller.dispose);
       await tester.pumpWidget(
         Directionality(
@@ -143,7 +258,7 @@ void main() {
 
     expect(
       find.byType(CupertinoPicker),
-      paints..rrect(color: const Color.fromARGB(30, 118, 118, 128)),
+      paints..rsuperellipse(color: const Color.fromARGB(30, 118, 118, 128)),
     );
     expect(find.byType(CupertinoPicker), paints..rect(color: const Color(0xFF123456)));
 
@@ -171,7 +286,7 @@ void main() {
 
     expect(
       find.byType(CupertinoPicker),
-      paints..rrect(color: const Color.fromARGB(61, 118, 118, 128)),
+      paints..rsuperellipse(color: const Color.fromARGB(61, 118, 118, 128)),
     );
     expect(find.byType(CupertinoPicker), paints..rect(color: const Color(0xFF654321)));
   });
@@ -198,7 +313,7 @@ void main() {
       ),
     );
 
-    expect(find.byType(CupertinoPicker), paints..rrect(color: const Color(0x12345678)));
+    expect(find.byType(CupertinoPicker), paints..rsuperellipse(color: const Color(0x12345678)));
   });
 
   testWidgets('CupertinoPicker.selectionOverlay is nullable', (WidgetTester tester) async {
@@ -221,15 +336,141 @@ void main() {
       ),
     );
 
-    expect(find.byType(CupertinoPicker), isNot(paints..rrect()));
+    expect(find.byType(CupertinoPicker), isNot(paints..rsuperellipse()));
   });
 
   group('scroll', () {
     testWidgets(
-      'scrolling calls onSelectedItemChanged and triggers haptic feedback',
+      'scrolling calls onSelectedItemChanged and triggers haptic feedback when scroll passes middle of item',
       (WidgetTester tester) async {
-        final List<int> selectedItems = <int>[];
-        final List<MethodCall> systemCalls = <MethodCall>[];
+        final selectedItems = <int>[];
+        final systemCalls = <MethodCall>[];
+
+        tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, (
+          MethodCall methodCall,
+        ) async {
+          systemCalls.add(methodCall);
+          return null;
+        });
+
+        await tester.pumpWidget(
+          Directionality(
+            textDirection: TextDirection.ltr,
+            child: CupertinoPicker(
+              itemExtent: 100.0,
+              onSelectedItemChanged: (int index) {
+                selectedItems.add(index);
+              },
+              children: List<Widget>.generate(100, (int index) {
+                return Center(
+                  child: SizedBox(width: 400.0, height: 100.0, child: Text(index.toString())),
+                );
+              }),
+            ),
+          ),
+        );
+        // Drag to almost the middle of the next item.
+        await tester.drag(
+          find.text('0'),
+          const Offset(0.0, -90.0),
+          warnIfMissed: false,
+        ); // has an IgnorePointer
+        // Expect that the item changed, but haptics were not triggered yet,
+        // since we are not in the middle of the item.
+        expect(selectedItems, <int>[1]);
+        expect(systemCalls, isEmpty);
+
+        // Let the scroll settle and end up in the middle of the item.
+        await tester.pumpAndSettle();
+        expect(systemCalls, hasLength(2));
+        // Check that the haptic feedback and ticking sound were triggered.
+        expect(
+          systemCalls[0],
+          isMethodCall('HapticFeedback.vibrate', arguments: 'HapticFeedbackType.selectionClick'),
+        );
+        expect(systemCalls[1], isMethodCall('SystemSound.play', arguments: 'SystemSoundType.tick'));
+
+        // Overscroll a little to pass the middle of the item.
+        await tester.drag(
+          find.text('0'),
+          const Offset(0.0, 110.0),
+          warnIfMissed: false,
+        ); // has an IgnorePointer
+        expect(selectedItems, <int>[1, 0]);
+        expect(systemCalls, hasLength(4));
+        expect(
+          systemCalls[2],
+          isMethodCall('HapticFeedback.vibrate', arguments: 'HapticFeedbackType.selectionClick'),
+        );
+        expect(systemCalls[3], isMethodCall('SystemSound.play', arguments: 'SystemSoundType.tick'));
+      },
+      variant: TargetPlatformVariant.only(TargetPlatform.iOS),
+    );
+
+    testWidgets('scrolling with new behavior calls onSelectedItemChanged only when scroll ends', (
+      WidgetTester tester,
+    ) async {
+      final selectedItems = <int>[];
+      final systemCalls = <MethodCall>[];
+
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, (
+        MethodCall methodCall,
+      ) async {
+        systemCalls.add(methodCall);
+        return null;
+      });
+
+      await tester.pumpWidget(
+        Directionality(
+          textDirection: TextDirection.ltr,
+          child: CupertinoPicker(
+            itemExtent: 100.0,
+            changeReportingBehavior: ChangeReportingBehavior.onScrollEnd,
+            onSelectedItemChanged: (int index) {
+              selectedItems.add(index);
+            },
+            children: List<Widget>.generate(100, (int index) {
+              return Center(
+                child: SizedBox(width: 400.0, height: 100.0, child: Text(index.toString())),
+              );
+            }),
+          ),
+        ),
+      );
+
+      final Offset initialOffset = tester.getTopLeft(find.text('0'));
+      // Drag to almost the middle of the next item.
+      final TestGesture scrollGesture = await tester.startGesture(initialOffset);
+      // Item 0 is still closest to the center. No updates.
+      await scrollGesture.moveBy(const Offset(0.0, -49.0));
+      expect(selectedItems.isEmpty, true);
+
+      // Now item 1 is closest to the center.
+      await scrollGesture.moveBy(const Offset(0.0, -1.0));
+      expect(selectedItems, <int>[]);
+
+      // Now item 1 is still closest to the center for another full itemExtent (100px).
+      await scrollGesture.moveBy(const Offset(0.0, -99.0));
+      expect(selectedItems, <int>[]);
+
+      await scrollGesture.moveBy(const Offset(0.0, -1.0));
+      await scrollGesture.up();
+      await tester.pumpAndSettle();
+      expect(selectedItems, <int>[2]);
+
+      await scrollGesture.down(initialOffset);
+      await scrollGesture.moveBy(const Offset(0.0, 100.0));
+      expect(selectedItems, <int>[2]);
+
+      await scrollGesture.up();
+      expect(selectedItems, <int>[2, 1]);
+    });
+
+    testWidgets(
+      'does not trigger haptics or sounds when scrolling by tapping on the item',
+      (WidgetTester tester) async {
+        final selectedItems = <int>[];
+        final systemCalls = <MethodCall>[];
 
         tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, (
           MethodCall methodCall,
@@ -255,37 +496,27 @@ void main() {
           ),
         );
 
-        await tester.drag(
-          find.text('0'),
-          const Offset(0.0, -100.0),
-          warnIfMissed: false,
-        ); // has an IgnorePointer
-        expect(selectedItems, <int>[1]);
-        expect(
-          systemCalls.single,
-          isMethodCall('HapticFeedback.vibrate', arguments: 'HapticFeedbackType.selectionClick'),
-        );
+        await tester.tap(find.text('2'), warnIfMissed: false); // has an IgnorePointer
+        await tester.pumpAndSettle(const Duration(milliseconds: 10));
 
-        await tester.drag(
-          find.text('0'),
-          const Offset(0.0, 100.0),
-          warnIfMissed: false,
-        ); // has an IgnorePointer
-        expect(selectedItems, <int>[1, 0]);
-        expect(systemCalls, hasLength(2));
-        expect(
-          systemCalls.last,
-          isMethodCall('HapticFeedback.vibrate', arguments: 'HapticFeedbackType.selectionClick'),
-        );
+        // Expect that the item changed, but haptics were not triggered.
+        expect(selectedItems, <int>[1, 2]);
+        expect(systemCalls, isEmpty);
+
+        await tester.drag(find.text('2'), const Offset(0.0, -30.0), warnIfMissed: false);
+        await tester.pumpAndSettle(const Duration(milliseconds: 10));
+        // Expect that moving within the item does not trigger haptics after animating scroll.
+        expect(selectedItems, <int>[1, 2]);
+        expect(systemCalls, isEmpty);
       },
       variant: TargetPlatformVariant.only(TargetPlatform.iOS),
     );
 
     testWidgets(
-      'do not trigger haptic effects on non-iOS devices',
+      'do not trigger haptic or sounds on non-iOS devices',
       (WidgetTester tester) async {
-        final List<int> selectedItems = <int>[];
-        final List<MethodCall> systemCalls = <MethodCall>[];
+        final selectedItems = <int>[];
+        final systemCalls = <MethodCall>[];
 
         tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, (
           MethodCall methodCall,
@@ -316,6 +547,10 @@ void main() {
           const Offset(0.0, -100.0),
           warnIfMissed: false,
         ); // has an IgnorePointer
+
+        // Allow the scroll to settle in the middle of the item.
+        await tester.pumpAndSettle();
+
         expect(selectedItems, <int>[1]);
         expect(systemCalls, isEmpty);
       },
@@ -329,9 +564,9 @@ void main() {
     testWidgets(
       'a drag in between items settles back',
       (WidgetTester tester) async {
-        final FixedExtentScrollController controller = FixedExtentScrollController(initialItem: 10);
+        final controller = FixedExtentScrollController(initialItem: 10);
         addTearDown(controller.dispose);
-        final List<int> selectedItems = <int>[];
+        final selectedItems = <int>[];
 
         await tester.pumpWidget(
           Directionality(
@@ -398,9 +633,9 @@ void main() {
     testWidgets(
       'a big fling that overscrolls springs back',
       (WidgetTester tester) async {
-        final FixedExtentScrollController controller = FixedExtentScrollController(initialItem: 10);
+        final controller = FixedExtentScrollController(initialItem: 10);
         addTearDown(controller.dispose);
-        final List<int> selectedItems = <int>[];
+        final selectedItems = <int>[];
 
         await tester.pumpWidget(
           Directionality(
@@ -462,6 +697,8 @@ void main() {
     );
   });
 
+  // TODO(justinmc): Don't test Material interactions in Cupertino tests.
+  // https://github.com/flutter/flutter/issues/177028
   testWidgets('Picker adapts to MaterialApp dark mode', (WidgetTester tester) async {
     Widget buildCupertinoPicker(Brightness brightness) {
       return MaterialApp(
@@ -518,7 +755,8 @@ void main() {
       final Container container = tester.firstWidget<Container>(selectionContainer);
       final EdgeInsetsGeometry? margin = container.margin;
       final BorderRadiusGeometry? borderRadius =
-          (container.decoration as BoxDecoration?)?.borderRadius;
+          ((container.decoration as ShapeDecoration?)?.shape as RoundedSuperellipseBorder?)
+              ?.borderRadius;
 
       expect(margin, isA<EdgeInsetsDirectional>());
       expect(borderRadius, isA<BorderRadiusDirectional>());
@@ -526,7 +764,7 @@ void main() {
   });
 
   testWidgets('Scroll controller is detached upon dispose', (WidgetTester tester) async {
-    final SpyFixedExtentScrollController controller = SpyFixedExtentScrollController();
+    final controller = SpyFixedExtentScrollController();
     addTearDown(controller.dispose);
     expect(controller.hasListeners, false);
     expect(controller.positions.length, 0);
@@ -561,9 +799,9 @@ void main() {
   ) async {
     // Regression test for https://github.com/flutter/flutter/issues/126491
 
-    final List<int> children = List<int>.generate(100, (int index) => index);
-    final List<int> paintedChildren = <int>[];
-    final Set<int> tappedChildren = <int>{};
+    final children = List<int>.generate(100, (int index) => index);
+    final paintedChildren = <int>[];
+    final tappedChildren = <int>{};
 
     await tester.pumpWidget(
       CupertinoApp(
@@ -576,28 +814,27 @@ void main() {
                 itemExtent: 55,
                 diameterRatio: 0.9,
                 onSelectedItemChanged: (int index) {},
-                children:
-                    children
-                        .map<Widget>(
-                          (int index) => GestureDetector(
-                            key: ValueKey<int>(index),
-                            onTap: () {
-                              tappedChildren.add(index);
-                            },
-                            child: SizedBox(
-                              width: 55,
-                              height: 55,
-                              child: CustomPaint(
-                                painter: TestCallbackPainter(
-                                  onPaint: () {
-                                    paintedChildren.add(index);
-                                  },
-                                ),
-                              ),
+                children: children
+                    .map<Widget>(
+                      (int index) => GestureDetector(
+                        key: ValueKey<int>(index),
+                        onTap: () {
+                          tappedChildren.add(index);
+                        },
+                        child: SizedBox(
+                          width: 55,
+                          height: 55,
+                          child: CustomPaint(
+                            painter: TestCallbackPainter(
+                              onPaint: () {
+                                paintedChildren.add(index);
+                              },
                             ),
                           ),
-                        )
-                        .toList(),
+                        ),
+                      ),
+                    )
+                    .toList(),
               ),
             ),
           ),
@@ -623,10 +860,10 @@ void main() {
   testWidgets('Tapping on child in a CupertinoPicker selects that child', (
     WidgetTester tester,
   ) async {
-    int selectedItem = 0;
-    const Duration tapScrollDuration = Duration(milliseconds: 300);
+    var selectedItem = 0;
+    const tapScrollDuration = Duration(milliseconds: 300);
     // The tap animation is set to 300ms, but add an extra 1µs to complete the scroll animation.
-    const Duration infinitesimalPause = Duration(microseconds: 1);
+    const infinitesimalPause = Duration(microseconds: 1);
 
     await tester.pumpWidget(
       CupertinoApp(
@@ -664,5 +901,33 @@ void main() {
     await tester.pump();
     await tester.pump(tapScrollDuration + infinitesimalPause);
     expect(selectedItem, equals(2));
+  });
+
+  testWidgets('CupertinoPickerDefaultSelectionOverlay does not crash at zero area', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = Size.zero;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      const CupertinoApp(home: Center(child: CupertinoPickerDefaultSelectionOverlay())),
+    );
+    expect(tester.getSize(find.byType(CupertinoPickerDefaultSelectionOverlay)), Size.zero);
+  });
+
+  testWidgets('CupertinoPicker does not crash at zero area', (WidgetTester tester) async {
+    await tester.pumpWidget(
+      CupertinoApp(
+        home: Center(
+          child: SizedBox.shrink(
+            child: CupertinoPicker(
+              itemExtent: 2.0,
+              onSelectedItemChanged: (_) {},
+              children: const <Widget>[Text('X'), Text('Y')],
+            ),
+          ),
+        ),
+      ),
+    );
+    expect(tester.getSize(find.byType(CupertinoPicker)), Size.zero);
   });
 }

@@ -14,7 +14,6 @@ import '../build_info.dart';
 import '../cache.dart';
 import '../globals.dart' as globals;
 import '../project.dart';
-import '../reporting/reporting.dart';
 import '../runner/flutter_command.dart' show FlutterCommandResult;
 import 'build.dart';
 
@@ -33,10 +32,8 @@ class BuildAppBundleCommand extends BuildSubCommand {
     addDartObfuscationOption();
     usesDartDefineOption();
     usesExtraDartFlagOptions(verboseHelp: verboseHelp);
-    addBundleSkSLPathOption(hide: !verboseHelp);
     addBuildPerformanceFile(hide: !verboseHelp);
     usesTrackWidgetCreation(verboseHelp: verboseHelp);
-    addNullSafetyModeOptions(hide: !verboseHelp);
     addEnableExperimentation(hide: !verboseHelp);
     usesAnalyzeSizeFlag();
     addAndroidSpecificBuildOptions(hide: !verboseHelp);
@@ -71,7 +68,7 @@ class BuildAppBundleCommand extends BuildSubCommand {
   }
 
   @override
-  final String name = 'appbundle';
+  final name = 'appbundle';
 
   @override
   List<String> get aliases => const <String>['aab'];
@@ -86,32 +83,11 @@ class BuildAppBundleCommand extends BuildSubCommand {
   };
 
   @override
-  final String description =
+  final description =
       'Build an Android App Bundle file from your app.\n\n'
       "This command can build debug and release versions of an app bundle for your application. 'debug' builds support "
       "debugging and a quick development cycle. 'release' builds don't support debugging and are "
       'suitable for deploying to app stores. \n app bundle improves your app size';
-
-  @override
-  Future<CustomDimensions> get usageValues async {
-    String buildMode;
-
-    if (boolArg('release')) {
-      buildMode = 'release';
-    } else if (boolArg('debug')) {
-      buildMode = 'debug';
-    } else if (boolArg('profile')) {
-      buildMode = 'profile';
-    } else {
-      // The build defaults to release.
-      buildMode = 'release';
-    }
-
-    return CustomDimensions(
-      commandBuildAppBundleTargetPlatform: stringsArg('target-platform').join(','),
-      commandBuildAppBundleBuildMode: buildMode,
-    );
-  }
 
   @override
   Future<Event> unifiedAnalyticsUsageValues(String commandPath) async {
@@ -141,7 +117,7 @@ class BuildAppBundleCommand extends BuildSubCommand {
     if (globals.androidSdk == null) {
       exitWithNoSdkMessage();
     }
-    final AndroidBuildInfo androidBuildInfo = AndroidBuildInfo(
+    final androidBuildInfo = AndroidBuildInfo(
       await getBuildInfo(),
       targetArchs: stringsArg('target-platform').map<AndroidArch>(getAndroidArchForName),
     );
@@ -159,7 +135,7 @@ class BuildAppBundleCommand extends BuildSubCommand {
         boolArg('deferred-components') &&
         boolArg('validate-deferred-components') &&
         !boolArg('debug')) {
-      final DeferredComponentsPrebuildValidator validator = DeferredComponentsPrebuildValidator(
+      final validator = DeferredComponentsPrebuildValidator(
         project.directory,
         globals.logger,
         globals.platform,
@@ -188,7 +164,6 @@ class BuildAppBundleCommand extends BuildSubCommand {
     }
 
     validateBuild(androidBuildInfo);
-    displayNullSafetyMode(androidBuildInfo.buildInfo);
     globals.terminal.usesTerminalUi = true;
     await androidBuilder?.buildAab(
       project: project,

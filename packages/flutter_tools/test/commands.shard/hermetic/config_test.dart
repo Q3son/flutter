@@ -15,7 +15,6 @@ import 'package:flutter_tools/src/cache.dart';
 import 'package:flutter_tools/src/commands/config.dart';
 import 'package:flutter_tools/src/features.dart';
 import 'package:flutter_tools/src/globals.dart' as globals;
-import 'package:flutter_tools/src/reporting/reporting.dart';
 import 'package:flutter_tools/src/version.dart';
 import 'package:test/fake.dart';
 import 'package:unified_analytics/unified_analytics.dart';
@@ -30,7 +29,6 @@ void main() {
   late FakeAndroidStudio fakeAndroidStudio;
   late FakeAndroidSdk fakeAndroidSdk;
   late FakeFlutterVersion fakeFlutterVersion;
-  late TestUsage testUsage;
   late FakeAnalytics fakeAnalytics;
 
   setUpAll(() {
@@ -42,35 +40,34 @@ void main() {
     fakeAndroidStudio = FakeAndroidStudio();
     fakeAndroidSdk = FakeAndroidSdk();
     fakeFlutterVersion = FakeFlutterVersion();
-    testUsage = TestUsage();
     fakeAnalytics = getInitializedFakeAnalyticsInstance(
       fs: MemoryFileSystem.test(),
       fakeFlutterVersion: fakes.FakeFlutterVersion(),
     );
   });
 
-  void verifyNoAnalytics() {
-    expect(testUsage.commands, isEmpty);
-    expect(testUsage.events, isEmpty);
-    expect(testUsage.timings, isEmpty);
-    expect(fakeAnalytics.sentEvents, isEmpty);
-  }
-
   group('config', () {
     testUsingContext('prints all settings with --list', () async {
-      final ConfigCommand configCommand = ConfigCommand();
+      final configCommand = ConfigCommand();
       final CommandRunner<void> commandRunner = createTestCommandRunner(configCommand);
       await commandRunner.run(<String>['config', '--list']);
       expect(
         testLogger.statusText,
         'All Settings:\n'
-        '${allFeatures.where((Feature e) => e.configSetting != null).map((Feature e) => '  ${e.configSetting}: (Not set)').join('\n')}'
+        '${featureFlags.allFeatures.where((Feature e) => e.configSetting != null).map((Feature e) => '  ${e.configSetting}: (Not set)').join('\n')}'
         '\n\n',
       );
-    }, overrides: <Type, Generator>{Usage: () => testUsage});
+    });
+
+    testUsingContext('prints default values with --help', () async {
+      final configCommand = ConfigCommand();
+      final CommandRunner<void> commandRunner = createTestCommandRunner(configCommand);
+      await commandRunner.run(<String>['config', '--help']);
+      expect(testLogger.statusText, contains('(defaults to on)'));
+    });
 
     testUsingContext('throws error on excess arguments', () {
-      final ConfigCommand configCommand = ConfigCommand();
+      final configCommand = ConfigCommand();
       final CommandRunner<void> commandRunner = createTestCommandRunner(configCommand);
 
       expect(
@@ -82,13 +79,13 @@ void main() {
         ]),
         throwsToolExit(),
       );
-      verifyNoAnalytics();
-    }, overrides: <Type, Generator>{Usage: () => testUsage});
+      expect(fakeAnalytics.sentEvents, isEmpty);
+    }, overrides: <Type, Generator>{Analytics: () => fakeAnalytics});
 
     testUsingContext(
       'machine flag',
       () async {
-        final ConfigCommand command = ConfigCommand();
+        final command = ConfigCommand();
         await command.handleMachine();
 
         expect(testLogger.statusText, isNotEmpty);
@@ -99,38 +96,42 @@ void main() {
           expect(jsonObject['android-sdk'], fakeAndroidSdk.directory.path);
           expect(jsonObject['jdk-dir'], fakeJava.javaHome);
         }
-        verifyNoAnalytics();
+        expect(fakeAnalytics.sentEvents, isEmpty);
       },
       overrides: <Type, Generator>{
         AndroidStudio: () => fakeAndroidStudio,
         AndroidSdk: () => fakeAndroidSdk,
         Java: () => fakeJava,
-        Usage: () => testUsage,
+        Analytics: () => fakeAnalytics,
       },
     );
 
     testUsingContext('Can set build-dir', () async {
-      final ConfigCommand configCommand = ConfigCommand();
+      final configCommand = ConfigCommand();
       final CommandRunner<void> commandRunner = createTestCommandRunner(configCommand);
 
       await commandRunner.run(<String>['config', '--build-dir=foo']);
 
       expect(getBuildDirectory(), 'foo');
-      verifyNoAnalytics();
-    }, overrides: <Type, Generator>{Usage: () => testUsage});
+      expect(fakeAnalytics.sentEvents, isEmpty);
+    }, overrides: <Type, Generator>{Analytics: () => fakeAnalytics});
 
-    testUsingContext('throws error on absolute path to build-dir', () async {
-      final ConfigCommand configCommand = ConfigCommand();
-      final CommandRunner<void> commandRunner = createTestCommandRunner(configCommand);
+    testUsingContext(
+      'throws error on absolute path to build-dir',
+      () async {
+        final configCommand = ConfigCommand();
+        final CommandRunner<void> commandRunner = createTestCommandRunner(configCommand);
 
-      expect(() => commandRunner.run(<String>['config', '--build-dir=/foo']), throwsToolExit());
-      verifyNoAnalytics();
-    }, overrides: <Type, Generator>{Usage: () => testUsage});
+        expect(() => commandRunner.run(<String>['config', '--build-dir=/foo']), throwsToolExit());
+        expect(fakeAnalytics.sentEvents, isEmpty);
+      },
+      overrides: <Type, Generator>{Analytics: () => fakeAnalytics},
+    );
 
     testUsingContext(
       'allows setting and removing feature flags',
       () async {
-        final ConfigCommand configCommand = ConfigCommand();
+        final configCommand = ConfigCommand();
         final CommandRunner<void> commandRunner = createTestCommandRunner(configCommand);
 
         await commandRunner.run(<String>[
@@ -175,17 +176,17 @@ void main() {
         expect(globals.config.getValue('enable-linux-desktop'), false);
         expect(globals.config.getValue('enable-windows-desktop'), false);
         expect(globals.config.getValue('enable-macos-desktop'), false);
-        verifyNoAnalytics();
+        expect(fakeAnalytics.sentEvents, isEmpty);
       },
       overrides: <Type, Generator>{
         AndroidStudio: () => fakeAndroidStudio,
         AndroidSdk: () => fakeAndroidSdk,
-        Usage: () => testUsage,
+        Analytics: () => fakeAnalytics,
       },
     );
 
     testUsingContext('warns the user to reload IDE', () async {
-      final ConfigCommand configCommand = ConfigCommand();
+      final configCommand = ConfigCommand();
       final CommandRunner<void> commandRunner = createTestCommandRunner(configCommand);
 
       await commandRunner.run(<String>['config', '--enable-web']);
@@ -194,13 +195,13 @@ void main() {
         testLogger.statusText,
         containsIgnoringWhitespace('You may need to restart any open editors'),
       );
-    }, overrides: <Type, Generator>{Usage: () => testUsage});
+    });
 
     testUsingContext(
       'displays which config settings are available on stable',
       () async {
         fakeFlutterVersion.channel = 'stable';
-        final ConfigCommand configCommand = ConfigCommand();
+        final configCommand = ConfigCommand();
         final CommandRunner<void> commandRunner = createTestCommandRunner(configCommand);
 
         await commandRunner.run(<String>[
@@ -217,82 +218,49 @@ void main() {
         expect(testLogger.statusText, containsIgnoringWhitespace('enable-linux-desktop: true'));
         expect(testLogger.statusText, containsIgnoringWhitespace('enable-windows-desktop: true'));
         expect(testLogger.statusText, containsIgnoringWhitespace('enable-macos-desktop: true'));
-        verifyNoAnalytics();
+        expect(fakeAnalytics.sentEvents, isEmpty);
       },
       overrides: <Type, Generator>{
         AndroidStudio: () => fakeAndroidStudio,
         AndroidSdk: () => fakeAndroidSdk,
         FlutterVersion: () => fakeFlutterVersion,
-        Usage: () => testUsage,
+        Analytics: () => fakeAnalytics,
       },
     );
 
     testUsingContext(
-      'no-analytics flag flips usage flag and sends event',
+      'analytics flag enables/disables analytics',
       () async {
-        final ConfigCommand configCommand = ConfigCommand();
+        final configCommand = ConfigCommand();
         final CommandRunner<void> commandRunner = createTestCommandRunner(configCommand);
 
-        expect(testUsage.enabled, true);
+        expect(fakeAnalytics.telemetryEnabled, true);
+
         await commandRunner.run(<String>['config', '--no-analytics']);
-
-        expect(testUsage.enabled, false);
-
-        // Verify that we flushed the analytics queue.
-        expect(testUsage.ensureAnalyticsSentCalls, 1);
-
-        // Verify that we only send the analytics disable event, and no other
-        // info.
-        expect(
-          testUsage.events,
-          equals(<TestUsageEvent>[const TestUsageEvent('analytics', 'enabled', label: 'false')]),
-        );
-        expect(testUsage.commands, isEmpty);
-        expect(testUsage.timings, isEmpty);
-        expect(fakeAnalytics.sentEvents, isEmpty);
-      },
-      overrides: <Type, Generator>{Usage: () => testUsage},
-    );
-
-    testUsingContext(
-      'analytics flag flips usage flag and sends event',
-      () async {
-        final ConfigCommand configCommand = ConfigCommand();
-        final CommandRunner<void> commandRunner = createTestCommandRunner(configCommand);
+        expect(fakeAnalytics.telemetryEnabled, false);
 
         await commandRunner.run(<String>['config', '--analytics']);
-
-        expect(testUsage.enabled, true);
-
-        // Verify that we only send the analytics enable event, and no other
-        // info.
-        expect(
-          testUsage.events,
-          equals(<TestUsageEvent>[const TestUsageEvent('analytics', 'enabled', label: 'true')]),
-        );
-        expect(testUsage.commands, isEmpty);
-        expect(testUsage.timings, isEmpty);
-        expect(fakeAnalytics.sentEvents, isEmpty);
+        expect(fakeAnalytics.telemetryEnabled, true);
       },
-      overrides: <Type, Generator>{Usage: () => testUsage},
+      overrides: <Type, Generator>{Analytics: () => fakeAnalytics},
     );
 
     testUsingContext('analytics reported with help usages', () async {
-      final ConfigCommand configCommand = ConfigCommand();
+      final configCommand = ConfigCommand();
       createTestCommandRunner(configCommand);
 
-      testUsage.suppressAnalytics = true;
+      await fakeAnalytics.setTelemetry(false);
       expect(
         configCommand.usage,
         containsIgnoringWhitespace('Analytics reporting is currently disabled'),
       );
 
-      testUsage.suppressAnalytics = false;
+      await fakeAnalytics.setTelemetry(true);
       expect(
         configCommand.usage,
         containsIgnoringWhitespace('Analytics reporting is currently enabled'),
       );
-    }, overrides: <Type, Generator>{Usage: () => testUsage});
+    }, overrides: <Type, Generator>{Analytics: () => fakeAnalytics});
   });
 }
 

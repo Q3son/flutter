@@ -4,6 +4,7 @@
 
 #include "impeller/display_list/image_filter.h"
 
+#include "flutter/display_list/effects/dl_color_sources.h"
 #include "flutter/display_list/effects/dl_image_filters.h"
 #include "fml/logging.h"
 #include "impeller/display_list/color_filter.h"
@@ -28,6 +29,7 @@ std::shared_ptr<FilterContents> WrapInput(const flutter::DlImageFilter* filter,
           Sigma(blur_filter->sigma_x()),                            //
           Sigma(blur_filter->sigma_y()),                            //
           static_cast<Entity::TileMode>(blur_filter->tile_mode()),  //
+          blur_filter->bounds(),                                    //
           FilterContents::BlurStyle::kNormal                        //
       );
     }

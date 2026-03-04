@@ -14,7 +14,10 @@ class DependentWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final Color resolved = CupertinoDynamicColor.resolve(color, context);
-    return DecoratedBox(decoration: BoxDecoration(color: resolved), child: const SizedBox.expand());
+    return DecoratedBox(
+      decoration: BoxDecoration(color: resolved),
+      child: const SizedBox.expand(),
+    );
   }
 }
 
@@ -529,6 +532,8 @@ void main() {
     expect(color.value, dynamicColor.darkHighContrastElevatedColor.value);
   });
 
+  // TODO(justinmc): Don't test Material interactions in Cupertino tests.
+  // https://github.com/flutter/flutter/issues/177028
   group('MaterialApp:', () {
     Color? color;
     setUp(() {

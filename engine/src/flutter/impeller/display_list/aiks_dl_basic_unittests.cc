@@ -15,21 +15,15 @@
 #include "flutter/display_list/dl_builder.h"
 #include "flutter/display_list/dl_color.h"
 #include "flutter/display_list/dl_paint.h"
+#include "flutter/display_list/geometry/dl_path_builder.h"
 #include "flutter/impeller/display_list/dl_image_impeller.h"
 #include "flutter/impeller/geometry/scalar.h"
 #include "flutter/testing/display_list_testing.h"
 #include "flutter/testing/testing.h"
 #include "impeller/playground/widgets.h"
-#include "include/core/SkMatrix.h"
 
 namespace impeller {
 namespace testing {
-
-namespace {
-SkM44 FromImpellerMatrix(const Matrix& matrix) {
-  return SkM44::ColMajor(matrix.m);
-}
-}  // namespace
 
 using namespace flutter;
 
@@ -37,10 +31,77 @@ TEST_P(AiksTest, CanRenderColoredRect) {
   DisplayListBuilder builder;
   DlPaint paint;
   paint.setColor(DlColor::kBlue());
-  SkPath path = SkPath();
-  path.addRect(SkRect::MakeXYWH(100.0, 100.0, 100.0, 100.0));
-  builder.DrawPath(path, paint);
+  builder.DrawPath(DlPath::MakeRectXYWH(100.0f, 100.0f, 100.0f, 100.0f), paint);
   ASSERT_TRUE(OpenPlaygroundHere(builder.Build()));
+}
+
+namespace {
+using DrawRectProc =
+    std::function<void(DisplayListBuilder&, const DlRect&, const DlPaint&)>;
+
+sk_sp<DisplayList> MakeWideStrokedRects(Point scale,
+                                        const DrawRectProc& draw_rect) {
+  DisplayListBuilder builder;
+  builder.Scale(scale.x, scale.y);
+  builder.DrawColor(DlColor::kWhite(), DlBlendMode::kSrc);
+
+  DlPaint paint;
+  paint.setColor(DlColor::kBlue().withAlphaF(0.5));
+  paint.setDrawStyle(DlDrawStyle::kStroke);
+  paint.setStrokeWidth(30.0f);
+
+  // Each of these 3 sets of rects includes (with different join types):
+  // - One rectangle with a gap in the middle
+  // - One rectangle with no gap because it is too narrow
+  // - One rectangle with no gap because it is too short
+  paint.setStrokeJoin(DlStrokeJoin::kBevel);
+  draw_rect(builder, DlRect::MakeXYWH(100.0f, 100.0f, 100.0f, 100.0f), paint);
+  draw_rect(builder, DlRect::MakeXYWH(250.0f, 100.0f, 10.0f, 100.0f), paint);
+  draw_rect(builder, DlRect::MakeXYWH(100.0f, 250.0f, 100.0f, 10.0f), paint);
+
+  paint.setStrokeJoin(DlStrokeJoin::kRound);
+  draw_rect(builder, DlRect::MakeXYWH(350.0f, 100.0f, 100.0f, 100.0f), paint);
+  draw_rect(builder, DlRect::MakeXYWH(500.0f, 100.0f, 10.0f, 100.0f), paint);
+  draw_rect(builder, DlRect::MakeXYWH(350.0f, 250.0f, 100.0f, 10.0f), paint);
+
+  paint.setStrokeJoin(DlStrokeJoin::kMiter);
+  draw_rect(builder, DlRect::MakeXYWH(600.0f, 100.0f, 100.0f, 100.0f), paint);
+  draw_rect(builder, DlRect::MakeXYWH(750.0f, 100.0f, 10.0f, 100.0f), paint);
+  draw_rect(builder, DlRect::MakeXYWH(600.0f, 250.0f, 100.0f, 10.0f), paint);
+
+  // And now draw 3 rectangles with a stroke width so large that that it
+  // overlaps in the middle in both directions (horizontal/vertical).
+  paint.setStrokeWidth(110.0f);
+
+  paint.setStrokeJoin(DlStrokeJoin::kBevel);
+  draw_rect(builder, DlRect::MakeXYWH(100.0f, 400.0f, 100.0f, 100.0f), paint);
+
+  paint.setStrokeJoin(DlStrokeJoin::kRound);
+  draw_rect(builder, DlRect::MakeXYWH(350.0f, 400.0f, 100.0f, 100.0f), paint);
+
+  paint.setStrokeJoin(DlStrokeJoin::kMiter);
+  draw_rect(builder, DlRect::MakeXYWH(600.0f, 400.0f, 100.0f, 100.0f), paint);
+
+  return builder.Build();
+}
+}  // namespace
+
+TEST_P(AiksTest, CanRenderWideStrokedRectWithoutOverlap) {
+  ASSERT_TRUE(OpenPlaygroundHere(MakeWideStrokedRects(
+      GetContentScale(), [](DisplayListBuilder& builder, const DlRect& rect,
+                            const DlPaint& paint) {
+        // Draw the rect directly
+        builder.DrawRect(rect, paint);
+      })));
+}
+
+TEST_P(AiksTest, CanRenderWideStrokedRectPathWithoutOverlap) {
+  ASSERT_TRUE(OpenPlaygroundHere(MakeWideStrokedRects(
+      GetContentScale(), [](DisplayListBuilder& builder, const DlRect& rect,
+                            const DlPaint& paint) {
+        // Draw the rect as a Path
+        builder.DrawPath(DlPath::MakeRect(rect), paint);
+      })));
 }
 
 TEST_P(AiksTest, CanRenderImage) {
@@ -48,7 +109,7 @@ TEST_P(AiksTest, CanRenderImage) {
   DlPaint paint;
   paint.setColor(DlColor::kRed());
   auto image = DlImageImpeller::Make(CreateTextureForFixture("kalimba.jpg"));
-  builder.DrawImage(image, SkPoint::Make(100.0, 100.0),
+  builder.DrawImage(image, DlPoint(100.0, 100.0),
                     DlImageSampling::kNearestNeighbor, &paint);
   ASSERT_TRUE(OpenPlaygroundHere(builder.Build()));
 }
@@ -62,7 +123,7 @@ TEST_P(AiksTest, CanRenderInvertedImageWithColorFilter) {
   paint.setInvertColors(true);
   auto image = DlImageImpeller::Make(CreateTextureForFixture("kalimba.jpg"));
 
-  builder.DrawImage(image, SkPoint::Make(100.0, 100.0),
+  builder.DrawImage(image, DlPoint(100.0, 100.0),
                     DlImageSampling::kNearestNeighbor, &paint);
   ASSERT_TRUE(OpenPlaygroundHere(builder.Build()));
 }
@@ -75,7 +136,7 @@ TEST_P(AiksTest, CanRenderColorFilterWithInvertColors) {
       DlColorFilter::MakeBlend(DlColor::kYellow(), DlBlendMode::kSrcOver));
   paint.setInvertColors(true);
 
-  builder.DrawRect(SkRect::MakeLTRB(0, 0, 100, 100), paint);
+  builder.DrawRect(DlRect::MakeLTRB(0, 0, 100, 100), paint);
   ASSERT_TRUE(OpenPlaygroundHere(builder.Build()));
 }
 
@@ -129,32 +190,34 @@ void CanRenderTiledTexture(AiksTest* aiks_test,
 
   builder.Scale(aiks_test->GetContentScale().x, aiks_test->GetContentScale().y);
   builder.Translate(100.0f, 100.0f);
-  builder.DrawRect(SkRect::MakeXYWH(0, 0, 600, 600), paint);
+  builder.DrawRect(DlRect::MakeXYWH(0, 0, 600, 600), paint);
 
   // Should not change the image.
   constexpr auto stroke_width = 64;
   paint.setDrawStyle(DlDrawStyle::kStroke);
   paint.setStrokeWidth(stroke_width);
   if (tile_mode == DlTileMode::kDecal) {
-    builder.DrawRect(SkRect::MakeXYWH(stroke_width, stroke_width, 600, 600),
+    builder.DrawRect(DlRect::MakeXYWH(stroke_width, stroke_width, 600, 600),
                      paint);
   } else {
-    builder.DrawRect(SkRect::MakeXYWH(0, 0, 600, 600), paint);
+    builder.DrawRect(DlRect::MakeXYWH(0, 0, 600, 600), paint);
   }
 
   {
     // Should not change the image.
-    SkPath path;
-    path.addCircle(150, 150, 150);
-    path.addRoundRect(SkRect::MakeLTRB(300, 300, 600, 600), 10, 10);
+    DlPathBuilder path_builder;
+    path_builder.AddCircle(DlPoint(150, 150), 150);
+    path_builder.AddRoundRect(
+        RoundRect::MakeRectXY(DlRect::MakeLTRB(300, 300, 600, 600), 10, 10));
+    DlPath path = path_builder.TakePath();
 
     // Make sure path cannot be simplified...
-    EXPECT_FALSE(path.isRect(nullptr));
-    EXPECT_FALSE(path.isOval(nullptr));
-    EXPECT_FALSE(path.isRRect(nullptr));
+    EXPECT_FALSE(path.IsRect(nullptr));
+    EXPECT_FALSE(path.IsOval(nullptr));
+    EXPECT_FALSE(path.IsRoundRect(nullptr));
 
     // Make sure path will not trigger the optimal convex code
-    EXPECT_FALSE(path.isConvex());
+    EXPECT_FALSE(path.IsConvex());
 
     paint.setDrawStyle(DlDrawStyle::kFill);
     builder.DrawPath(path, paint);
@@ -162,28 +225,25 @@ void CanRenderTiledTexture(AiksTest* aiks_test,
 
   {
     // Should not change the image. Tests the Convex short-cut code.
-    SkPath circle;
-    circle.addCircle(150, 450, 150);
 
-    // Unfortunately, the circle path can be simplified...
-    EXPECT_TRUE(circle.isOval(nullptr));
-    // At least it's convex, though...
-    EXPECT_TRUE(circle.isConvex());
-
-    // Let's make a copy that doesn't remember that it's just a circle...
-    SkPath path;
-    // This moveTo confuses addPath into appending rather than replacing,
-    // which prevents it from noticing that it's just a circle...
-    path.moveTo(10, 10);
-    path.addPath(circle);
+    // To avoid simplification, construct an explicit circle using conics.
+    constexpr float kConicWeight = 0.707106781f;  // sqrt(2)/2
+    const DlPath path = DlPathBuilder()
+                            .MoveTo({150, 300})
+                            .ConicCurveTo({300, 300}, {300, 450}, kConicWeight)
+                            .ConicCurveTo({300, 600}, {150, 600}, kConicWeight)
+                            .ConicCurveTo({0, 600}, {0, 450}, kConicWeight)
+                            .ConicCurveTo({0, 300}, {150, 300}, kConicWeight)
+                            .Close()
+                            .TakePath();
 
     // Make sure path cannot be simplified...
-    EXPECT_FALSE(path.isRect(nullptr));
-    EXPECT_FALSE(path.isOval(nullptr));
-    EXPECT_FALSE(path.isRRect(nullptr));
+    EXPECT_FALSE(path.IsRect(nullptr));
+    EXPECT_FALSE(path.IsOval(nullptr));
+    EXPECT_FALSE(path.IsRoundRect(nullptr));
 
     // But check that we will trigger the optimal convex code
-    EXPECT_TRUE(path.isConvex());
+    EXPECT_TRUE(path.IsConvex());
 
     paint.setDrawStyle(DlDrawStyle::kFill);
     builder.DrawPath(path, paint);
@@ -218,16 +278,16 @@ TEST_P(AiksTest, CanRenderImageRect) {
   DisplayListBuilder builder;
   auto image = DlImageImpeller::Make(CreateTextureForFixture("kalimba.jpg"));
 
-  SkSize image_half_size = SkSize::Make(image->dimensions().fWidth * 0.5f,
-                                        image->dimensions().fHeight * 0.5f);
+  DlISize image_half_size =
+      DlISize(image->GetSize().width * 0.5f, image->GetSize().height * 0.5f);
 
   // Render the bottom right quarter of the source image in a stretched rect.
-  auto source_rect = SkRect::MakeSize(image_half_size);
+  auto source_rect = DlRect::MakeSize(image_half_size);
   source_rect =
-      source_rect.makeOffset(image_half_size.fWidth, image_half_size.fHeight);
+      source_rect.Shift(image_half_size.width, image_half_size.height);
 
   builder.DrawImageRect(image, source_rect,
-                        SkRect::MakeXYWH(100, 100, 600, 600),
+                        DlRect::MakeXYWH(100, 100, 600, 600),
                         DlImageSampling::kNearestNeighbor);
   ASSERT_TRUE(OpenPlaygroundHere(builder.Build()));
 }
@@ -237,11 +297,11 @@ TEST_P(AiksTest, DrawImageRectSrcOutsideBounds) {
   auto image = DlImageImpeller::Make(CreateTextureForFixture("kalimba.jpg"));
 
   // Use a source rect that is partially outside the bounds of the image.
-  auto source_rect = SkRect::MakeXYWH(
-      image->dimensions().fWidth * 0.25f, image->dimensions().fHeight * 0.4f,
-      image->dimensions().fWidth, image->dimensions().fHeight);
+  auto source_rect = DlRect::MakeXYWH(
+      image->GetSize().width * 0.25f, image->GetSize().height * 0.4f,
+      image->GetSize().width, image->GetSize().height);
 
-  auto dest_rect = SkRect::MakeXYWH(100, 100, 600, 600);
+  auto dest_rect = DlRect::MakeXYWH(100, 100, 600, 600);
 
   DlPaint paint;
   paint.setColor(DlColor::kMidGrey());
@@ -265,34 +325,34 @@ TEST_P(AiksTest, CanRenderSimpleClips) {
     builder.Translate(x, y);
     {
       builder.Save();
-      builder.ClipRect(SkRect::MakeLTRB(50, 50, 150, 150));
+      builder.ClipRect(DlRect::MakeLTRB(50, 50, 150, 150));
       builder.DrawPaint(paint);
       builder.Restore();
     }
     {
       builder.Save();
-      builder.ClipOval(SkRect::MakeLTRB(200, 50, 300, 150));
+      builder.ClipOval(DlRect::MakeLTRB(200, 50, 300, 150));
       builder.DrawPaint(paint);
       builder.Restore();
     }
     {
       builder.Save();
-      builder.ClipRRect(
-          SkRRect::MakeRectXY(SkRect::MakeLTRB(50, 200, 150, 300), 20, 20));
+      builder.ClipRoundRect(
+          DlRoundRect::MakeRectXY(DlRect::MakeLTRB(50, 200, 150, 300), 20, 20));
       builder.DrawPaint(paint);
       builder.Restore();
     }
     {
       builder.Save();
-      builder.ClipRRect(
-          SkRRect::MakeRectXY(SkRect::MakeLTRB(200, 230, 300, 270), 20, 20));
+      builder.ClipRoundRect(DlRoundRect::MakeRectXY(
+          DlRect::MakeLTRB(200, 230, 300, 270), 20, 20));
       builder.DrawPaint(paint);
       builder.Restore();
     }
     {
       builder.Save();
-      builder.ClipRRect(
-          SkRRect::MakeRectXY(SkRect::MakeLTRB(230, 200, 270, 300), 20, 20));
+      builder.ClipRoundRect(DlRoundRect::MakeRectXY(
+          DlRect::MakeLTRB(230, 200, 270, 300), 20, 20));
       builder.DrawPaint(paint);
       builder.Restore();
     }
@@ -325,7 +385,7 @@ TEST_P(AiksTest, CanRenderSimpleClips) {
   auto image = DlImageImpeller::Make(texture);
 
   paint.setColorSource(DlColorSource::MakeRadial(
-      {500, 600}, 75, 7, gradient_colors, stops, DlTileMode::kMirror));
+      DlPoint(500, 600), 75, 7, gradient_colors, stops, DlTileMode::kMirror));
   draw(paint, 0, 300);
 
   paint.setColorSource(
@@ -345,9 +405,9 @@ TEST_P(AiksTest, CanSaveLayerStandalone) {
   DlPaint alpha;
   alpha.setColor(DlColor::kRed().modulateOpacity(0.5));
 
-  builder.SaveLayer(nullptr, &alpha);
+  builder.SaveLayer(std::nullopt, &alpha);
 
-  builder.DrawCircle(SkPoint{125, 125}, 125, red);
+  builder.DrawCircle(DlPoint(125, 125), 125, red);
 
   builder.Restore();
 
@@ -368,8 +428,8 @@ TEST_P(AiksTest, CanRenderDifferentShapesWithSameColorSource) {
   };
 
   paint.setColorSource(DlColorSource::MakeLinear(
-      /*start_point=*/{0, 0},            //
-      /*end_point=*/{100, 100},          //
+      /*start_point=*/DlPoint(0, 0),     //
+      /*end_point=*/DlPoint(100, 100),   //
       /*stop_count=*/2,                  //
       /*colors=*/colors,                 //
       /*stops=*/stops,                   //
@@ -378,12 +438,12 @@ TEST_P(AiksTest, CanRenderDifferentShapesWithSameColorSource) {
 
   builder.Save();
   builder.Translate(100, 100);
-  builder.DrawRect(SkRect::MakeXYWH(0, 0, 200, 200), paint);
+  builder.DrawRect(DlRect::MakeXYWH(0, 0, 200, 200), paint);
   builder.Restore();
 
   builder.Save();
   builder.Translate(100, 400);
-  builder.DrawCircle(SkPoint{100, 100}, 100, paint);
+  builder.DrawCircle(DlPoint(100, 100), 100, paint);
   builder.Restore();
   ASSERT_TRUE(OpenPlaygroundHere(builder.Build()));
 }
@@ -393,16 +453,16 @@ TEST_P(AiksTest, CanRenderRoundedRectWithNonUniformRadii) {
   DlPaint paint;
   paint.setColor(DlColor::kRed());
 
-  SkRRect rrect;
-  SkVector radii[4] = {
-      SkVector{50, 25},
-      SkVector{25, 50},
-      SkVector{50, 25},
-      SkVector{25, 50},
+  RoundingRadii radii = {
+      .top_left = DlSize(50, 25),
+      .top_right = DlSize(25, 50),
+      .bottom_left = DlSize(25, 50),
+      .bottom_right = DlSize(50, 25),
   };
-  rrect.setRectRadii(SkRect::MakeXYWH(100, 100, 500, 500), radii);
+  DlRoundRect rrect =
+      DlRoundRect::MakeRectRadii(DlRect::MakeXYWH(100, 100, 500, 500), radii);
 
-  builder.DrawRRect(rrect, paint);
+  builder.DrawRoundRect(rrect, paint);
 
   ASSERT_TRUE(OpenPlaygroundHere(builder.Build()));
 }
@@ -430,6 +490,141 @@ TEST_P(AiksTest, CanDrawPaintMultipleTimes) {
   ASSERT_TRUE(OpenPlaygroundHere(builder.Build()));
 }
 
+TEST_P(AiksTest, StrokedRectsRenderCorrectly) {
+  DisplayListBuilder builder;
+  builder.Scale(GetContentScale().x, GetContentScale().y);
+
+  DlPaint paint;
+  paint.setColor(DlColor::kPurple());
+  paint.setDrawStyle(DlDrawStyle::kStroke);
+  paint.setStrokeWidth(20.0f);
+
+  DlPaint thin_paint = paint;
+  thin_paint.setColor(DlColor::kYellow());
+  thin_paint.setStrokeWidth(0.0f);
+
+  DlRect rect = DlRect::MakeLTRB(10, 10, 90, 90);
+  DlRect thin_tall_rect = DlRect::MakeLTRB(120, 10, 120, 90);
+  DlRect thin_wide_rect = DlRect::MakeLTRB(10, 120, 90, 120);
+  DlRect empty_rect = DlRect::MakeLTRB(120, 120, 120, 120);
+
+  // We draw the following sets of rectangles:
+  //
+  //      A     E     X
+  //                  X
+  //      B     F     X
+  //                  X
+  //      C  D  G  H  X
+  //
+  // Purple A,B,C,D are all drawn with stroke width 20 (non-overflowing).
+  // Each of those sets has 4 rectangles of dimension 80x80, 80x0, 0x80,
+  // and 0,0 to demonstrate the basic behavior and also the behavior of
+  // empty dimensions.
+  //
+  // Blue E,F,G,H are the same 80x80 rectangles, but with an overflowing
+  // stroke width of 120 to show the behavior with degenerately large
+  // stroke widths.
+  //
+  // A,E are drawn with Bevel joins.
+  // B,F are drawn with Round joins.
+  // C,G are drawn with Miter joins and a large enough miter limit.
+  // D,H are drawn with Miter joins and a too small miter limit (== Bevel).
+  //
+  // All orange X rectangles are drawn with round joins and increasing stroke
+  // widths to demonstrate fidelity of the rounding code at various arc sizes.
+  // These X rectangles also help test that the variable sizing estimates in
+  // the round join code are accurate.
+
+  // rects (A)
+  paint.setStrokeJoin(DlStrokeJoin::kBevel);
+  builder.DrawRect(rect.Shift({100, 100}), paint);
+  builder.DrawRect(rect.Shift({100, 100}), thin_paint);
+  builder.DrawRect(thin_tall_rect.Shift({100, 100}), paint);
+  builder.DrawRect(thin_tall_rect.Shift({100, 100}), thin_paint);
+  builder.DrawRect(thin_wide_rect.Shift({100, 100}), paint);
+  builder.DrawRect(thin_wide_rect.Shift({100, 100}), thin_paint);
+  builder.DrawRect(empty_rect.Shift({100, 100}), paint);
+  builder.DrawRect(empty_rect.Shift({100, 100}), thin_paint);
+
+  // rects (B)
+  paint.setStrokeJoin(DlStrokeJoin::kRound);
+  builder.DrawRect(rect.Shift({100, 300}), paint);
+  builder.DrawRect(rect.Shift({100, 300}), thin_paint);
+  builder.DrawRect(thin_tall_rect.Shift({100, 300}), paint);
+  builder.DrawRect(thin_tall_rect.Shift({100, 300}), thin_paint);
+  builder.DrawRect(thin_wide_rect.Shift({100, 300}), paint);
+  builder.DrawRect(thin_wide_rect.Shift({100, 300}), thin_paint);
+  builder.DrawRect(empty_rect.Shift({100, 300}), paint);
+  builder.DrawRect(empty_rect.Shift({100, 300}), thin_paint);
+
+  // rects (C)
+  paint.setStrokeJoin(DlStrokeJoin::kMiter);
+  paint.setStrokeMiter(kSqrt2 + flutter::kEhCloseEnough);
+  builder.DrawRect(rect.Shift({100, 500}), paint);
+  builder.DrawRect(rect.Shift({100, 500}), thin_paint);
+  builder.DrawRect(thin_tall_rect.Shift({100, 500}), paint);
+  builder.DrawRect(thin_tall_rect.Shift({100, 500}), thin_paint);
+  builder.DrawRect(thin_wide_rect.Shift({100, 500}), paint);
+  builder.DrawRect(thin_wide_rect.Shift({100, 500}), thin_paint);
+  builder.DrawRect(empty_rect.Shift({100, 500}), paint);
+  builder.DrawRect(empty_rect.Shift({100, 500}), thin_paint);
+
+  // rects (D)
+  paint.setStrokeJoin(DlStrokeJoin::kMiter);
+  paint.setStrokeMiter(kSqrt2 - flutter::kEhCloseEnough);
+  builder.DrawRect(rect.Shift({300, 500}), paint);
+  builder.DrawRect(rect.Shift({300, 500}), thin_paint);
+  builder.DrawRect(thin_tall_rect.Shift({300, 500}), paint);
+  builder.DrawRect(thin_tall_rect.Shift({300, 500}), thin_paint);
+  builder.DrawRect(thin_wide_rect.Shift({300, 500}), paint);
+  builder.DrawRect(thin_wide_rect.Shift({300, 500}), thin_paint);
+  builder.DrawRect(empty_rect.Shift({300, 500}), paint);
+  builder.DrawRect(empty_rect.Shift({300, 500}), thin_paint);
+
+  paint.setStrokeWidth(120.0f);
+  paint.setColor(DlColor::kBlue());
+  rect = rect.Expand(-20);
+
+  // rect (E)
+  paint.setStrokeJoin(DlStrokeJoin::kBevel);
+  builder.DrawRect(rect.Shift({500, 100}), paint);
+  builder.DrawRect(rect.Shift({500, 100}), thin_paint);
+
+  // rect (F)
+  paint.setStrokeJoin(DlStrokeJoin::kRound);
+  builder.DrawRect(rect.Shift({500, 300}), paint);
+  builder.DrawRect(rect.Shift({500, 300}), thin_paint);
+
+  // rect (G)
+  paint.setStrokeJoin(DlStrokeJoin::kMiter);
+  paint.setStrokeMiter(kSqrt2 + flutter::kEhCloseEnough);
+  builder.DrawRect(rect.Shift({500, 500}), paint);
+  builder.DrawRect(rect.Shift({500, 500}), thin_paint);
+
+  // rect (H)
+  paint.setStrokeJoin(DlStrokeJoin::kMiter);
+  paint.setStrokeMiter(kSqrt2 - flutter::kEhCloseEnough);
+  builder.DrawRect(rect.Shift({700, 500}), paint);
+  builder.DrawRect(rect.Shift({700, 500}), thin_paint);
+
+  DlPaint round_mock_paint;
+  round_mock_paint.setColor(DlColor::kGreen());
+  round_mock_paint.setDrawStyle(DlDrawStyle::kFill);
+
+  // array of rects (X)
+  Scalar x = 900;
+  Scalar y = 50;
+  for (int i = 0; i < 15; i++) {
+    paint.setStrokeWidth(i);
+    paint.setColor(DlColor::kOrange());
+    paint.setStrokeJoin(DlStrokeJoin::kRound);
+    builder.DrawRect(DlRect::MakeXYWH(x, y, 30, 30), paint);
+    y += 32 + i;
+  }
+
+  ASSERT_TRUE(OpenPlaygroundHere(builder.Build()));
+}
+
 TEST_P(AiksTest, FilledCirclesRenderCorrectly) {
   DisplayListBuilder builder;
   builder.Scale(GetContentScale().x, GetContentScale().y);
@@ -448,7 +643,7 @@ TEST_P(AiksTest, FilledCirclesRenderCorrectly) {
   int radius = 600;
   while (radius > 0) {
     paint.setColor(colors[(c_index++) % color_count]);
-    builder.DrawCircle(SkPoint{10, 10}, radius, paint);
+    builder.DrawCircle(DlPoint(10, 10), radius, paint);
     if (radius > 30) {
       radius -= 10;
     } else {
@@ -479,14 +674,14 @@ TEST_P(AiksTest, FilledCirclesRenderCorrectly) {
   auto image = DlImageImpeller::Make(texture);
 
   paint.setColorSource(DlColorSource::MakeRadial(
-      {500, 600}, 75, 7, gradient_colors, stops, DlTileMode::kMirror));
-  builder.DrawCircle(SkPoint{500, 600}, 100, paint);
+      DlPoint(500, 600), 75, 7, gradient_colors, stops, DlTileMode::kMirror));
+  builder.DrawCircle(DlPoint(500, 600), 100, paint);
 
   DlMatrix local_matrix = DlMatrix::MakeTranslation({700, 200});
   paint.setColorSource(DlColorSource::MakeImage(
       image, DlTileMode::kRepeat, DlTileMode::kRepeat,
       DlImageSampling::kNearestNeighbor, &local_matrix));
-  builder.DrawCircle(SkPoint{800, 300}, 100, paint);
+  builder.DrawCircle(DlPoint(800, 300), 100, paint);
 
   ASSERT_TRUE(OpenPlaygroundHere(builder.Build()));
 }
@@ -507,7 +702,7 @@ TEST_P(AiksTest, StrokedCirclesRenderCorrectly) {
 
   int c_index = 0;
 
-  auto draw = [&paint, &colors, &c_index](DlCanvas& canvas, SkPoint center,
+  auto draw = [&paint, &colors, &c_index](DlCanvas& canvas, DlPoint center,
                                           Scalar r, Scalar dr, int n) {
     for (int i = 0; i < n; i++) {
       paint.setColor(colors[(c_index++) % color_count]);
@@ -518,9 +713,9 @@ TEST_P(AiksTest, StrokedCirclesRenderCorrectly) {
 
   paint.setDrawStyle(DlDrawStyle::kStroke);
   paint.setStrokeWidth(1);
-  draw(builder, {10, 10}, 2, 2, 14);  // r = [2, 28], covers [1,29]
+  draw(builder, DlPoint(10, 10), 2, 2, 14);  // r = [2, 28], covers [1,29]
   paint.setStrokeWidth(5);
-  draw(builder, {10, 10}, 35, 10, 56);  // r = [35, 585], covers [30,590]
+  draw(builder, DlPoint(10, 10), 35, 10, 56);  // r = [35, 585], covers [30,590]
 
   DlColor gradient_colors[7] = {
       DlColor::RGBA(0x1f / 255.0, 0.0, 0x5c / 255.0, 1.0),
@@ -545,14 +740,14 @@ TEST_P(AiksTest, StrokedCirclesRenderCorrectly) {
   auto image = DlImageImpeller::Make(texture);
 
   paint.setColorSource(DlColorSource::MakeRadial(
-      {500, 600}, 75, 7, gradient_colors, stops, DlTileMode::kMirror));
-  draw(builder, {500, 600}, 5, 10, 10);
+      DlPoint(500, 600), 75, 7, gradient_colors, stops, DlTileMode::kMirror));
+  draw(builder, DlPoint(500, 600), 5, 10, 10);
 
   DlMatrix local_matrix = DlMatrix::MakeTranslation({700, 200});
   paint.setColorSource(DlColorSource::MakeImage(
       image, DlTileMode::kRepeat, DlTileMode::kRepeat,
       DlImageSampling::kNearestNeighbor, &local_matrix));
-  draw(builder, {800, 300}, 5, 10, 10);
+  draw(builder, DlPoint(800, 300), 5, 10, 10);
 
   ASSERT_TRUE(OpenPlaygroundHere(builder.Build()));
 }
@@ -576,10 +771,10 @@ TEST_P(AiksTest, FilledEllipsesRenderCorrectly) {
   int short_radius = 600;
   while (long_radius > 0 && short_radius > 0) {
     paint.setColor(colors[(c_index++) % color_count]);
-    builder.DrawOval(SkRect::MakeXYWH(10 - long_radius, 10 - short_radius,
+    builder.DrawOval(DlRect::MakeXYWH(10 - long_radius, 10 - short_radius,
                                       long_radius * 2, short_radius * 2),
                      paint);
-    builder.DrawOval(SkRect::MakeXYWH(1000 - short_radius, 750 - long_radius,
+    builder.DrawOval(DlRect::MakeXYWH(1000 - short_radius, 750 - long_radius,
                                       short_radius * 2, long_radius * 2),
                      paint);
     if (short_radius > 30) {
@@ -616,16 +811,415 @@ TEST_P(AiksTest, FilledEllipsesRenderCorrectly) {
   paint.setColor(DlColor::kWhite().modulateOpacity(0.5));
 
   paint.setColorSource(DlColorSource::MakeRadial(
-      {300, 650}, 75, 7, gradient_colors, stops, DlTileMode::kMirror));
-  builder.DrawOval(SkRect::MakeXYWH(200, 625, 200, 50), paint);
-  builder.DrawOval(SkRect::MakeXYWH(275, 550, 50, 200), paint);
+      DlPoint(300, 650), 75, 7, gradient_colors, stops, DlTileMode::kMirror));
+  builder.DrawOval(DlRect::MakeXYWH(200, 625, 200, 50), paint);
+  builder.DrawOval(DlRect::MakeXYWH(275, 550, 50, 200), paint);
 
   DlMatrix local_matrix = DlMatrix::MakeTranslation({610, 15});
   paint.setColorSource(DlColorSource::MakeImage(
       image, DlTileMode::kRepeat, DlTileMode::kRepeat,
       DlImageSampling::kNearestNeighbor, &local_matrix));
-  builder.DrawOval(SkRect::MakeXYWH(610, 90, 200, 50), paint);
-  builder.DrawOval(SkRect::MakeXYWH(685, 15, 50, 200), paint);
+  builder.DrawOval(DlRect::MakeXYWH(610, 90, 200, 50), paint);
+  builder.DrawOval(DlRect::MakeXYWH(685, 15, 50, 200), paint);
+
+  ASSERT_TRUE(OpenPlaygroundHere(builder.Build()));
+}
+
+namespace {
+struct ArcFarmOptions {
+  bool use_center = false;
+  bool full_circles = false;
+  bool sweeps_over_360 = false;
+  Scalar vertical_scale = 1.0f;
+};
+
+void RenderArcFarm(DisplayListBuilder& builder,
+                   const DlPaint& paint,
+                   const ArcFarmOptions& opts) {
+  builder.Save();
+  builder.Translate(50, 50);
+  const Rect arc_bounds = Rect::MakeLTRB(0, 0, 42, 42 * opts.vertical_scale);
+  const int sweep_limit = opts.sweeps_over_360 ? 420 : 360;
+  for (int start = 0; start <= 360; start += 30) {
+    builder.Save();
+    for (int sweep = 30; sweep <= sweep_limit; sweep += 30) {
+      builder.DrawArc(arc_bounds, start, opts.full_circles ? 360 : sweep,
+                      opts.use_center, paint);
+      builder.Translate(50, 0);
+    }
+    builder.Restore();
+    builder.Translate(0, 50);
+  }
+  builder.Restore();
+}
+
+void RenderArcFarmForOverlappingCapsTest(DisplayListBuilder& builder,
+                                         const DlPaint& paint) {
+  builder.Save();
+  builder.Translate(40, 30);
+  const Rect arc_bounds = Rect::MakeLTRB(0, 0, 40, 40);
+  for (int stroke_width = 10; stroke_width <= 40; stroke_width += 3) {
+    DlPaint modified_paint = DlPaint(paint);
+    modified_paint.setStrokeWidth(stroke_width);
+    builder.Save();
+    for (int sweep = 160; sweep <= 360; sweep += 20) {
+      builder.DrawArc(arc_bounds, 0, sweep, false, modified_paint);
+      builder.Translate(84, 0);
+    }
+    builder.Restore();
+    builder.Translate(0, 44 + stroke_width);
+  }
+  builder.Restore();
+}
+}  // namespace
+
+TEST_P(AiksTest, FilledArcsRenderCorrectly) {
+  DisplayListBuilder builder;
+  builder.Scale(GetContentScale().x, GetContentScale().y);
+  builder.DrawColor(DlColor::kWhite(), DlBlendMode::kSrc);
+
+  DlPaint paint;
+  paint.setColor(DlColor::kBlue());
+
+  RenderArcFarm(builder, paint,
+                {
+                    .use_center = false,
+                    .full_circles = false,
+                });
+
+  ASSERT_TRUE(OpenPlaygroundHere(builder.Build()));
+}
+
+TEST_P(AiksTest, TranslucentFilledArcsRenderCorrectly) {
+  DisplayListBuilder builder;
+  builder.Scale(GetContentScale().x, GetContentScale().y);
+  builder.DrawColor(DlColor::kWhite(), DlBlendMode::kSrc);
+
+  DlPaint paint;
+  paint.setColor(DlColor::kBlue().modulateOpacity(0.5));
+
+  RenderArcFarm(builder, paint,
+                {
+                    .use_center = false,
+                    .full_circles = false,
+                });
+
+  ASSERT_TRUE(OpenPlaygroundHere(builder.Build()));
+}
+
+TEST_P(AiksTest, FilledArcsRenderCorrectlyWithCenter) {
+  DisplayListBuilder builder;
+  builder.Scale(GetContentScale().x, GetContentScale().y);
+  builder.DrawColor(DlColor::kWhite(), DlBlendMode::kSrc);
+
+  DlPaint paint;
+  paint.setColor(DlColor::kBlue());
+
+  RenderArcFarm(builder, paint,
+                {
+                    .use_center = true,
+                    .full_circles = false,
+                });
+
+  ASSERT_TRUE(OpenPlaygroundHere(builder.Build()));
+}
+
+TEST_P(AiksTest, NonSquareFilledArcsRenderCorrectly) {
+  DisplayListBuilder builder;
+  builder.Scale(GetContentScale().x, GetContentScale().y);
+  builder.DrawColor(DlColor::kWhite(), DlBlendMode::kSrc);
+
+  DlPaint paint;
+  paint.setColor(DlColor::kBlue());
+
+  RenderArcFarm(builder, paint,
+                {
+                    .use_center = false,
+                    .full_circles = false,
+                    .vertical_scale = 0.8f,
+                });
+
+  ASSERT_TRUE(OpenPlaygroundHere(builder.Build()));
+}
+
+TEST_P(AiksTest, NonSquareFilledArcsRenderCorrectlyWithCenter) {
+  DisplayListBuilder builder;
+  builder.Scale(GetContentScale().x, GetContentScale().y);
+  builder.DrawColor(DlColor::kWhite(), DlBlendMode::kSrc);
+
+  DlPaint paint;
+  paint.setColor(DlColor::kBlue());
+
+  RenderArcFarm(builder, paint,
+                {
+                    .use_center = true,
+                    .full_circles = false,
+                    .vertical_scale = 0.8f,
+                });
+
+  ASSERT_TRUE(OpenPlaygroundHere(builder.Build()));
+}
+
+TEST_P(AiksTest, StrokedArcsRenderCorrectlyWithButtEnds) {
+  DisplayListBuilder builder;
+  builder.Scale(GetContentScale().x, GetContentScale().y);
+  builder.DrawColor(DlColor::kWhite(), DlBlendMode::kSrc);
+
+  DlPaint paint;
+  paint.setDrawStyle(DlDrawStyle::kStroke);
+  paint.setStrokeWidth(6.0f);
+  paint.setStrokeCap(DlStrokeCap::kButt);
+  paint.setColor(DlColor::kBlue());
+
+  RenderArcFarm(builder, paint,
+                {
+                    .use_center = false,
+                    .full_circles = false,
+                });
+
+  ASSERT_TRUE(OpenPlaygroundHere(builder.Build()));
+}
+
+TEST_P(AiksTest, StrokedArcsRenderCorrectlyWithSquareEnds) {
+  DisplayListBuilder builder;
+  builder.Scale(GetContentScale().x, GetContentScale().y);
+  builder.DrawColor(DlColor::kWhite(), DlBlendMode::kSrc);
+
+  DlPaint paint;
+  paint.setDrawStyle(DlDrawStyle::kStroke);
+  paint.setStrokeWidth(6.0f);
+  paint.setStrokeCap(DlStrokeCap::kSquare);
+  paint.setColor(DlColor::kBlue());
+
+  RenderArcFarm(builder, paint,
+                {
+                    .use_center = false,
+                    .full_circles = false,
+                });
+
+  ASSERT_TRUE(OpenPlaygroundHere(builder.Build()));
+}
+
+TEST_P(AiksTest, StrokedArcsRenderCorrectlyWithTranslucencyAndSquareEnds) {
+  DisplayListBuilder builder;
+  builder.Scale(GetContentScale().x, GetContentScale().y);
+  builder.DrawColor(DlColor::kWhite(), DlBlendMode::kSrc);
+
+  DlPaint paint;
+  paint.setDrawStyle(DlDrawStyle::kStroke);
+  paint.setStrokeCap(DlStrokeCap::kSquare);
+  paint.setColor(DlColor::kBlue().modulateOpacity(0.5));
+
+  RenderArcFarmForOverlappingCapsTest(builder, paint);
+
+  ASSERT_TRUE(OpenPlaygroundHere(builder.Build()));
+}
+
+TEST_P(AiksTest, StrokedArcsRenderCorrectlyWithRoundEnds) {
+  DisplayListBuilder builder;
+  builder.Scale(GetContentScale().x, GetContentScale().y);
+  builder.DrawColor(DlColor::kWhite(), DlBlendMode::kSrc);
+
+  DlPaint paint;
+  paint.setDrawStyle(DlDrawStyle::kStroke);
+  paint.setStrokeWidth(6.0f);
+  paint.setStrokeCap(DlStrokeCap::kRound);
+  paint.setColor(DlColor::kBlue());
+
+  RenderArcFarm(builder, paint,
+                {
+                    .use_center = false,
+                    .full_circles = false,
+                });
+
+  ASSERT_TRUE(OpenPlaygroundHere(builder.Build()));
+}
+
+TEST_P(AiksTest, StrokedArcsRenderCorrectlyWithTranslucencyAndRoundEnds) {
+  DisplayListBuilder builder;
+  builder.Scale(GetContentScale().x, GetContentScale().y);
+  builder.DrawColor(DlColor::kWhite(), DlBlendMode::kSrc);
+
+  DlPaint paint;
+  paint.setDrawStyle(DlDrawStyle::kStroke);
+  paint.setStrokeCap(DlStrokeCap::kRound);
+  paint.setColor(DlColor::kBlue().modulateOpacity(0.5));
+
+  RenderArcFarmForOverlappingCapsTest(builder, paint);
+
+  ASSERT_TRUE(OpenPlaygroundHere(builder.Build()));
+}
+
+TEST_P(AiksTest, StrokedArcsRenderCorrectlyWithBevelJoinsAndCenter) {
+  DisplayListBuilder builder;
+  builder.Scale(GetContentScale().x, GetContentScale().y);
+  builder.DrawColor(DlColor::kWhite(), DlBlendMode::kSrc);
+
+  DlPaint paint;
+  paint.setDrawStyle(DlDrawStyle::kStroke);
+  paint.setStrokeWidth(6.0f);
+  paint.setStrokeJoin(DlStrokeJoin::kBevel);
+  paint.setColor(DlColor::kBlue());
+
+  RenderArcFarm(builder, paint,
+                {
+                    .use_center = true,
+                    .full_circles = false,
+                    .sweeps_over_360 = true,
+                });
+
+  ASSERT_TRUE(OpenPlaygroundHere(builder.Build()));
+}
+
+TEST_P(AiksTest, StrokedArcsRenderCorrectlyWithMiterJoinsAndCenter) {
+  DisplayListBuilder builder;
+  builder.Scale(GetContentScale().x, GetContentScale().y);
+  builder.DrawColor(DlColor::kWhite(), DlBlendMode::kSrc);
+
+  DlPaint paint;
+  paint.setDrawStyle(DlDrawStyle::kStroke);
+  paint.setStrokeWidth(6.0f);
+  paint.setStrokeJoin(DlStrokeJoin::kMiter);
+  // Default miter of 4.0 does a miter on all of the centers, but
+  // using 3.0 will show some bevels on the widest interior angles...
+  paint.setStrokeMiter(3.0f);
+  paint.setColor(DlColor::kBlue());
+
+  RenderArcFarm(builder, paint,
+                {
+                    .use_center = true,
+                    .full_circles = false,
+                    .sweeps_over_360 = true,
+                });
+
+  ASSERT_TRUE(OpenPlaygroundHere(builder.Build()));
+}
+
+TEST_P(AiksTest, StrokedArcsRenderCorrectlyWithRoundJoinsAndCenter) {
+  DisplayListBuilder builder;
+  builder.Scale(GetContentScale().x, GetContentScale().y);
+  builder.DrawColor(DlColor::kWhite(), DlBlendMode::kSrc);
+
+  DlPaint paint;
+  paint.setDrawStyle(DlDrawStyle::kStroke);
+  paint.setStrokeWidth(6.0f);
+  paint.setStrokeJoin(DlStrokeJoin::kRound);
+  paint.setColor(DlColor::kBlue());
+
+  RenderArcFarm(builder, paint,
+                {
+                    .use_center = true,
+                    .full_circles = false,
+                    .sweeps_over_360 = true,
+                });
+
+  ASSERT_TRUE(OpenPlaygroundHere(builder.Build()));
+}
+
+TEST_P(AiksTest, StrokedArcsRenderCorrectlyWithSquareAndButtEnds) {
+  DisplayListBuilder builder;
+  builder.Scale(GetContentScale().x, GetContentScale().y);
+  builder.DrawColor(DlColor::kWhite(), DlBlendMode::kSrc);
+
+  DlPaint paint;
+  paint.setDrawStyle(DlDrawStyle::kStroke);
+  paint.setStrokeWidth(8.0f);
+  paint.setStrokeCap(DlStrokeCap::kSquare);
+  paint.setColor(DlColor::kRed());
+
+  RenderArcFarm(builder, paint,
+                {
+                    .use_center = false,
+                    .full_circles = false,
+                });
+
+  paint.setStrokeCap(DlStrokeCap::kButt);
+  paint.setColor(DlColor::kBlue());
+
+  RenderArcFarm(builder, paint,
+                {
+                    .use_center = false,
+                    .full_circles = false,
+                });
+
+  ASSERT_TRUE(OpenPlaygroundHere(builder.Build()));
+}
+
+TEST_P(AiksTest, StrokedArcsRenderCorrectlyWithSquareAndButtAndRoundEnds) {
+  DisplayListBuilder builder;
+  builder.Scale(GetContentScale().x, GetContentScale().y);
+  builder.DrawColor(DlColor::kWhite(), DlBlendMode::kSrc);
+
+  DlPaint paint;
+  paint.setDrawStyle(DlDrawStyle::kStroke);
+  paint.setStrokeWidth(8.0f);
+  paint.setStrokeCap(DlStrokeCap::kSquare);
+  paint.setColor(DlColor::kRed());
+
+  RenderArcFarm(builder, paint,
+                {
+                    .use_center = false,
+                    .full_circles = false,
+                });
+
+  paint.setStrokeCap(DlStrokeCap::kRound);
+  paint.setColor(DlColor::kGreen());
+
+  RenderArcFarm(builder, paint,
+                {
+                    .use_center = false,
+                    .full_circles = false,
+                });
+
+  paint.setStrokeCap(DlStrokeCap::kButt);
+  paint.setColor(DlColor::kBlue());
+
+  RenderArcFarm(builder, paint,
+                {
+                    .use_center = false,
+                    .full_circles = false,
+                });
+
+  ASSERT_TRUE(OpenPlaygroundHere(builder.Build()));
+}
+
+TEST_P(AiksTest, StrokedArcsCoverFullArcWithButtEnds) {
+  // This test compares the rendering of a full circle arc against a partial
+  // arc by drawing a one over the other in high contrast. If the partial
+  // arc misses any pixels that were drawn by the full arc, there will be
+  // some "pixel dirt" around the missing "erased" parts of the arcs. This
+  // case arises while rendering a CircularProgressIndicator with a background
+  // color where we want the rendering of the background full arc to hit the
+  // same pixels around the edges as the partial arc that covers it.
+  //
+  // In this case we draw a full blue circle and then draw a partial arc
+  // over it in the background color (white).
+
+  DisplayListBuilder builder;
+  builder.Scale(GetContentScale().x, GetContentScale().y);
+  builder.DrawColor(DlColor::kWhite(), DlBlendMode::kSrc);
+
+  DlPaint paint;
+  paint.setDrawStyle(DlDrawStyle::kStroke);
+  paint.setStrokeWidth(6.0f);
+  paint.setStrokeCap(DlStrokeCap::kButt);
+  paint.setColor(DlColor::kBlue());
+
+  // First draw full circles in blue to establish the pixels to be erased
+  RenderArcFarm(builder, paint,
+                {
+                    .use_center = false,
+                    .full_circles = true,
+                });
+
+  paint.setColor(DlColor::kWhite());
+
+  // Then draw partial arcs in white over the circles to "erase" them
+  RenderArcFarm(builder, paint,
+                {
+                    .use_center = false,
+                    .full_circles = false,
+                });
 
   ASSERT_TRUE(OpenPlaygroundHere(builder.Build()));
 }
@@ -648,19 +1242,21 @@ TEST_P(AiksTest, FilledRoundRectsRenderCorrectly) {
   for (int i = 0; i < 4; i++) {
     for (int j = 0; j < 4; j++) {
       paint.setColor(colors[(c_index++) % color_count]);
-      builder.DrawRRect(
-          SkRRect::MakeRectXY(
-              SkRect::MakeXYWH(i * 100 + 10, j * 100 + 20, 80, 80),  //
+      builder.DrawRoundRect(
+          DlRoundRect::MakeRectXY(
+              DlRect::MakeXYWH(i * 100 + 10, j * 100 + 20, 80, 80),  //
               i * 5 + 10, j * 5 + 10),
           paint);
     }
   }
   paint.setColor(colors[(c_index++) % color_count]);
-  builder.DrawRRect(
-      SkRRect::MakeRectXY(SkRect::MakeXYWH(10, 420, 380, 80), 40, 40), paint);
+  builder.DrawRoundRect(
+      DlRoundRect::MakeRectXY(DlRect::MakeXYWH(10, 420, 380, 80), 40, 40),
+      paint);
   paint.setColor(colors[(c_index++) % color_count]);
-  builder.DrawRRect(
-      SkRRect::MakeRectXY(SkRect::MakeXYWH(410, 20, 80, 380), 40, 40), paint);
+  builder.DrawRoundRect(
+      DlRoundRect::MakeRectXY(DlRect::MakeXYWH(410, 20, 80, 380), 40, 40),
+      paint);
 
   DlColor gradient_colors[7] = {
       DlColor::RGBA(0x1f / 255.0, 0.0, 0x5c / 255.0, 1.0),
@@ -686,24 +1282,26 @@ TEST_P(AiksTest, FilledRoundRectsRenderCorrectly) {
 
   paint.setColor(DlColor::kWhite().modulateOpacity(0.1));
   paint.setColorSource(DlColorSource::MakeRadial(
-      {550, 550}, 75, 7, gradient_colors, stops, DlTileMode::kMirror));
+      DlPoint(550, 550), 75, 7, gradient_colors, stops, DlTileMode::kMirror));
   for (int i = 1; i <= 10; i++) {
     int j = 11 - i;
-    builder.DrawRRect(
-        SkRRect::MakeRectXY(SkRect::MakeLTRB(550 - i * 20, 550 - j * 20,  //
-                                             550 + i * 20, 550 + j * 20),
-                            i * 10, j * 10),
+    builder.DrawRoundRect(
+        DlRoundRect::MakeRectXY(DlRect::MakeLTRB(550 - i * 20, 550 - j * 20,  //
+                                                 550 + i * 20, 550 + j * 20),
+                                i * 10, j * 10),
         paint);
   }
 
   paint.setColor(DlColor::kWhite().modulateOpacity(0.5));
   paint.setColorSource(DlColorSource::MakeRadial(
-      {200, 650}, 75, 7, gradient_colors, stops, DlTileMode::kMirror));
+      DlPoint(200, 650), 75, 7, gradient_colors, stops, DlTileMode::kMirror));
   paint.setColor(DlColor::kWhite().modulateOpacity(0.5));
-  builder.DrawRRect(
-      SkRRect::MakeRectXY(SkRect::MakeLTRB(100, 610, 300, 690), 40, 40), paint);
-  builder.DrawRRect(
-      SkRRect::MakeRectXY(SkRect::MakeLTRB(160, 550, 240, 750), 40, 40), paint);
+  builder.DrawRoundRect(
+      DlRoundRect::MakeRectXY(DlRect::MakeLTRB(100, 610, 300, 690), 40, 40),
+      paint);
+  builder.DrawRoundRect(
+      DlRoundRect::MakeRectXY(DlRect::MakeLTRB(160, 550, 240, 750), 40, 40),
+      paint);
 
   paint.setColor(DlColor::kWhite().modulateOpacity(0.1));
   DlMatrix local_matrix = DlMatrix::MakeTranslation({520, 20});
@@ -712,10 +1310,10 @@ TEST_P(AiksTest, FilledRoundRectsRenderCorrectly) {
       DlImageSampling::kNearestNeighbor, &local_matrix));
   for (int i = 1; i <= 10; i++) {
     int j = 11 - i;
-    builder.DrawRRect(
-        SkRRect::MakeRectXY(SkRect::MakeLTRB(720 - i * 20, 220 - j * 20,  //
-                                             720 + i * 20, 220 + j * 20),
-                            i * 10, j * 10),
+    builder.DrawRoundRect(
+        DlRoundRect::MakeRectXY(DlRect::MakeLTRB(720 - i * 20, 220 - j * 20,  //
+                                                 720 + i * 20, 220 + j * 20),
+                                i * 10, j * 10),
         paint);
   }
 
@@ -724,11 +1322,12 @@ TEST_P(AiksTest, FilledRoundRectsRenderCorrectly) {
   paint.setColorSource(DlColorSource::MakeImage(
       image, DlTileMode::kRepeat, DlTileMode::kRepeat,
       DlImageSampling::kNearestNeighbor, &local_matrix));
-  builder.DrawRRect(
-      SkRRect::MakeRectXY(SkRect::MakeLTRB(800, 410, 1000, 490), 40, 40),
+  builder.DrawRoundRect(
+      DlRoundRect::MakeRectXY(DlRect::MakeLTRB(800, 410, 1000, 490), 40, 40),
       paint);
-  builder.DrawRRect(
-      SkRRect::MakeRectXY(SkRect::MakeLTRB(860, 350, 940, 550), 40, 40), paint);
+  builder.DrawRoundRect(
+      DlRoundRect::MakeRectXY(DlRect::MakeLTRB(860, 350, 940, 550), 40, 40),
+      paint);
 
   ASSERT_TRUE(OpenPlaygroundHere(builder.Build()));
 }
@@ -747,7 +1346,7 @@ TEST_P(AiksTest, SolidColorCirclesOvalsRRectsMaskBlurCorrectly) {
   for (int i = 0; i < 5; i++) {
     Scalar x = (i + 1) * 100;
     Scalar radius = x / 10.0f;
-    builder.DrawRect(SkRect::MakeXYWH(x + 25 - radius / 2, y + radius / 2,  //
+    builder.DrawRect(DlRect::MakeXYWH(x + 25 - radius / 2, y + radius / 2,  //
                                       radius, 60.0f - radius),
                      paint);
   }
@@ -757,7 +1356,7 @@ TEST_P(AiksTest, SolidColorCirclesOvalsRRectsMaskBlurCorrectly) {
   for (int i = 0; i < 5; i++) {
     Scalar x = (i + 1) * 100;
     Scalar radius = x / 10.0f;
-    builder.DrawCircle(SkPoint{x + 25, y + 25}, radius, paint);
+    builder.DrawCircle(DlPoint(x + 25, y + 25), radius, paint);
   }
 
   paint.setColor(DlColor::kGreen());
@@ -765,7 +1364,7 @@ TEST_P(AiksTest, SolidColorCirclesOvalsRRectsMaskBlurCorrectly) {
   for (int i = 0; i < 5; i++) {
     Scalar x = (i + 1) * 100;
     Scalar radius = x / 10.0f;
-    builder.DrawOval(SkRect::MakeXYWH(x + 25 - radius / 2, y + radius / 2,  //
+    builder.DrawOval(DlRect::MakeXYWH(x + 25 - radius / 2, y + radius / 2,  //
                                       radius, 60.0f - radius),
                      paint);
   }
@@ -776,9 +1375,10 @@ TEST_P(AiksTest, SolidColorCirclesOvalsRRectsMaskBlurCorrectly) {
   for (int i = 0; i < 5; i++) {
     Scalar x = (i + 1) * 100;
     Scalar radius = x / 20.0f;
-    builder.DrawRRect(SkRRect::MakeRectXY(SkRect::MakeXYWH(x, y, 60.0f, 60.0f),
-                                          radius, radius),
-                      paint);
+    builder.DrawRoundRect(
+        DlRoundRect::MakeRectXY(DlRect::MakeXYWH(x, y, 60.0f, 60.0f),  //
+                                radius, radius),
+        paint);
   }
 
   paint.setColor(
@@ -787,8 +1387,9 @@ TEST_P(AiksTest, SolidColorCirclesOvalsRRectsMaskBlurCorrectly) {
   for (int i = 0; i < 5; i++) {
     Scalar x = (i + 1) * 100;
     Scalar radius = x / 20.0f;
-    builder.DrawRRect(
-        SkRRect::MakeRectXY(SkRect::MakeXYWH(x, y, 60.0f, 60.0f), radius, 5.0f),
+    builder.DrawRoundRect(
+        DlRoundRect::MakeRectXY(DlRect::MakeXYWH(x, y, 60.0f, 60.0f),  //
+                                radius, 5.0f),
         paint);
   }
 
@@ -810,8 +1411,8 @@ TEST_P(AiksTest, CanRenderClippedBackdropFilter) {
   };
   DlPaint paint;
   paint.setColorSource(DlColorSource::MakeLinear(
-      /*start_point=*/{0, 0},            //
-      /*end_point=*/{100, 100},          //
+      /*start_point=*/DlPoint(0, 0),     //
+      /*end_point=*/DlPoint(100, 100),   //
       /*stop_count=*/2,                  //
       /*colors=*/colors.data(),          //
       /*stops=*/stops.data(),            //
@@ -820,17 +1421,17 @@ TEST_P(AiksTest, CanRenderClippedBackdropFilter) {
 
   builder.DrawPaint(paint);
 
-  SkRect clip_rect = SkRect::MakeLTRB(50, 50, 400, 300);
-  SkRRect clip_rrect = SkRRect::MakeRectXY(clip_rect, 100, 100);
+  DlRect clip_rect = DlRect::MakeLTRB(50, 50, 400, 300);
+  DlRoundRect clip_rrect = DlRoundRect::MakeRectXY(clip_rect, 100, 100);
 
   // Draw a clipped SaveLayer, where the clip coverage and SaveLayer size are
   // the same.
-  builder.ClipRRect(clip_rrect, DlCanvas::ClipOp::kIntersect);
+  builder.ClipRoundRect(clip_rrect, DlClipOp::kIntersect);
 
   DlPaint save_paint;
   auto backdrop_filter = DlImageFilter::MakeColorFilter(
       DlColorFilter::MakeBlend(DlColor::kRed(), DlBlendMode::kExclusion));
-  builder.SaveLayer(&clip_rect, &save_paint, backdrop_filter.get());
+  builder.SaveLayer(clip_rect, &save_paint, backdrop_filter.get());
 
   ASSERT_TRUE(OpenPlaygroundHere(builder.Build()));
 }
@@ -852,8 +1453,8 @@ TEST_P(AiksTest, CanDrawPerspectiveTransformWithClips) {
         DlPaint paint;
         paint.setColor(DlColor::kGreen());
         builder.DrawPaint(paint);
-        builder.ClipRect(SkRect::MakeLTRB(-180, -180, 180, 180),
-                         DlCanvas::ClipOp::kDifference);
+        builder.ClipRect(DlRect::MakeLTRB(-180, -180, 180, 180),
+                         DlClipOp::kDifference);
 
         paint.setColor(DlColor::kBlack());
         builder.DrawPaint(paint);
@@ -864,7 +1465,7 @@ TEST_P(AiksTest, CanDrawPerspectiveTransformWithClips) {
       {
         // 2. Draw an oval clip that applies to the image, which will get drawn
         //    in front of the image on the depth buffer.
-        builder.ClipOval(SkRect::MakeLTRB(-200, -200, 200, 200));
+        builder.ClipOval(DlRect::MakeLTRB(-200, -200, 200, 200));
 
         Matrix result =
             Matrix(1.0, 0.0, 0.0, 0.0,    //
@@ -874,13 +1475,12 @@ TEST_P(AiksTest, CanDrawPerspectiveTransformWithClips) {
             Matrix::MakeRotationY({Radians{-1.0f + (time++ / 60.0f)}});
 
         // 3. Draw the rotating image with a perspective transform.
-        builder.Transform(FromImpellerMatrix(result));
+        builder.Transform(result);
 
         auto image =
             DlImageImpeller::Make(CreateTextureForFixture("airplane.jpg"));
-        auto position = -SkPoint::Make(image->dimensions().fWidth,
-                                       image->dimensions().fHeight) *
-                        0.5;
+        auto position =
+            -DlPoint(image->GetSize().width, image->GetSize().height) * 0.5;
         builder.DrawImage(image, position, {});
       }
       builder.Restore();  // Restore oval intersect clip.
@@ -888,7 +1488,7 @@ TEST_P(AiksTest, CanDrawPerspectiveTransformWithClips) {
       // 4. Draw a semi-translucent blue circle atop all previous draws.
       DlPaint paint;
       paint.setColor(DlColor::kBlue().modulateOpacity(0.4));
-      builder.DrawCircle(SkPoint{}, 230, paint);
+      builder.DrawCircle(DlPoint(), 230, paint);
     }
     builder.Restore();  // Restore translation.
 
@@ -915,7 +1515,7 @@ TEST_P(AiksTest, ImageColorSourceEffectTransform) {
         texture, DlTileMode::kRepeat, DlTileMode::kRepeat,
         DlImageSampling::kNearestNeighbor, &matrix));
 
-    builder.DrawRect(SkRect::MakeLTRB(0, 0, 100, 100), paint);
+    builder.DrawRect(DlRect::MakeLTRB(0, 0, 100, 100), paint);
   }
 
   // Rotation/skew
@@ -931,12 +1531,13 @@ TEST_P(AiksTest, ImageColorSourceEffectTransform) {
     paint.setColorSource(DlColorSource::MakeImage(
         texture, DlTileMode::kRepeat, DlTileMode::kRepeat,
         DlImageSampling::kNearestNeighbor, &matrix));
-    builder.DrawRect(SkRect::MakeLTRB(100, 0, 200, 100), paint);
+    builder.DrawRect(DlRect::MakeLTRB(100, 0, 200, 100), paint);
     builder.Restore();
   }
 
   // Scale
   {
+    builder.Save();
     builder.Translate(100, 0);
     builder.Scale(100, 100);
     DlPaint paint;
@@ -946,7 +1547,24 @@ TEST_P(AiksTest, ImageColorSourceEffectTransform) {
         texture, DlTileMode::kRepeat, DlTileMode::kRepeat,
         DlImageSampling::kNearestNeighbor, &matrix));
 
-    builder.DrawRect(SkRect::MakeLTRB(0, 0, 1, 1), paint);
+    builder.DrawRect(DlRect::MakeLTRB(0, 0, 1, 1), paint);
+    builder.Restore();
+  }
+
+  // Perspective
+  {
+    builder.Save();
+    builder.Translate(150, 150);
+    DlPaint paint;
+
+    DlMatrix matrix =
+        DlMatrix::MakePerspective(Radians{0.5}, ISize{200, 200}, 0.05, 1);
+    paint.setColorSource(DlColorSource::MakeImage(
+        texture, DlTileMode::kRepeat, DlTileMode::kRepeat,
+        DlImageSampling::kNearestNeighbor, &matrix));
+
+    builder.DrawRect(DlRect::MakeLTRB(0, 0, 200, 200), paint);
+    builder.Restore();
   }
 
   ASSERT_TRUE(OpenPlaygroundHere(builder.Build()));
@@ -961,8 +1579,8 @@ TEST_P(AiksTest, SubpassWithClearColorOptimization) {
   paint.setColor(DlColor::kBlue().modulateOpacity(0.5));
   paint.setBlendMode(DlBlendMode::kSrc);
 
-  SkRect bounds = SkRect::MakeLTRB(0, 0, 200, 200);
-  builder.SaveLayer(&bounds, &paint);
+  DlRect bounds = DlRect::MakeLTRB(0, 0, 200, 200);
+  builder.SaveLayer(bounds, &paint);
 
   paint.setColor(DlColor::kTransparent());
   paint.setBlendMode(DlBlendMode::kSrc);
@@ -971,7 +1589,7 @@ TEST_P(AiksTest, SubpassWithClearColorOptimization) {
 
   paint.setColor(DlColor::kBlue());
   paint.setBlendMode(DlBlendMode::kDstOver);
-  builder.SaveLayer(nullptr, &paint);
+  builder.SaveLayer(std::nullopt, &paint);
   builder.Restore();
 
   // This playground should appear blank on CI since we are only drawing
@@ -991,11 +1609,11 @@ TEST_P(AiksTest, MatrixImageFilterDoesntCullWhenTranslatedFromOffscreen) {
   DlMatrix translate = DlMatrix::MakeTranslation({300, 0});
   paint.setImageFilter(
       DlImageFilter::MakeMatrix(translate, DlImageSampling::kLinear));
-  builder.SaveLayer(nullptr, &paint);
+  builder.SaveLayer(std::nullopt, &paint);
 
   DlPaint circle_paint;
   circle_paint.setColor(DlColor::kGreen());
-  builder.DrawCircle(SkPoint{-300, 0}, 100, circle_paint);
+  builder.DrawCircle(DlPoint(-300, 0), 100, circle_paint);
   builder.Restore();
 
   ASSERT_TRUE(OpenPlaygroundHere(builder.Build()));
@@ -1014,11 +1632,11 @@ TEST_P(AiksTest,
   paint.setImageFilter(DlImageFilter::MakeMatrix(
       DlMatrix::MakeTranslation({300, 0}) * DlMatrix::MakeScale({2, 2, 1}),
       DlImageSampling::kNearestNeighbor));
-  builder.SaveLayer(nullptr, &paint);
+  builder.SaveLayer(std::nullopt, &paint);
 
   DlPaint circle_paint;
   circle_paint.setColor(DlColor::kGreen());
-  builder.DrawCircle(SkPoint{-150, 0}, 50, circle_paint);
+  builder.DrawCircle(DlPoint(-150, 0), 50, circle_paint);
   builder.Restore();
 
   ASSERT_TRUE(OpenPlaygroundHere(builder.Build()));
@@ -1033,19 +1651,19 @@ TEST_P(AiksTest, ClearColorOptimizationWhenSubpassIsBiggerThanParentPass) {
 
   DlPaint paint;
   paint.setColor(DlColor::kRed());
-  builder.DrawRect(SkRect::MakeLTRB(200, 200, 300, 300), paint);
+  builder.DrawRect(DlRect::MakeLTRB(200, 200, 300, 300), paint);
 
   paint.setImageFilter(DlImageFilter::MakeMatrix(DlMatrix::MakeScale({2, 2, 1}),
                                                  DlImageSampling::kLinear));
-  builder.SaveLayer(nullptr, &paint);
+  builder.SaveLayer(std::nullopt, &paint);
   // Draw a rectangle that would fully cover the parent pass size, but not
   // the subpass that it is rendered in.
   paint.setColor(DlColor::kGreen());
-  builder.DrawRect(SkRect::MakeLTRB(0, 0, 400, 400), paint);
+  builder.DrawRect(DlRect::MakeLTRB(0, 0, 400, 400), paint);
   // Draw a bigger rectangle to force the subpass to be bigger.
 
   paint.setColor(DlColor::kRed());
-  builder.DrawRect(SkRect::MakeLTRB(0, 0, 800, 800), paint);
+  builder.DrawRect(DlRect::MakeLTRB(0, 0, 800, 800), paint);
   builder.Restore();
 
   ASSERT_TRUE(OpenPlaygroundHere(builder.Build()));
@@ -1058,9 +1676,9 @@ TEST_P(AiksTest, EmptySaveLayerIgnoresPaint) {
   DlPaint paint;
   paint.setColor(DlColor::kRed());
   builder.DrawPaint(paint);
-  builder.ClipRect(SkRect::MakeXYWH(100, 100, 200, 200));
+  builder.ClipRect(DlRect::MakeXYWH(100, 100, 200, 200));
   paint.setColor(DlColor::kBlue());
-  builder.SaveLayer(nullptr, &paint);
+  builder.SaveLayer(std::nullopt, &paint);
   builder.Restore();
 
   ASSERT_TRUE(OpenPlaygroundHere(builder.Build()));
@@ -1070,12 +1688,12 @@ TEST_P(AiksTest, EmptySaveLayerRendersWithClear) {
   DisplayListBuilder builder;
   builder.Scale(GetContentScale().x, GetContentScale().y);
   auto image = DlImageImpeller::Make(CreateTextureForFixture("airplane.jpg"));
-  builder.DrawImage(image, SkPoint{10, 10}, {});
-  builder.ClipRect(SkRect::MakeXYWH(100, 100, 200, 200));
+  builder.DrawImage(image, DlPoint(10, 10), {});
+  builder.ClipRect(DlRect::MakeXYWH(100, 100, 200, 200));
 
   DlPaint paint;
   paint.setBlendMode(DlBlendMode::kClear);
-  builder.SaveLayer(nullptr, &paint);
+  builder.SaveLayer(std::nullopt, &paint);
   builder.Restore();
 
   ASSERT_TRUE(OpenPlaygroundHere(builder.Build()));
@@ -1097,12 +1715,12 @@ TEST_P(AiksTest,
   DlPaint save;
   save.setColor(DlColor::kBlack().modulateOpacity(0.5));
 
-  SkRect huge_bounds = SkRect::MakeXYWH(0, 0, 100000, 100000);
-  builder.SaveLayer(&huge_bounds, &save);
+  DlRect huge_bounds = DlRect::MakeXYWH(0, 0, 100000, 100000);
+  builder.SaveLayer(huge_bounds, &save);
 
-  builder.DrawRect(SkRect::MakeXYWH(0, 0, 100, 100), red);
-  builder.DrawRect(SkRect::MakeXYWH(10, 10, 100, 100), green);
-  builder.DrawRect(SkRect::MakeXYWH(20, 20, 100, 100), blue);
+  builder.DrawRect(DlRect::MakeXYWH(0, 0, 100, 100), red);
+  builder.DrawRect(DlRect::MakeXYWH(10, 10, 100, 100), green);
+  builder.DrawRect(DlRect::MakeXYWH(20, 20, 100, 100), blue);
 
   builder.Restore();
 
@@ -1133,7 +1751,7 @@ TEST_P(AiksTest, CoordinateConversionsAreCorrect) {
     builder.Save();
     builder.Translate(100, 200);
     builder.Scale(0.5, 0.5);
-    builder.DrawImage(image, SkPoint::Make(100.0, 100.0),
+    builder.DrawImage(image, DlPoint(100.0, 100.0),
                       DlImageSampling::kNearestNeighbor);
     builder.Restore();
   }
@@ -1143,15 +1761,15 @@ TEST_P(AiksTest, CoordinateConversionsAreCorrect) {
     DlPaint alpha;
     alpha.setColor(DlColor::kRed().modulateOpacity(0.5));
 
-    builder.SaveLayer(nullptr, &alpha);
+    builder.SaveLayer(std::nullopt, &alpha);
 
     DlPaint paint;
     paint.setColor(DlColor::kRed());
-    builder.DrawRect(SkRect::MakeXYWH(000, 000, 100, 100), paint);
+    builder.DrawRect(DlRect::MakeXYWH(000, 000, 100, 100), paint);
     paint.setColor(DlColor::kGreen());
-    builder.DrawRect(SkRect::MakeXYWH(020, 020, 100, 100), paint);
+    builder.DrawRect(DlRect::MakeXYWH(020, 020, 100, 100), paint);
     paint.setColor(DlColor::kBlue());
-    builder.DrawRect(SkRect::MakeXYWH(040, 040, 100, 100), paint);
+    builder.DrawRect(DlRect::MakeXYWH(040, 040, 100, 100), paint);
 
     builder.Restore();
   }
@@ -1164,7 +1782,7 @@ TEST_P(AiksTest, CanPerformFullScreenMSAA) {
 
   DlPaint paint;
   paint.setColor(DlColor::kRed());
-  builder.DrawCircle(SkPoint::Make(250, 250), 125, paint);
+  builder.DrawCircle(DlPoint(250, 250), 125, paint);
 
   ASSERT_TRUE(OpenPlaygroundHere(builder.Build()));
 }
@@ -1175,7 +1793,7 @@ TEST_P(AiksTest, CanPerformSkew) {
   DlPaint red;
   red.setColor(DlColor::kRed());
   builder.Skew(2, 5);
-  builder.DrawRect(SkRect::MakeXYWH(0, 0, 100, 100), red);
+  builder.DrawRect(DlRect::MakeXYWH(0, 0, 100, 100), red);
 
   ASSERT_TRUE(OpenPlaygroundHere(builder.Build()));
 }
@@ -1186,16 +1804,16 @@ TEST_P(AiksTest, CanPerformSaveLayerWithBounds) {
   DlPaint save;
   save.setColor(DlColor::kBlack());
 
-  SkRect save_bounds = SkRect::MakeXYWH(0, 0, 50, 50);
-  builder.SaveLayer(&save_bounds, &save);
+  DlRect save_bounds = DlRect::MakeXYWH(0, 0, 50, 50);
+  builder.SaveLayer(save_bounds, &save);
 
   DlPaint paint;
   paint.setColor(DlColor::kRed());
-  builder.DrawRect(SkRect::MakeXYWH(0, 0, 100, 100), paint);
+  builder.DrawRect(DlRect::MakeXYWH(0, 0, 100, 100), paint);
   paint.setColor(DlColor::kGreen());
-  builder.DrawRect(SkRect::MakeXYWH(10, 10, 100, 100), paint);
+  builder.DrawRect(DlRect::MakeXYWH(10, 10, 100, 100), paint);
   paint.setColor(DlColor::kBlue());
-  builder.DrawRect(SkRect::MakeXYWH(20, 20, 100, 100), paint);
+  builder.DrawRect(DlRect::MakeXYWH(20, 20, 100, 100), paint);
 
   builder.Restore();
 
@@ -1217,25 +1835,23 @@ TEST_P(AiksTest, FilledRoundRectPathsRenderCorrectly) {
   paint.setColor(DlColor::kWhite());
   builder.DrawPaint(paint);
 
-  auto draw_rrect_as_path = [&builder](const SkRect& rect, Scalar x, Scalar y,
+  auto draw_rrect_as_path = [&builder](const DlRect& rect, Scalar x, Scalar y,
                                        const DlPaint& paint) {
-    SkPath path;
-    path.addRoundRect(rect, x, y);
-    builder.DrawPath(path, paint);
+    builder.DrawPath(DlPath::MakeRoundRectXY(rect, x, y), paint);
   };
 
   int c_index = 0;
   for (int i = 0; i < 4; i++) {
     for (int j = 0; j < 4; j++) {
       paint.setColor(colors[(c_index++) % color_count]);
-      draw_rrect_as_path(SkRect::MakeXYWH(i * 100 + 10, j * 100 + 20, 80, 80),
+      draw_rrect_as_path(DlRect::MakeXYWH(i * 100 + 10, j * 100 + 20, 80, 80),
                          i * 5 + 10, j * 5 + 10, paint);
     }
   }
   paint.setColor(colors[(c_index++) % color_count]);
-  draw_rrect_as_path(SkRect::MakeXYWH(10, 420, 380, 80), 40, 40, paint);
+  draw_rrect_as_path(DlRect::MakeXYWH(10, 420, 380, 80), 40, 40, paint);
   paint.setColor(colors[(c_index++) % color_count]);
-  draw_rrect_as_path(SkRect::MakeXYWH(410, 20, 80, 380), 40, 40, paint);
+  draw_rrect_as_path(DlRect::MakeXYWH(410, 20, 80, 380), 40, 40, paint);
 
   std::vector<DlColor> gradient_colors = {
       DlColor::RGBA(0x1f / 255.0, 0.0, 0x5c / 255.0, 1.0),
@@ -1260,7 +1876,7 @@ TEST_P(AiksTest, FilledRoundRectPathsRenderCorrectly) {
 
   paint.setColor(DlColor::kWhite().modulateOpacity(0.1));
   paint.setColorSource(DlColorSource::MakeRadial(
-      /*center=*/{550, 550},
+      /*center=*/DlPoint(550, 550),
       /*radius=*/75,
       /*stop_count=*/gradient_colors.size(),
       /*colors=*/gradient_colors.data(),
@@ -1268,20 +1884,20 @@ TEST_P(AiksTest, FilledRoundRectPathsRenderCorrectly) {
       /*tile_mode=*/DlTileMode::kMirror));
   for (int i = 1; i <= 10; i++) {
     int j = 11 - i;
-    draw_rrect_as_path(SkRect::MakeLTRB(550 - i * 20, 550 - j * 20,  //
+    draw_rrect_as_path(DlRect::MakeLTRB(550 - i * 20, 550 - j * 20,  //
                                         550 + i * 20, 550 + j * 20),
                        i * 10, j * 10, paint);
   }
   paint.setColor(DlColor::kWhite().modulateOpacity(0.5));
   paint.setColorSource(DlColorSource::MakeRadial(
-      /*center=*/{200, 650},
+      /*center=*/DlPoint(200, 650),
       /*radius=*/75,
       /*stop_count=*/gradient_colors.size(),
       /*colors=*/gradient_colors.data(),
       /*stops=*/stops.data(),
       /*tile_mode=*/DlTileMode::kMirror));
-  draw_rrect_as_path(SkRect::MakeLTRB(100, 610, 300, 690), 40, 40, paint);
-  draw_rrect_as_path(SkRect::MakeLTRB(160, 550, 240, 750), 40, 40, paint);
+  draw_rrect_as_path(DlRect::MakeLTRB(100, 610, 300, 690), 40, 40, paint);
+  draw_rrect_as_path(DlRect::MakeLTRB(160, 550, 240, 750), 40, 40, paint);
 
   auto matrix = DlMatrix::MakeTranslation({520, 20});
   paint.setColor(DlColor::kWhite().modulateOpacity(0.1));
@@ -1290,7 +1906,7 @@ TEST_P(AiksTest, FilledRoundRectPathsRenderCorrectly) {
       DlImageSampling::kMipmapLinear, &matrix));
   for (int i = 1; i <= 10; i++) {
     int j = 11 - i;
-    draw_rrect_as_path(SkRect::MakeLTRB(720 - i * 20, 220 - j * 20,  //
+    draw_rrect_as_path(DlRect::MakeLTRB(720 - i * 20, 220 - j * 20,  //
                                         720 + i * 20, 220 + j * 20),
                        i * 10, j * 10, paint);
   }
@@ -1300,8 +1916,8 @@ TEST_P(AiksTest, FilledRoundRectPathsRenderCorrectly) {
       texture, DlTileMode::kRepeat, DlTileMode::kRepeat,
       DlImageSampling::kMipmapLinear, &matrix));
 
-  draw_rrect_as_path(SkRect::MakeLTRB(800, 410, 1000, 490), 40, 40, paint);
-  draw_rrect_as_path(SkRect::MakeLTRB(860, 350, 940, 550), 40, 40, paint);
+  draw_rrect_as_path(DlRect::MakeLTRB(800, 410, 1000, 490), 40, 40, paint);
+  draw_rrect_as_path(DlRect::MakeLTRB(860, 350, 940, 550), 40, 40, paint);
 
   ASSERT_TRUE(OpenPlaygroundHere(builder.Build()));
 }
@@ -1321,7 +1937,7 @@ TEST_P(AiksTest, CoverageOriginShouldBeAccountedForInSubpasses) {
     static PlaygroundPoint point_a(Point(40, 40), 10, Color::White());
     static PlaygroundPoint point_b(Point(160, 160), 10, Color::White());
     auto [b0, b1] = DrawPlaygroundLine(point_a, point_b);
-    SkRect bounds = SkRect::MakeLTRB(b0.x, b0.y, b1.x, b1.y);
+    DlRect bounds = DlRect::MakeLTRB(b0.x, b0.y, b1.x, b1.y);
 
     DlPaint stroke_paint;
     stroke_paint.setColor(DlColor::kYellow());
@@ -1329,22 +1945,22 @@ TEST_P(AiksTest, CoverageOriginShouldBeAccountedForInSubpasses) {
     stroke_paint.setDrawStyle(DlDrawStyle::kStroke);
     builder.DrawRect(bounds, stroke_paint);
 
-    builder.SaveLayer(&bounds, &alpha);
+    builder.SaveLayer(bounds, &alpha);
 
     DlPaint paint;
     paint.setColor(DlColor::kRed());
     builder.DrawRect(
-        SkRect::MakeXYWH(current.x, current.y, size.width, size.height), paint);
+        DlRect::MakeXYWH(current.x, current.y, size.width, size.height), paint);
 
     paint.setColor(DlColor::kGreen());
     current += offset;
     builder.DrawRect(
-        SkRect::MakeXYWH(current.x, current.y, size.width, size.height), paint);
+        DlRect::MakeXYWH(current.x, current.y, size.width, size.height), paint);
 
     paint.setColor(DlColor::kBlue());
     current += offset;
     builder.DrawRect(
-        SkRect::MakeXYWH(current.x, current.y, size.width, size.height), paint);
+        DlRect::MakeXYWH(current.x, current.y, size.width, size.height), paint);
 
     builder.Restore();
 
@@ -1360,13 +1976,13 @@ TEST_P(AiksTest, SaveLayerDrawsBehindSubsequentEntities) {
   DlPaint paint;
 
   paint.setColor(DlColor::kBlack());
-  SkRect rect = SkRect::MakeXYWH(25, 25, 25, 25);
+  DlRect rect = DlRect::MakeXYWH(25, 25, 25, 25);
   builder.DrawRect(rect, paint);
 
   builder.Translate(10, 10);
 
   DlPaint save_paint;
-  builder.SaveLayer(nullptr, &save_paint);
+  builder.SaveLayer(std::nullopt, &save_paint);
 
   paint.setColor(DlColor::kGreen());
   builder.DrawRect(rect, paint);
@@ -1383,13 +1999,13 @@ TEST_P(AiksTest, SaveLayerDrawsBehindSubsequentEntities) {
 TEST_P(AiksTest, SiblingSaveLayerBoundsAreRespected) {
   DisplayListBuilder builder;
   DlPaint paint;
-  SkRect rect = SkRect::MakeXYWH(0, 0, 1000, 1000);
+  DlRect rect = DlRect::MakeXYWH(0, 0, 1000, 1000);
 
   // Black, green, and red squares offset by [10, 10].
   {
     DlPaint save_paint;
-    SkRect bounds = SkRect::MakeXYWH(25, 25, 25, 25);
-    builder.SaveLayer(&bounds, &save_paint);
+    DlRect bounds = DlRect::MakeXYWH(25, 25, 25, 25);
+    builder.SaveLayer(bounds, &save_paint);
     paint.setColor(DlColor::kBlack());
     builder.DrawRect(rect, paint);
     builder.Restore();
@@ -1397,8 +2013,8 @@ TEST_P(AiksTest, SiblingSaveLayerBoundsAreRespected) {
 
   {
     DlPaint save_paint;
-    SkRect bounds = SkRect::MakeXYWH(35, 35, 25, 25);
-    builder.SaveLayer(&bounds, &save_paint);
+    DlRect bounds = DlRect::MakeXYWH(35, 35, 25, 25);
+    builder.SaveLayer(bounds, &save_paint);
     paint.setColor(DlColor::kGreen());
     builder.DrawRect(rect, paint);
     builder.Restore();
@@ -1406,8 +2022,8 @@ TEST_P(AiksTest, SiblingSaveLayerBoundsAreRespected) {
 
   {
     DlPaint save_paint;
-    SkRect bounds = SkRect::MakeXYWH(45, 45, 25, 25);
-    builder.SaveLayer(&bounds, &save_paint);
+    DlRect bounds = DlRect::MakeXYWH(45, 45, 25, 25);
+    builder.SaveLayer(bounds, &save_paint);
     paint.setColor(DlColor::kRed());
     builder.DrawRect(rect, paint);
     builder.Restore();
@@ -1426,21 +2042,21 @@ TEST_P(AiksTest, CanRenderClippedLayers) {
   // Draw a green circle on the screen.
   {
     // Increase the clip depth for the savelayer to contend with.
-    SkPath path = SkPath::Circle(100, 100, 50);
+    DlPath path = DlPath::MakeCircle(DlPoint(100, 100), 50);
     builder.ClipPath(path);
 
-    SkRect bounds = SkRect::MakeXYWH(50, 50, 100, 100);
+    DlRect bounds = DlRect::MakeXYWH(50, 50, 100, 100);
     DlPaint save_paint;
-    builder.SaveLayer(&bounds, &save_paint);
+    builder.SaveLayer(bounds, &save_paint);
 
     // Fill the layer with white.
     paint.setColor(DlColor::kWhite());
-    builder.DrawRect(SkRect::MakeSize(SkSize{400, 400}), paint);
+    builder.DrawRect(DlRect::MakeSize(DlSize(400, 400)), paint);
     // Fill the layer with green, but do so with a color blend that can't be
     // collapsed into the parent pass.
     paint.setColor(DlColor::kGreen());
     paint.setBlendMode(DlBlendMode::kHardLight);
-    builder.DrawRect(SkRect::MakeSize(SkSize{400, 400}), paint);
+    builder.DrawRect(DlRect::MakeSize(DlSize(400, 400)), paint);
   }
 
   ASSERT_TRUE(OpenPlaygroundHere(builder.Build()));
@@ -1454,8 +2070,8 @@ TEST_P(AiksTest, SaveLayerFiltersScaleWithTransform) {
 
   auto texture = DlImageImpeller::Make(CreateTextureForFixture("boston.jpg"));
   auto draw_image_layer = [&builder, &texture](const DlPaint& paint) {
-    builder.SaveLayer(nullptr, &paint);
-    builder.DrawImage(texture, SkPoint{}, DlImageSampling::kLinear);
+    builder.SaveLayer(std::nullopt, &paint);
+    builder.DrawImage(texture, DlPoint(), DlImageSampling::kLinear);
     builder.Restore();
   };
 
@@ -1488,9 +2104,10 @@ TEST_P(AiksTest, FastEllipticalRRectMaskBlursRenderCorrectly) {
     for (int j = 0; j < 5; j++) {
       Scalar x = j * 125;
       Scalar x_radius = j * 15;
-      builder.DrawRRect(
-          SkRRect::MakeRectXY(SkRect::MakeXYWH(x + 50, y + 50, 100.0f, 100.0f),
-                              x_radius, y_radius),
+      builder.DrawRoundRect(
+          DlRoundRect::MakeRectXY(
+              DlRect::MakeXYWH(x + 50, y + 50, 100.0f, 100.0f),  //
+              x_radius, y_radius),
           paint);
     }
   }
@@ -1503,18 +2120,18 @@ TEST_P(AiksTest, PipelineBlendSingleParameter) {
 
   // Should render a green square in the middle of a blue circle.
   DlPaint paint;
-  builder.SaveLayer(nullptr, &paint);
+  builder.SaveLayer(std::nullopt, &paint);
   {
     builder.Translate(100, 100);
     paint.setColor(DlColor::kBlue());
-    builder.DrawCircle(SkPoint::Make(200, 200), 200, paint);
-    builder.ClipRect(SkRect::MakeXYWH(100, 100, 200, 200));
+    builder.DrawCircle(DlPoint(200, 200), 200, paint);
+    builder.ClipRect(DlRect::MakeXYWH(100, 100, 200, 200));
 
     paint.setColor(DlColor::kGreen());
     paint.setBlendMode(DlBlendMode::kSrcOver);
     paint.setImageFilter(DlImageFilter::MakeColorFilter(
         DlColorFilter::MakeBlend(DlColor::kWhite(), DlBlendMode::kDst)));
-    builder.DrawCircle(SkPoint::Make(200, 200), 200, paint);
+    builder.DrawCircle(DlPoint(200, 200), 200, paint);
     builder.Restore();
   }
 
@@ -1528,18 +2145,18 @@ TEST_P(AiksTest, MassiveScalingMatrixImageFilter) {
   if (GetBackend() == PlaygroundBackend::kVulkan) {
     GTEST_SKIP() << "Swiftshader is running out of memory on this example.";
   }
-  DisplayListBuilder builder(SkRect::MakeSize(SkSize::Make(1000, 1000)));
+  DisplayListBuilder builder(DlRect::MakeSize(DlSize(1000, 1000)));
 
   auto filter = DlImageFilter::MakeMatrix(
       DlMatrix::MakeScale({0.001, 0.001, 1}), DlImageSampling::kLinear);
 
   DlPaint paint;
   paint.setImageFilter(filter);
-  builder.SaveLayer(nullptr, &paint);
+  builder.SaveLayer(std::nullopt, &paint);
   {
     DlPaint paint;
     paint.setColor(DlColor::kRed());
-    builder.DrawRect(SkRect::MakeLTRB(0, 0, 100000, 100000), paint);
+    builder.DrawRect(DlRect::MakeLTRB(0, 0, 100000, 100000), paint);
   }
   builder.Restore();
 
@@ -1570,8 +2187,9 @@ TEST_P(AiksTest, NoDimplesInRRectPath) {
     std::vector<Scalar> stops = {0.0, 1.0};
 
     DlPaint paint;
-    auto gradient = DlColorSource::MakeLinear(
-        {0, 0}, {200, 200}, 2, colors.data(), stops.data(), DlTileMode::kClamp);
+    auto gradient = DlColorSource::MakeLinear(DlPoint(0, 0), DlPoint(200, 200),
+                                              2, colors.data(), stops.data(),
+                                              DlTileMode::kClamp);
     paint.setColorSource(gradient);
     paint.setColor(DlColor::kWhite());
     paint.setDrawStyle(DlDrawStyle::kStroke);
@@ -1582,9 +2200,9 @@ TEST_P(AiksTest, NoDimplesInRRectPath) {
 
     Scalar corner_x = ((1 - corner) * 50) + 50;
     Scalar corner_y = corner * 50 + 50;
-    SkRRect rrect = SkRRect::MakeRectXY(SkRect::MakeXYWH(0, 0, width, height),
-                                        corner_x, corner_y);
-    builder.DrawRRect(rrect, paint);
+    DlRoundRect rrect = DlRoundRect::MakeRectXY(
+        DlRect::MakeXYWH(0, 0, width, height), corner_x, corner_y);
+    builder.DrawRoundRect(rrect, paint);
     builder.Restore();
     return builder.Build();
   };
@@ -1613,7 +2231,11 @@ TEST_P(AiksTest, BackdropFilterOverUnclosedClip) {
     builder.SaveLayer(std::nullopt, nullptr, image_filter.get());
   }
   builder.Restore();
+<<<<<<< HEAD
   builder.DrawCircle(SkPoint{100, 100}, 100,
+=======
+  builder.DrawCircle(DlPoint(100, 100), 100,
+>>>>>>> 48c32af0345e9ad5747f78ddce828c7f795f7159
                      DlPaint().setColor(DlColor::kAqua()));
 
   ASSERT_TRUE(OpenPlaygroundHere(builder.Build()));

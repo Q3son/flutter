@@ -4,7 +4,7 @@
 
 import '../framework/devices.dart';
 import '../framework/framework.dart';
-import '../framework/talkback.dart';
+import '../framework/talkback.dart' hide adbPath;
 import '../framework/task_result.dart';
 import '../framework/utils.dart';
 
@@ -22,11 +22,11 @@ TaskFunction createPlatformInteractionTest() {
   ).call;
 }
 
-TaskFunction createFlavorsTest({Map<String, String>? environment}) {
+TaskFunction createFlavorsTest({Map<String, String>? environment, List<String>? extraOptions}) {
   return DriverTest(
     '${flutterDirectory.path}/dev/integration_tests/flavors',
     'lib/main.dart',
-    extraOptions: <String>['--flavor', 'paid'],
+    extraOptions: extraOptions ?? <String>['--flavor', 'paid'],
     environment: environment,
   ).call;
 }
@@ -139,6 +139,52 @@ TaskFunction createSolidColorTest({required bool enableImpeller}) {
   ).call;
 }
 
+TaskFunction androidVerifiedInputTest({Map<String, String>? environment}) {
+  return DriverTest(
+    '${flutterDirectory.path}/dev/integration_tests/android_verified_input',
+    'lib/main.dart',
+    environment: environment,
+  ).call;
+}
+
+// Can run on emulator or physical android device.
+// Device must have developer settings enabled.
+// Device must be android api 30 or higher.
+TaskFunction createDisplayCutoutTest() {
+  return IntegrationTest(
+    '${flutterDirectory.path}/dev/integration_tests/display_cutout_rotation/',
+    'integration_test/display_cutout_test.dart',
+    setup: (Device device) async {
+      if (device is! AndroidDevice) {
+        // Only android devices support this cutoutTest.
+        throw TaskResult.failure('This test should only target android');
+      }
+      // Test requires developer settings added in 28 and behavior added in 30.
+      final String sdkResult = await device.shellEval('getprop', <String>['ro.build.version.sdk']);
+      if (sdkResult.startsWith('2') || sdkResult.startsWith('1') || sdkResult.length == 1) {
+        throw TaskResult.failure('This test should only target android 30+.');
+      }
+      print('Adding Synthetic notch...');
+      // This command will cause any running android activity to be recreated.
+      await device.shellExec('cmd', <String>[
+        'overlay',
+        'enable',
+        'com.android.internal.display.cutout.emulation.tall',
+      ]);
+    },
+    tearDown: (Device device) async {
+      if (device is AndroidDevice) {
+        print('Removing Synthetic notch...');
+        await device.shellExec('cmd', <String>[
+          'overlay',
+          'disable',
+          'com.android.internal.display.cutout.emulation.tall',
+        ]);
+      }
+    },
+  ).call;
+}
+
 TaskFunction dartDefinesTask() {
   return DriverTest(
     '${flutterDirectory.path}/dev/integration_tests/ui',
@@ -148,6 +194,17 @@ TaskFunction dartDefinesTask() {
       '--dart-define=test.valueB=Value',
     ],
   ).call;
+}
+
+TaskFunction featureFlagsTask() {
+  return () async {
+    await flutter('config', options: const <String>['--enable-windowing']);
+
+    return DriverTest(
+      '${flutterDirectory.path}/dev/integration_tests/ui',
+      'lib/feature_flags.dart',
+    ).call();
+  };
 }
 
 TaskFunction createEndToEndIntegrationTest() {
@@ -170,6 +227,16 @@ TaskFunction createWindowsStartupDriverTest({String? deviceIdOverride}) {
     'lib/main.dart',
     deviceIdOverride: deviceIdOverride,
   ).call;
+}
+
+TaskFunction createWindowingDriverTest() {
+  return () async {
+    await flutter('config', options: const <String>['--enable-windowing']);
+    return DriverTest(
+      '${flutterDirectory.path}/dev/integration_tests/windowing_test',
+      'lib/main.dart',
+    ).call();
+  };
 }
 
 TaskFunction createWideGamutTest() {
@@ -198,16 +265,41 @@ class DriverTest {
   Future<TaskResult> call() {
     return inDirectory<TaskResult>(testDirectory, () async {
       String deviceId;
+      Device? selectedDevice;
       if (deviceIdOverride != null) {
         deviceId = deviceIdOverride!;
       } else {
-        final Device device = await devices.workingDevice;
-        await device.unlock();
-        deviceId = device.deviceId;
+        selectedDevice = await devices.workingDevice;
+        await selectedDevice.unlock();
+        deviceId = selectedDevice.deviceId;
       }
       await flutter('packages', options: <String>['get']);
 
-      final List<String> options = <String>[
+      final bool isAndroidRun = selectedDevice != null
+          ? selectedDevice is AndroidDevice
+          : const <DeviceOperatingSystem>{
+              DeviceOperatingSystem.android,
+              DeviceOperatingSystem.androidArm,
+              DeviceOperatingSystem.androidArm64,
+            }.contains(deviceOperatingSystem);
+
+      String? devicelabAdbPath;
+      if (isAndroidRun) {
+        try {
+          devicelabAdbPath = adbPath;
+        } on DeviceException {
+          devicelabAdbPath = null;
+        }
+      }
+      // Make the device ID available in the driver code, so tools like ADB can
+      // reference it if needed.
+      final env = <String, String>{
+        if (environment != null) ...environment!,
+        'FLUTTER_DEVICE_ID_NUMBER': deviceId,
+        if (devicelabAdbPath != null) 'FLUTTER_ADB_PATH': devicelabAdbPath,
+      };
+
+      final options = <String>[
         '--no-android-gradle-daemon',
         '-v',
         '-t',
@@ -216,8 +308,7 @@ class DriverTest {
         deviceId,
         ...extraOptions,
       ];
-      await flutter('drive', options: options, environment: environment);
-
+      await flutter('drive', options: options, environment: env);
       return TaskResult.success(null);
     });
   }
@@ -231,6 +322,8 @@ class IntegrationTest {
     this.createPlatforms = const <String>[],
     this.withTalkBack = false,
     this.environment,
+    this.setup,
+    this.tearDown,
   });
 
   final String testDirectory;
@@ -240,12 +333,19 @@ class IntegrationTest {
   final bool withTalkBack;
   final Map<String, String>? environment;
 
+  /// Run before flutter drive with the result from devices.workingDevice.
+  final Future<void> Function(Device device)? setup;
+
+  /// Run after flutter drive with the result from devices.workingDevice.
+  final Future<void> Function(Device device)? tearDown;
+
   Future<TaskResult> call() {
     return inDirectory<TaskResult>(testDirectory, () async {
       final Device device = await devices.workingDevice;
       await device.unlock();
       final String deviceId = device.deviceId;
       await flutter('packages', options: <String>['get']);
+      await setup?.call(await devices.workingDevice);
 
       if (createPlatforms.isNotEmpty) {
         await flutter(
@@ -263,8 +363,9 @@ class IntegrationTest {
         await enableTalkBack();
       }
 
-      final List<String> options = <String>['-v', '-d', deviceId, testTarget, ...extraOptions];
+      final options = <String>['-v', '-d', deviceId, testTarget, ...extraOptions];
       await flutter('test', options: options, environment: environment);
+      await tearDown?.call(await devices.workingDevice);
 
       if (withTalkBack) {
         await disableTalkBack();

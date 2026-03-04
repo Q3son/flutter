@@ -107,8 +107,9 @@ class RefPtr final {
 
   // Destructor.
   ~RefPtr() {
+    // NOLINTNEXTLINE(clang-analyzer-core.StackAddressEscape)
     if (ptr_) {
-      // NOLINTNEXTLINE(clang-analyzer-cplusplus.NewDelete)
+      // NOLINTNEXTLINE(clang-analyzer-cplusplus.NewDelete,clang-analyzer-core.StackAddressEscape)
       ptr_->Release();
     }
   }
@@ -139,6 +140,7 @@ class RefPtr final {
     if (old_ptr) {
       old_ptr->Release();
     }
+    // NOLINTNEXTLINE(clang-analyzer-cplusplus.NewDeleteLeaks)
     return *this;
   }
 
@@ -155,6 +157,7 @@ class RefPtr final {
     if (old_ptr) {
       old_ptr->Release();
     }
+    // NOLINTNEXTLINE(clang-analyzer-cplusplus.NewDeleteLeaks)
     return *this;
   }
 
@@ -163,12 +166,14 @@ class RefPtr final {
   // equivalent to |RefPtr<T>(std::move(r)).swap(*this)|.
   RefPtr<T>& operator=(RefPtr<T>&& r) {
     RefPtr<T>(std::move(r)).swap(*this);
+    // NOLINTNEXTLINE(clang-analyzer-cplusplus.NewDeleteLeaks)
     return *this;
   }
 
   template <typename U>
   RefPtr<T>& operator=(RefPtr<U>&& r) {
     RefPtr<T>(std::move(r)).swap(*this);
+    // NOLINTNEXTLINE(clang-analyzer-cplusplus.NewDeleteLeaks)
     return *this;
   }
 

@@ -25,9 +25,8 @@ void main() {
     late BufferLogger logger;
     late FakeProcessManager fakeProcessManager;
 
-    const String flutterRoot = '/path/to/flutter';
-    const String pathToXcodeAutomationScript =
-        '$flutterRoot/packages/flutter_tools/bin/xcode_debug.js';
+    const flutterRoot = '/path/to/flutter';
+    const pathToXcodeAutomationScript = '$flutterRoot/packages/flutter_tools/bin/xcode_debug.js';
 
     setUp(() {
       fileSystem = MemoryFileSystem.test();
@@ -36,8 +35,8 @@ void main() {
     });
 
     group('debugApp', () {
-      const String pathToXcodeApp = '/Applications/Xcode.app';
-      const String deviceId = '0000001234';
+      const pathToXcodeApp = '/Applications/Xcode.app';
+      const deviceId = '0000001234';
 
       late Xcode xcode;
       late Directory xcodeproj;
@@ -121,7 +120,7 @@ void main() {
             ),
           ]);
 
-          final XcodeDebug xcodeDebug = XcodeDebug(
+          final xcodeDebug = XcodeDebug(
             logger: logger,
             processManager: fakeProcessManager,
             xcode: xcode,
@@ -207,7 +206,7 @@ void main() {
             ),
           ]);
 
-          final XcodeDebug xcodeDebug = XcodeDebug(
+          final xcodeDebug = XcodeDebug(
             logger: logger,
             processManager: fakeProcessManager,
             xcode: xcode,
@@ -262,7 +261,7 @@ void main() {
           ),
         ]);
 
-        final XcodeDebug xcodeDebug = XcodeDebug(
+        final xcodeDebug = XcodeDebug(
           logger: logger,
           processManager: fakeProcessManager,
           xcode: xcode,
@@ -334,7 +333,7 @@ void main() {
           ),
         ]);
 
-        final XcodeDebug xcodeDebug = XcodeDebug(
+        final xcodeDebug = XcodeDebug(
           logger: logger,
           processManager: fakeProcessManager,
           xcode: xcode,
@@ -403,7 +402,7 @@ void main() {
           ),
         ]);
 
-        final XcodeDebug xcodeDebug = XcodeDebug(
+        final xcodeDebug = XcodeDebug(
           logger: logger,
           processManager: fakeProcessManager,
           xcode: xcode,
@@ -472,7 +471,7 @@ void main() {
           ),
         ]);
 
-        final XcodeDebug xcodeDebug = XcodeDebug(
+        final xcodeDebug = XcodeDebug(
           logger: logger,
           processManager: fakeProcessManager,
           xcode: xcode,
@@ -541,7 +540,7 @@ void main() {
           ),
         ]);
 
-        final XcodeDebug xcodeDebug = XcodeDebug(
+        final xcodeDebug = XcodeDebug(
           logger: logger,
           processManager: fakeProcessManager,
           xcode: xcode,
@@ -567,7 +566,7 @@ void main() {
           fileSystem: fileSystem,
           flutterRoot: flutterRoot,
         );
-        final XcodeDebug xcodeDebug = XcodeDebug(
+        final xcodeDebug = XcodeDebug(
           logger: logger,
           processManager: fakeProcessManager,
           xcode: xcode,
@@ -586,7 +585,7 @@ void main() {
           fileSystem: fileSystem,
           flutterRoot: flutterRoot,
         );
-        final XcodeDebug xcodeDebug = XcodeDebug(
+        final xcodeDebug = XcodeDebug(
           logger: logger,
           processManager: fakeProcessManager,
           xcode: xcode,
@@ -605,7 +604,7 @@ void main() {
           fileSystem: fileSystem,
           flutterRoot: flutterRoot,
         );
-        final XcodeDebug xcodeDebug = XcodeDebug(
+        final xcodeDebug = XcodeDebug(
           logger: logger,
           processManager: fakeProcessManager,
           xcode: xcode,
@@ -617,10 +616,31 @@ void main() {
         expect(logger.errorText, contains('osascript returned unexpected JSON response'));
         expect(response, isNull);
       });
+
+      testWithoutContext('successfully removes any text before JSON', () async {
+        final Xcode xcode = setupXcode(
+          fakeProcessManager: FakeProcessManager.any(),
+          fileSystem: fileSystem,
+          flutterRoot: flutterRoot,
+        );
+        final xcodeDebug = XcodeDebug(
+          logger: logger,
+          processManager: fakeProcessManager,
+          xcode: xcode,
+          fileSystem: fileSystem,
+        );
+
+        final XcodeAutomationScriptResponse? response = xcodeDebug.parseScriptResponse(
+          'start process_extensions{"status":true,"errorMessage":null,"debugResult":{"completed":false,"status":"running","errorMessage":null}}',
+        );
+
+        expect(logger.errorText, isEmpty);
+        expect(response, isNotNull);
+      });
     });
 
     group('exit', () {
-      const String pathToXcodeApp = '/Applications/Xcode.app';
+      const pathToXcodeApp = '/Applications/Xcode.app';
 
       late Directory projectDirectory;
       late Directory xcodeproj;
@@ -638,13 +658,13 @@ void main() {
           fileSystem: fileSystem,
           flutterRoot: flutterRoot,
         );
-        final XcodeDebugProject project = XcodeDebugProject(
+        final project = XcodeDebugProject(
           scheme: 'Runner',
           xcodeProject: xcodeproj,
           xcodeWorkspace: xcworkspace,
           hostAppProjectName: 'Runner',
         );
-        final XcodeDebug xcodeDebug = XcodeDebug(
+        final xcodeDebug = XcodeDebug(
           logger: logger,
           processManager: fakeProcessManager,
           xcode: xcode,
@@ -696,7 +716,7 @@ void main() {
         xcodeproj.createSync(recursive: true);
         xcworkspace.createSync(recursive: true);
 
-        final XcodeDebugProject project = XcodeDebugProject(
+        final project = XcodeDebugProject(
           scheme: 'Runner',
           xcodeProject: xcodeproj,
           xcodeWorkspace: xcworkspace,
@@ -704,7 +724,7 @@ void main() {
           isTemporaryProject: true,
         );
 
-        final XcodeDebug xcodeDebug = XcodeDebug(
+        final xcodeDebug = XcodeDebug(
           logger: logger,
           processManager: fakeProcessManager,
           xcode: xcode,
@@ -762,14 +782,14 @@ void main() {
             fileSystem: fileSystem,
             flutterRoot: flutterRoot,
           );
-          final XcodeDebugProject project = XcodeDebugProject(
+          final project = XcodeDebugProject(
             scheme: 'Runner',
             xcodeProject: xcodeproj,
             xcodeWorkspace: xcworkspace,
             hostAppProjectName: 'Runner',
             isTemporaryProject: true,
           );
-          final XcodeDebug xcodeDebug = XcodeDebug(
+          final xcodeDebug = XcodeDebug(
             logger: logger,
             processManager: fakeProcessManager,
             xcode: xcode,
@@ -827,13 +847,13 @@ void main() {
           fileSystem: fileSystem,
           flutterRoot: flutterRoot,
         );
-        final XcodeDebugProject project = XcodeDebugProject(
+        final project = XcodeDebugProject(
           scheme: 'Runner',
           xcodeProject: xcodeproj,
           xcodeWorkspace: xcworkspace,
           hostAppProjectName: 'Runner',
         );
-        final XcodeDebug xcodeDebug = XcodeDebug(
+        final xcodeDebug = XcodeDebug(
           logger: logger,
           processManager: fakeProcessManager,
           xcode: xcode,
@@ -866,14 +886,14 @@ void main() {
             fileSystem: fileSystem,
             flutterRoot: flutterRoot,
           );
-          final XcodeDebugProject project = XcodeDebugProject(
+          final project = XcodeDebugProject(
             scheme: 'Runner',
             xcodeProject: xcodeproj,
             xcodeWorkspace: xcworkspace,
             hostAppProjectName: 'Runner',
             isTemporaryProject: true,
           );
-          final XcodeDebug xcodeDebug = XcodeDebug(
+          final xcodeDebug = XcodeDebug(
             logger: logger,
             processManager: FakeProcessManager.any(),
             xcode: xcode,
@@ -904,7 +924,7 @@ void main() {
     });
 
     group('stop app', () {
-      const String pathToXcodeApp = '/Applications/Xcode.app';
+      const pathToXcodeApp = '/Applications/Xcode.app';
 
       late Xcode xcode;
       late Directory xcodeproj;
@@ -928,7 +948,7 @@ void main() {
       });
 
       testWithoutContext('succeeds with all optional flags', () async {
-        final XcodeDebug xcodeDebug = XcodeDebug(
+        final xcodeDebug = XcodeDebug(
           logger: logger,
           processManager: fakeProcessManager,
           xcode: xcode,
@@ -970,7 +990,7 @@ void main() {
       });
 
       testWithoutContext('fails if osascript output returns false status', () async {
-        final XcodeDebug xcodeDebug = XcodeDebug(
+        final xcodeDebug = XcodeDebug(
           logger: logger,
           processManager: fakeProcessManager,
           xcode: xcode,
@@ -1024,7 +1044,7 @@ void main() {
       });
 
       testWithoutContext('succeeds', () async {
-        final XcodeDebug xcodeDebug = XcodeDebug(
+        final xcodeDebug = XcodeDebug(
           logger: logger,
           processManager: fakeProcessManager,
           xcode: xcode,
@@ -1042,7 +1062,7 @@ void main() {
       });
 
       testWithoutContext('prints error if scheme file not found', () async {
-        final XcodeDebug xcodeDebug = XcodeDebug(
+        final xcodeDebug = XcodeDebug(
           logger: logger,
           processManager: fakeProcessManager,
           xcode: xcode,
@@ -1058,7 +1078,7 @@ void main() {
       });
 
       testWithoutContext('throws error if launch action is missing debugger info', () async {
-        final XcodeDebug xcodeDebug = XcodeDebug(
+        final xcodeDebug = XcodeDebug(
           logger: logger,
           processManager: fakeProcessManager,
           xcode: xcode,
@@ -1078,7 +1098,7 @@ void main() {
       });
 
       testWithoutContext('prints error if unable to find launch action', () async {
-        final XcodeDebug xcodeDebug = XcodeDebug(
+        final xcodeDebug = XcodeDebug(
           logger: logger,
           processManager: fakeProcessManager,
           xcode: xcode,
@@ -1096,7 +1116,7 @@ void main() {
       });
 
       testWithoutContext('prints error if invalid xml', () async {
-        final XcodeDebug xcodeDebug = XcodeDebug(
+        final xcodeDebug = XcodeDebug(
           logger: logger,
           processManager: fakeProcessManager,
           xcode: xcode,
@@ -1120,7 +1140,7 @@ void main() {
     late FakeProcessManager fakeProcessManager;
     late MemoryFileSystem fileSystem;
 
-    const String flutterRoot = '/path/to/flutter';
+    const flutterRoot = '/path/to/flutter';
 
     setUp(() {
       logger = BufferLogger.test();
@@ -1135,7 +1155,7 @@ void main() {
         flutterRoot: flutterRoot,
       );
 
-      final XcodeDebug xcodeDebug = XcodeDebug(
+      final xcodeDebug = XcodeDebug(
         logger: logger,
         processManager: fakeProcessManager,
         xcode: xcode,
@@ -1168,7 +1188,6 @@ void main() {
         expect(schemeFile.existsSync(), isTrue);
         expect(schemeFile.readAsStringSync(), contains('FilePath = "/path/to/bundle"'));
       } catch (err) {
-        // ignore: avoid_catches_without_on_clauses
         fail(err.toString());
       } finally {
         projectDirectory.deleteSync(recursive: true);
@@ -1194,7 +1213,7 @@ Xcode setupXcode({
       .file('$flutterRoot/packages/flutter_tools/bin/xcode_debug.js')
       .createSync(recursive: true);
 
-  final XcodeProjectInterpreter xcodeProjectInterpreter = XcodeProjectInterpreter.test(
+  final xcodeProjectInterpreter = XcodeProjectInterpreter.test(
     processManager: FakeProcessManager.any(),
     version: Version(14, 0, 0),
   );
@@ -1217,7 +1236,7 @@ class FakeProcess extends Fake implements Process {
   }
 }
 
-const String validSchemeXml = '''
+const validSchemeXml = '''
 <?xml version="1.0" encoding="UTF-8"?>
 <Scheme
    LastUpgradeVersion = "1510"
@@ -1260,7 +1279,7 @@ const String validSchemeXml = '''
 </Scheme>
 ''';
 
-const String disabledDebugExecutableSchemeXml = '''
+const disabledDebugExecutableSchemeXml = '''
 <?xml version="1.0" encoding="UTF-8"?>
 <Scheme
    LastUpgradeVersion = "1510"

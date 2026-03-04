@@ -8,10 +8,6 @@ import 'package:ui/src/engine.dart';
 import 'package:ui/ui.dart' as ui;
 import 'package:ui/ui_web/src/ui_web.dart' as ui_web;
 
-// TODO(mdebbar): Deprecate this and remove it.
-// https://github.com/flutter/flutter/issues/127395
-typedef WebOnlyImageCodecChunkCallback = ui_web.ImageCodecChunkCallback;
-
 abstract class HtmlImageElementCodec implements ui.Codec {
   HtmlImageElementCodec(this.src, {this.chunkCallback, this.debugSource});
 
@@ -36,32 +32,31 @@ abstract class HtmlImageElementCodec implements ui.Codec {
     if (decodeFuture != null) {
       return decodeFuture;
     }
-    final Completer<void> completer = Completer<void>();
+    final completer = Completer<void>();
     decodeFuture = completer.future;
     // Currently there is no way to watch decode progress, so
     // we add 0/100 , 100/100 progress callbacks to enable loading progress
     // builders to create UI.
     chunkCallback?.call(0, 100);
     imgElement = createDomHTMLImageElement();
-    if (renderer is! HtmlRenderer) {
-      imgElement!.crossOrigin = 'anonymous';
-    }
+    imgElement!.crossOrigin = 'anonymous';
     imgElement!
       ..decoding = 'async'
       ..src = src;
 
     // Ignoring the returned future on purpose because we're communicating
     // through the `completer`.
-    // ignore: unawaited_futures
-    imgElement!
-        .decode()
-        .then((dynamic _) {
-          chunkCallback?.call(100, 100);
-          completer.complete();
-        })
-        .catchError((dynamic e) {
-          completer.completeError(e.toString());
-        });
+    unawaited(
+      imgElement!
+          .decode()
+          .then((dynamic _) {
+            chunkCallback?.call(100, 100);
+            completer.complete();
+          })
+          .catchError((dynamic e) {
+            completer.completeError(e.toString());
+          }),
+    );
     return completer.future;
   }
 
@@ -74,11 +69,11 @@ abstract class HtmlImageElementCodec implements ui.Codec {
     if (naturalWidth == 0 &&
         naturalHeight == 0 &&
         ui_web.browser.browserEngine == ui_web.BrowserEngine.firefox) {
-      const int kDefaultImageSizeFallback = 300;
+      const kDefaultImageSizeFallback = 300;
       naturalWidth = kDefaultImageSizeFallback;
       naturalHeight = kDefaultImageSizeFallback;
     }
-    final ui.Image image = createImageFromHTMLImageElement(
+    final ui.Image image = await createImageFromHTMLImageElement(
       imgElement!,
       naturalWidth,
       naturalHeight,
@@ -87,7 +82,7 @@ abstract class HtmlImageElementCodec implements ui.Codec {
   }
 
   /// Creates a [ui.Image] from an [HTMLImageElement] that has been loaded.
-  ui.Image createImageFromHTMLImageElement(
+  FutureOr<ui.Image> createImageFromHTMLImageElement(
     DomHTMLImageElement image,
     int naturalWidth,
     int naturalHeight,

@@ -9,11 +9,12 @@ import 'package:ui/ui.dart' as ui;
 import 'package:ui/ui_web/src/ui_web.dart' as ui_web;
 import 'package:web_locale_keymap/web_locale_keymap.dart' as locale_keymap;
 
-import '../engine.dart' show registerHotRestartListener;
 import 'dom.dart';
+import 'initialization.dart';
 import 'key_map.g.dart';
 import 'platform_dispatcher.dart';
 import 'raw_keyboard.dart';
+import 'renderer.dart';
 import 'semantics.dart';
 
 typedef _VoidCallback = void Function();
@@ -103,12 +104,12 @@ ValueGetter<T> _cached<T>(ValueGetter<T> body) {
 class KeyboardBinding {
   KeyboardBinding._() {
     _addEventListener('keydown', (DomEvent domEvent) {
-      final FlutterHtmlKeyboardEvent event = FlutterHtmlKeyboardEvent(domEvent as DomKeyboardEvent);
+      final event = FlutterHtmlKeyboardEvent(domEvent as DomKeyboardEvent);
       _converter.handleEvent(event);
       RawKeyboard.instance?.handleHtmlEvent(domEvent);
     });
     _addEventListener('keyup', (DomEvent domEvent) {
-      final FlutterHtmlKeyboardEvent event = FlutterHtmlKeyboardEvent(domEvent as DomKeyboardEvent);
+      final event = FlutterHtmlKeyboardEvent(domEvent as DomKeyboardEvent);
       _converter.handleEvent(event);
       RawKeyboard.instance?.handleHtmlEvent(domEvent);
     });
@@ -141,7 +142,7 @@ class KeyboardBinding {
   final Map<String, DomEventListener> _listeners = <String, DomEventListener>{};
 
   void _addEventListener(String eventName, DartDomEventListener handler) {
-    JSVoid loggedHandler(DomEvent event) {
+    void loggedHandler(DomEvent event) {
       if (_debugLogKeyEvents) {
         print(event.type);
       }
@@ -150,16 +151,16 @@ class KeyboardBinding {
       }
     }
 
-    final DomEventListener wrappedHandler = createDomEventListener(loggedHandler);
+    final DomEventListener wrappedHandler = loggedHandler.toJS;
     assert(!_listeners.containsKey(eventName));
     _listeners[eventName] = wrappedHandler;
-    domWindow.addEventListener(eventName, wrappedHandler, true);
+    domWindow.addEventListener(eventName, wrappedHandler, true.toJS);
   }
 
   /// Remove all active event listeners.
   void _clearListeners() {
     _listeners.forEach((String eventName, DomEventListener listener) {
-      domWindow.removeEventListener(eventName, listener, true);
+      domWindow.removeEventListener(eventName, listener, true.toJS);
     });
     _listeners.clear();
   }
@@ -233,17 +234,14 @@ class KeyboardConverter {
   final locale_keymap.LocaleKeymap _mapping;
 
   static locale_keymap.LocaleKeymap _mappingFromPlatform(ui_web.OperatingSystem platform) {
-    switch (platform) {
-      case ui_web.OperatingSystem.iOs:
-      case ui_web.OperatingSystem.macOs:
-        return locale_keymap.LocaleKeymap.darwin();
-      case ui_web.OperatingSystem.windows:
-        return locale_keymap.LocaleKeymap.win();
-      case ui_web.OperatingSystem.android:
-      case ui_web.OperatingSystem.linux:
-      case ui_web.OperatingSystem.unknown:
-        return locale_keymap.LocaleKeymap.linux();
-    }
+    return switch (platform) {
+      ui_web.OperatingSystem.iOs ||
+      ui_web.OperatingSystem.macOs => locale_keymap.LocaleKeymap.darwin(),
+      ui_web.OperatingSystem.windows => locale_keymap.LocaleKeymap.win(),
+      ui_web.OperatingSystem.android ||
+      ui_web.OperatingSystem.linux ||
+      ui_web.OperatingSystem.unknown => locale_keymap.LocaleKeymap.linux(),
+    };
   }
 
   // The `performDispatchKeyData` wrapped with tracking logic.
@@ -342,7 +340,7 @@ class KeyboardConverter {
     ValueGetter<ui.KeyData> getData,
     _VoidCallback callback,
   ) {
-    bool canceled = false;
+    var canceled = false;
     Future<void>.delayed(duration).then<void>((_) {
       if (!canceled && !_disposed) {
         callback();
@@ -569,7 +567,7 @@ class KeyboardConverter {
     }
 
     final String? character = logicalKeyIsCharacter ? eventKey : null;
-    final ui.KeyData keyData = ui.KeyData(
+    final keyData = ui.KeyData(
       timeStamp: timeStamp,
       type: type,
       physical: physicalKey,
@@ -600,8 +598,16 @@ class KeyboardConverter {
       return;
     }
 
+    if (kDebugMode &&
+        event.key == 'F10' &&
+        event.altKey &&
+        event.type == 'keydown' &&
+        !(event.repeat ?? false)) {
+      renderer.dumpDebugInfo();
+    }
+
     assert(_dispatchKeyData == null);
-    bool sentAnyEvents = false;
+    var sentAnyEvents = false;
     _dispatchKeyData = (ui.KeyData data) {
       sentAnyEvents = true;
       return performDispatchKeyData(data);

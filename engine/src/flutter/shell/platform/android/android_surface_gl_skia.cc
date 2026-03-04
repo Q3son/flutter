@@ -63,7 +63,7 @@ std::unique_ptr<Surface> AndroidSurfaceGLSkia::CreateGPUSurface(
   }
 }
 
-bool AndroidSurfaceGLSkia::OnScreenSurfaceResize(const SkISize& size) {
+bool AndroidSurfaceGLSkia::OnScreenSurfaceResize(const DlISize& size) {
   FML_DCHECK(IsValid());
   FML_DCHECK(onscreen_surface_);
   FML_DCHECK(native_window_);
@@ -100,7 +100,8 @@ bool AndroidSurfaceGLSkia::ResourceContextClearCurrent() {
 }
 
 bool AndroidSurfaceGLSkia::SetNativeWindow(
-    fml::RefPtr<AndroidNativeWindow> window) {
+    fml::RefPtr<AndroidNativeWindow> window,
+    const std::shared_ptr<PlatformViewAndroidJNI>& jni_facade) {
   FML_DCHECK(IsValid());
   FML_DCHECK(window);
   native_window_ = window;
@@ -147,7 +148,7 @@ SurfaceFrame::FramebufferInfo AndroidSurfaceGLSkia::GLContextFramebufferInfo()
 }
 
 void AndroidSurfaceGLSkia::GLContextSetDamageRegion(
-    const std::optional<SkIRect>& region) {
+    const std::optional<DlIRect>& region) {
   FML_DCHECK(IsValid());
   onscreen_surface_->SetDamageRegion(region);
 }

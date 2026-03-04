@@ -33,6 +33,15 @@ class JNIMock final : public PlatformViewAndroidJNI {
                std::vector<std::string> strings,
                std::vector<std::vector<uint8_t>> string_attribute_args),
               (override));
+  MOCK_METHOD(void,
+              FlutterViewSetApplicationLocale,
+              (std::string locale),
+              (override));
+
+  MOCK_METHOD(void,
+              FlutterViewSetSemanticsTreeEnabled,
+              (bool enabled),
+              (override));
 
   MOCK_METHOD(void,
               FlutterViewUpdateCustomAccessibilityActions,
@@ -114,6 +123,36 @@ class JNIMock final : public PlatformViewAndroidJNI {
 
   MOCK_METHOD(void, FlutterViewDestroyOverlaySurfaces, (), (override));
 
+  MOCK_METHOD(ASurfaceTransaction*, createTransaction, (), (override));
+
+  MOCK_METHOD(void, swapTransaction, (), (override));
+
+  MOCK_METHOD(void, applyTransaction, (), (override));
+
+  MOCK_METHOD(void, destroyOverlaySurface2, (), (override));
+
+  MOCK_METHOD(std::unique_ptr<PlatformViewAndroidJNI::OverlayMetadata>,
+              createOverlaySurface2,
+              (),
+              (override));
+
+  MOCK_METHOD(void,
+              onDisplayPlatformView2,
+              (int32_t view_id,
+               int32_t x,
+               int32_t y,
+               int32_t width,
+               int32_t height,
+               int32_t viewWidth,
+               int32_t viewHeight,
+               MutatorsStack mutators_stack),
+              (override));
+
+  MOCK_METHOD(void, hidePlatformView2, (int32_t view_id), (override));
+  MOCK_METHOD(void, onEndFrame2, (), (override));
+  MOCK_METHOD(void, hideOverlaySurface2, (), (override));
+  MOCK_METHOD(void, showOverlaySurface2, (), (override));
+
   MOCK_METHOD(std::unique_ptr<std::vector<std::string>>,
               FlutterViewComputePlatformResolvedLocale,
               (std::vector<std::string> supported_locales_data),
@@ -132,6 +171,11 @@ class JNIMock final : public PlatformViewAndroidJNI {
   MOCK_METHOD(double,
               FlutterViewGetScaledFontSize,
               (double font_size, int configuration_id),
+              (const, override));
+
+  MOCK_METHOD(void,
+              MaybeResizeSurfaceView,
+              (int32_t width, int32_t height),
               (const, override));
 };
 

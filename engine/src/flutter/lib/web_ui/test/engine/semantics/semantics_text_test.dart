@@ -33,7 +33,7 @@ Future<void> testMain() async {
 
     // Add a node with a label - expect a <span>
     {
-      final SemanticsTester tester = SemanticsTester(owner());
+      final tester = SemanticsTester(owner());
       tester.updateNode(
         id: 0,
         label: 'Hello',
@@ -56,7 +56,7 @@ Future<void> testMain() async {
 
     // Change label - expect the <span> to be updated.
     {
-      final SemanticsTester tester = SemanticsTester(owner());
+      final tester = SemanticsTester(owner());
       tester.updateNode(
         id: 0,
         label: 'World',
@@ -71,7 +71,7 @@ Future<void> testMain() async {
 
     // Empty the label - expect the <span> to be removed.
     {
-      final SemanticsTester tester = SemanticsTester(owner());
+      final tester = SemanticsTester(owner());
       tester.updateNode(
         id: 0,
         label: '',
@@ -91,7 +91,7 @@ Future<void> testMain() async {
       ..debugOverrideTimestampFunction(() => _testTime)
       ..semanticsEnabled = true;
 
-    final SemanticsTester tester = SemanticsTester(owner());
+    final tester = SemanticsTester(owner());
     tester.updateNode(
       id: 0,
       label: 'I am a parent',
@@ -110,9 +110,7 @@ Future<void> testMain() async {
 
     expectSemanticsTree(owner(), '''
       <sem aria-label="I am a parent" role="group">
-        <sem-c>
           <sem><span>I am a child</span></sem>
-        </sem-c>
       </sem>''');
 
     semantics().semanticsEnabled = false;
@@ -125,7 +123,7 @@ Future<void> testMain() async {
 
     // A leaf node with a label - expect <span>
     {
-      final SemanticsTester tester = SemanticsTester(owner());
+      final tester = SemanticsTester(owner());
       tester.updateNode(
         id: 0,
         label: 'I am a leaf',
@@ -140,7 +138,7 @@ Future<void> testMain() async {
 
     // Add a child - expect <span> to be removed from the parent.
     {
-      final SemanticsTester tester = SemanticsTester(owner());
+      final tester = SemanticsTester(owner());
       tester.updateNode(
         id: 0,
         label: 'I am a parent',
@@ -159,15 +157,13 @@ Future<void> testMain() async {
 
       expectSemanticsTree(owner(), '''
         <sem aria-label="I am a parent" role="group">
-          <sem-c>
             <sem><span>I am a child</span></sem>
-          </sem-c>
         </sem>''');
     }
 
     // Remove the child - expect the <span> to be readded to the former parent.
     {
-      final SemanticsTester tester = SemanticsTester(owner());
+      final tester = SemanticsTester(owner());
       tester.updateNode(
         id: 0,
         label: 'I am a leaf again',
@@ -188,7 +184,7 @@ Future<void> testMain() async {
       ..debugOverrideTimestampFunction(() => _testTime)
       ..semanticsEnabled = true;
 
-    final SemanticsTester tester = SemanticsTester(owner());
+    final tester = SemanticsTester(owner());
     tester.updateNode(
       id: 0,
       label: 'Hello',
@@ -216,7 +212,7 @@ Future<void> testMain() async {
       ..debugOverrideTimestampFunction(() => _testTime)
       ..semanticsEnabled = true;
 
-    final SemanticsTester tester = SemanticsTester(owner());
+    final tester = SemanticsTester(owner());
     tester.updateNode(
       id: 0,
       label: 'Hello',
@@ -248,7 +244,7 @@ Future<void> testMain() async {
       ..debugOverrideTimestampFunction(() => _testTime)
       ..semanticsEnabled = true;
 
-    final SemanticsTester tester = SemanticsTester(owner());
+    final tester = SemanticsTester(owner());
     tester.updateNode(
       id: 0,
       label: 'Hello',
@@ -280,7 +276,7 @@ Future<void> testMain() async {
       ..debugOverrideTimestampFunction(() => _testTime)
       ..semanticsEnabled = true;
 
-    final SemanticsTester tester = SemanticsTester(owner());
+    final tester = SemanticsTester(owner());
     tester.updateNode(
       id: 0,
       label: 'Ignore pointer events',

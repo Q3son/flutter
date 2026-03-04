@@ -24,7 +24,11 @@ executable("testing") {
     "//flutter:export_dynamic_test_symbols",
   ]
 
-  sources = [ "tester_main.cc" ]
+  sources = [
+    "tester_context.h",
+    "tester_context_vk_factory.h",
+    "tester_main.cc",
+  ]
   libs = []
   if (is_win) {
     libs += [
@@ -37,7 +41,7 @@ executable("testing") {
 
   deps = [
     "$dart_src/runtime:libdart_jit",
-    "$dart_src/runtime/bin:dart_io_api",
+    "$dart_src/runtime/bin:common_embedder_dart_io",
     "//flutter/assets",
     "//flutter/common",
     "//flutter/flow",
@@ -46,8 +50,8 @@ executable("testing") {
     "//flutter/shell/common",
     "//flutter/shell/gpu:gpu_surface_software",
     "//flutter/skia",
-    "//flutter/third_party/abseil-cpp/absl/base:no_destructor",
     "//flutter/third_party/tonic",
+    "//third_party/abseil-cpp/absl/base:no_destructor",
   ]
 
   if (impeller_supports_rendering) {
@@ -56,6 +60,7 @@ executable("testing") {
       "//flutter/impeller",
       "//flutter/third_party/swiftshader/src/Vulkan:swiftshader_libvulkan_static",
     ]
+    sources += [ "tester_context_vk_factory.cc" ]
   }
 
   metadata = {

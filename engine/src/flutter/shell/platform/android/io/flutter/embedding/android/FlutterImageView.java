@@ -7,7 +7,6 @@ package io.flutter.embedding.android;
 import static io.flutter.Build.API_LEVELS;
 
 import android.annotation.SuppressLint;
-import android.annotation.TargetApi;
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
@@ -15,7 +14,6 @@ import android.graphics.ColorSpace;
 import android.graphics.PixelFormat;
 import android.hardware.HardwareBuffer;
 import android.media.Image;
-import android.media.Image.Plane;
 import android.media.ImageReader;
 import android.util.AttributeSet;
 import android.view.Surface;
@@ -48,6 +46,8 @@ public class FlutterImageView extends View implements RenderSurface {
   @Nullable private Image currentImage;
   @Nullable private Bitmap currentBitmap;
   @Nullable private FlutterRenderer flutterRenderer;
+
+  private boolean isContentSizingEnabled = false;
 
   public ImageReader getImageReader() {
     return imageReader;
@@ -94,6 +94,16 @@ public class FlutterImageView extends View implements RenderSurface {
 
   private void init() {
     setAlpha(0.0f);
+    isContentSizingEnabled = ContentSizingFlag.isEnabled(getContext());
+  }
+
+  @Override
+  protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+    if (isContentSizingEnabled) {
+      FlutterMeasureSpec.onMeasure(widthMeasureSpec, heightMeasureSpec, this::setMeasuredDimension);
+    } else {
+      super.onMeasure(widthMeasureSpec, heightMeasureSpec);
+    }
   }
 
   private static void logW(String format, Object... args) {
@@ -253,19 +263,18 @@ public class FlutterImageView extends View implements RenderSurface {
     }
   }
 
-  @TargetApi(API_LEVELS.API_29)
   private void updateCurrentBitmap() {
     if (android.os.Build.VERSION.SDK_INT >= API_LEVELS.API_29) {
       final HardwareBuffer buffer = currentImage.getHardwareBuffer();
       currentBitmap = Bitmap.wrapHardwareBuffer(buffer, ColorSpace.get(ColorSpace.Named.SRGB));
       buffer.close();
     } else {
-      final Plane[] imagePlanes = currentImage.getPlanes();
+      final Image.Plane[] imagePlanes = currentImage.getPlanes();
       if (imagePlanes.length != 1) {
         return;
       }
 
-      final Plane imagePlane = imagePlanes[0];
+      final Image.Plane imagePlane = imagePlanes[0];
       final int desiredWidth = imagePlane.getRowStride() / imagePlane.getPixelStride();
       final int desiredHeight = currentImage.getHeight();
 

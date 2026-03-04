@@ -64,12 +64,12 @@ void main() {
 
   test('ExpansionTileThemeData lerp special cases', () {
     expect(ExpansionTileThemeData.lerp(null, null, 0), null);
-    const ExpansionTileThemeData data = ExpansionTileThemeData();
+    const data = ExpansionTileThemeData();
     expect(identical(ExpansionTileThemeData.lerp(data, data, 0.5), data), true);
   });
 
   test('ExpansionTileThemeData defaults', () {
-    const ExpansionTileThemeData theme = ExpansionTileThemeData();
+    const theme = ExpansionTileThemeData();
     expect(theme.backgroundColor, null);
     expect(theme.collapsedBackgroundColor, null);
     expect(theme.tilePadding, null);
@@ -86,41 +86,39 @@ void main() {
   });
 
   testWidgets('Default ExpansionTileThemeData debugFillProperties', (WidgetTester tester) async {
-    final DiagnosticPropertiesBuilder builder = DiagnosticPropertiesBuilder();
+    final builder = DiagnosticPropertiesBuilder();
     const TooltipThemeData().debugFillProperties(builder);
 
-    final List<String> description =
-        builder.properties
-            .where((DiagnosticsNode node) => !node.isFiltered(DiagnosticLevel.info))
-            .map((DiagnosticsNode node) => node.toString())
-            .toList();
+    final List<String> description = builder.properties
+        .where((DiagnosticsNode node) => !node.isFiltered(DiagnosticLevel.info))
+        .map((DiagnosticsNode node) => node.toString())
+        .toList();
 
     expect(description, <String>[]);
   });
 
   testWidgets('ExpansionTileThemeData implements debugFillProperties', (WidgetTester tester) async {
-    final DiagnosticPropertiesBuilder builder = DiagnosticPropertiesBuilder();
-    ExpansionTileThemeData(
-      backgroundColor: const Color(0xff000000),
-      collapsedBackgroundColor: const Color(0xff6f83fc),
-      tilePadding: const EdgeInsets.all(20.0),
+    final builder = DiagnosticPropertiesBuilder();
+    const ExpansionTileThemeData(
+      backgroundColor: Color(0xff000000),
+      collapsedBackgroundColor: Color(0xff6f83fc),
+      tilePadding: EdgeInsets.all(20.0),
       expandedAlignment: Alignment.bottomCenter,
-      childrenPadding: const EdgeInsets.all(10.0),
-      iconColor: const Color(0xffa7c61c),
-      collapsedIconColor: const Color(0xffdd0b1f),
-      textColor: const Color(0xffffffff),
-      collapsedTextColor: const Color(0xff522bab),
-      shape: const Border(),
-      collapsedShape: const Border(),
+      childrenPadding: EdgeInsets.all(10.0),
+      iconColor: Color(0xffa7c61c),
+      collapsedIconColor: Color(0xffdd0b1f),
+      textColor: Color(0xffffffff),
+      collapsedTextColor: Color(0xff522bab),
+      shape: Border(),
+      collapsedShape: Border(),
       clipBehavior: Clip.antiAlias,
       expansionAnimationStyle: AnimationStyle(curve: Curves.easeInOut),
     ).debugFillProperties(builder);
 
-    final List<String> description =
-        builder.properties
-            .where((DiagnosticsNode node) => !node.isFiltered(DiagnosticLevel.info))
-            .map((DiagnosticsNode node) => node.toString())
-            .toList();
+    final List<String> description = builder.properties
+        .where((DiagnosticsNode node) => !node.isFiltered(DiagnosticLevel.info))
+        .map((DiagnosticsNode node) => node.toString())
+        .toList();
 
     expect(
       description,
@@ -207,7 +205,7 @@ void main() {
     final Rect titleRect = tester.getRect(find.text('Collapsed Tile'));
     final Rect trailingRect = tester.getRect(find.byIcon(Icons.expand_more));
     final Rect listTileRect = tester.getRect(find.byType(ListTile));
-    final Rect tallerWidget = titleRect.height > trailingRect.height ? titleRect : trailingRect;
+    final tallerWidget = titleRect.height > trailingRect.height ? titleRect : trailingRect;
 
     // Check the positions of title and trailing Widgets, after padding is applied.
     expect(listTileRect.left, titleRect.left - 8);
@@ -291,7 +289,7 @@ void main() {
     final Rect titleRect = tester.getRect(find.text('Expanded Tile'));
     final Rect trailingRect = tester.getRect(find.byIcon(Icons.expand_more));
     final Rect listTileRect = tester.getRect(find.byType(ListTile));
-    final Rect tallerWidget = titleRect.height > trailingRect.height ? titleRect : trailingRect;
+    final tallerWidget = titleRect.height > trailingRect.height ? titleRect : trailingRect;
 
     // Check the positions of title and trailing Widgets, after padding is applied.
     expect(listTileRect.left, titleRect.left - 8);
@@ -330,7 +328,7 @@ void main() {
   testWidgets('Override ExpansionTile animation using ExpansionTileThemeData.AnimationStyle', (
     WidgetTester tester,
   ) async {
-    const Key expansionTileKey = Key('expansionTileKey');
+    const expansionTileKey = Key('expansionTileKey');
 
     Widget buildExpansionTile({AnimationStyle? animationStyle}) {
       return MaterialApp(
@@ -382,7 +380,7 @@ void main() {
     // Override the animation duration.
     await tester.pumpWidget(
       buildExpansionTile(
-        animationStyle: AnimationStyle(duration: const Duration(milliseconds: 800)),
+        animationStyle: const AnimationStyle(duration: Duration(milliseconds: 800)),
       ),
     );
     await tester.pumpAndSettle();
@@ -412,7 +410,7 @@ void main() {
 
     // Override the animation curve.
     await tester.pumpWidget(
-      buildExpansionTile(animationStyle: AnimationStyle(curve: Easing.emphasizedDecelerate)),
+      buildExpansionTile(animationStyle: const AnimationStyle(curve: Easing.emphasizedDecelerate)),
     );
     await tester.pumpAndSettle();
 

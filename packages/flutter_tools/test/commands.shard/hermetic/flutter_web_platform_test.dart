@@ -19,7 +19,7 @@ import '../../src/common.dart';
 import '../../src/context.dart';
 import '../../src/fakes.dart';
 
-class MockServer implements shelf.Server {
+class FakeServer implements shelf.Server {
   shelf.Handler? mountedHandler;
 
   @override
@@ -52,18 +52,11 @@ void main() {
     operatingSystemUtils = FakeOperatingSystemUtils();
     tempDir = fileSystem.systemTempDirectory.createTempSync('flutter_web_platform_test.');
 
-    for (final HostArtifact artifact in <HostArtifact>[
-      HostArtifact.webPrecompiledAmdCanvaskitAndHtmlSoundSdk,
-      HostArtifact.webPrecompiledAmdCanvaskitAndHtmlSdk,
-      HostArtifact.webPrecompiledAmdCanvaskitSoundSdk,
+    for (final artifact in <HostArtifact>[
       HostArtifact.webPrecompiledAmdCanvaskitSdk,
-      HostArtifact.webPrecompiledAmdSoundSdk,
-      HostArtifact.webPrecompiledAmdSdk,
-      HostArtifact.webPrecompiledDdcLibraryBundleCanvaskitAndHtmlSoundSdk,
-      HostArtifact.webPrecompiledDdcLibraryBundleCanvaskitSoundSdk,
-      HostArtifact.webPrecompiledDdcLibraryBundleSoundSdk,
+      HostArtifact.webPrecompiledDdcLibraryBundleCanvaskitSdk,
     ]) {
-      final File artifactFile = artifacts.getHostArtifact(artifact) as File;
+      final artifactFile = artifacts.getHostArtifact(artifact) as File;
       artifactFile.createSync();
       artifactFile.writeAsStringSync(artifact.name);
     }
@@ -76,7 +69,7 @@ void main() {
   testUsingContext(
     'FlutterWebPlatform serves the correct dart_sdk.js (amd module system) for the passed web renderer',
     () async {
-      final ChromiumLauncher chromiumLauncher = ChromiumLauncher(
+      final chromiumLauncher = ChromiumLauncher(
         fileSystem: fileSystem,
         platform: platform,
         processManager: processManager,
@@ -84,7 +77,7 @@ void main() {
         browserFinder: (Platform platform, FileSystem filesystem) => 'chrome',
         logger: logger,
       );
-      final MockServer server = MockServer();
+      final server = FakeServer();
       final FlutterWebPlatform webPlatform = await FlutterWebPlatform.start(
         'ProjectRoot',
         flutterProject: FlutterProject.fromDirectoryTest(tempDir),
@@ -101,6 +94,7 @@ void main() {
         useWasm: false,
         serverFactory: () async => server,
         testPackageUri: Uri.parse('test'),
+        crossOriginIsolation: false,
       );
       final shelf.Handler? handler = server.mountedHandler;
       expect(handler, isNotNull);
@@ -109,7 +103,7 @@ void main() {
         shelf.Request('GET', Uri.parse('http://localhost/dart_sdk.js')),
       );
       final String contents = await response.readAsString();
-      expect(contents, HostArtifact.webPrecompiledAmdCanvaskitSoundSdk.name);
+      expect(contents, HostArtifact.webPrecompiledAmdCanvaskitSdk.name);
       await webPlatform.close();
     },
     overrides: <Type, Generator>{
@@ -122,7 +116,7 @@ void main() {
   testUsingContext(
     'FlutterWebPlatform serves the correct dart_sdk.js (ddc library bundle module system) for the passed web renderer',
     () async {
-      final ChromiumLauncher chromiumLauncher = ChromiumLauncher(
+      final chromiumLauncher = ChromiumLauncher(
         fileSystem: fileSystem,
         platform: platform,
         processManager: processManager,
@@ -130,7 +124,7 @@ void main() {
         browserFinder: (Platform platform, FileSystem filesystem) => 'chrome',
         logger: logger,
       );
-      final MockServer server = MockServer();
+      final server = FakeServer();
       final FlutterWebPlatform webPlatform = await FlutterWebPlatform.start(
         'ProjectRoot',
         flutterProject: FlutterProject.fromDirectoryTest(tempDir),
@@ -140,6 +134,7 @@ void main() {
           packageConfigPath: '.dart_tool/package_config.json',
           treeShakeIcons: false,
           extraFrontEndOptions: <String>['--dartdevc-module-format=ddc', '--canary'],
+          webEnableHotReload: true,
         ),
         webMemoryFS: WebMemoryFS(),
         fileSystem: fileSystem,
@@ -153,6 +148,7 @@ void main() {
         useWasm: false,
         serverFactory: () async => server,
         testPackageUri: Uri.parse('test'),
+        crossOriginIsolation: false,
       );
       final shelf.Handler? handler = server.mountedHandler;
       expect(handler, isNotNull);
@@ -161,7 +157,7 @@ void main() {
         shelf.Request('GET', Uri.parse('http://localhost/dart_sdk.js')),
       );
       final String contents = await response.readAsString();
-      expect(contents, HostArtifact.webPrecompiledDdcLibraryBundleCanvaskitSoundSdk.name);
+      expect(contents, HostArtifact.webPrecompiledDdcLibraryBundleCanvaskitSdk.name);
       await webPlatform.close();
     },
     overrides: <Type, Generator>{

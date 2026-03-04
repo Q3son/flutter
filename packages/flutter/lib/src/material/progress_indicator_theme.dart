@@ -16,14 +16,15 @@ import 'theme.dart';
 // Examples can assume:
 // late BuildContext context;
 
-@immutable
-/// Defines the visual properties of [ProgressIndicator] widgets.
+/// Overrides the default values of visual properties for descendant
+/// [ProgressIndicator] widgets.
 ///
-/// Used by [ProgressIndicatorTheme] to control the visual properties of
-/// progress indicators in a widget subtree.
+/// Descendant widgets obtain the current [ProgressIndicatorThemeData] object
+/// with [ProgressIndicatorTheme.of]. Instances of [ProgressIndicatorThemeData]
+/// can be customized with [ProgressIndicatorThemeData.copyWith].
 ///
-/// To obtain this configuration, use [ProgressIndicatorTheme.of] to access
-/// the closest ancestor [ProgressIndicatorTheme] of the current [BuildContext].
+/// Typically a [ProgressIndicatorThemeData] is specified as part of the overall
+/// [Theme] with [ThemeData.progressIndicatorTheme].
 ///
 /// See also:
 ///
@@ -31,6 +32,7 @@ import 'theme.dart';
 ///    theme down its subtree.
 ///  * [ThemeData.progressIndicatorTheme], which describes the defaults for
 ///    any progress indicators as part of the application's [ThemeData].
+@immutable
 class ProgressIndicatorThemeData with Diagnosticable {
   /// Creates the set of properties used to configure [ProgressIndicator] widgets.
   const ProgressIndicatorThemeData({
@@ -49,10 +51,12 @@ class ProgressIndicatorThemeData with Diagnosticable {
     this.trackGap,
     this.circularTrackPadding,
     @Deprecated(
-      'Use ProgressIndicatorTheme to customize the ProgressIndicator appearance. '
+      'Set this flag to false to opt into the 2024 progress indicator appearance. Defaults to true. '
+      'In the future, this flag will default to false. Use ProgressIndicatorThemeData to customize individual properties. '
       'This feature was deprecated after v3.27.0-0.2.pre.',
     )
     this.year2023,
+    this.controller,
   });
 
   /// The color of the [ProgressIndicator]'s indicator.
@@ -85,13 +89,13 @@ class ProgressIndicatorThemeData with Diagnosticable {
 
   /// Overrides the stop indicator color of the [LinearProgressIndicator].
   ///
-  /// If [LinearProgressIndicator.year2023] is false or [ThemeData.useMaterial3]
+  /// If [LinearProgressIndicator.year2023] is true or [ThemeData.useMaterial3]
   /// is false, then no stop indicator will be drawn.
   final Color? stopIndicatorColor;
 
   /// Overrides the stop indicator radius of the [LinearProgressIndicator].
   ///
-  /// If [LinearProgressIndicator.year2023] is false or [ThemeData.useMaterial3]
+  /// If [LinearProgressIndicator.year2023] is true or [ThemeData.useMaterial3]
   /// is false, then no stop indicator will be drawn.
   final double? stopIndicatorRadius;
 
@@ -109,10 +113,10 @@ class ProgressIndicatorThemeData with Diagnosticable {
 
   /// Overrides the active indicator and the background track.
   ///
-  /// If [CircularProgressIndicator.year2023] is false or [ThemeData.useMaterial3]
+  /// If [CircularProgressIndicator.year2023] is true or [ThemeData.useMaterial3]
   /// is false, then no track gap will be drawn.
   ///
-  /// If [LinearProgressIndicator.year2023] is false or [ThemeData.useMaterial3]
+  /// If [LinearProgressIndicator.year2023] is true or [ThemeData.useMaterial3]
   /// is false, then no track gap will be drawn.
   final double? trackGap;
 
@@ -131,10 +135,22 @@ class ProgressIndicatorThemeData with Diagnosticable {
   ///
   /// If [ThemeData.useMaterial3] is false, then this property is ignored.
   @Deprecated(
-    'Use ProgressIndicatorTheme to customize the ProgressIndicator appearance. '
+    'Set this flag to false to opt into the 2024 progress indicator appearance. Defaults to true. '
+    'In the future, this flag will default to false. Use ProgressIndicatorThemeData to customize individual properties. '
     'This feature was deprecated after v3.27.0-0.2.pre.',
   )
   final bool? year2023;
+
+  /// Defines a default [AnimationController] for descendant
+  /// [CircularProgressIndicator] and [LinearProgressIndicator] widgets.
+  ///
+  /// If a descendant progress indicator's `controller` property is null, this
+  /// controller will be used to drive its indeterminate animation. This allows
+  /// a single controller to synchronize the animations of multiple indicators.
+  ///
+  /// If this property is also null, the progress indicator will create and
+  /// manage its own internal [AnimationController].
+  final AnimationController? controller;
 
   /// Creates a copy of this object but with the given fields replaced with the
   /// new values.
@@ -154,6 +170,7 @@ class ProgressIndicatorThemeData with Diagnosticable {
     double? trackGap,
     EdgeInsetsGeometry? circularTrackPadding,
     bool? year2023,
+    AnimationController? controller,
   }) {
     return ProgressIndicatorThemeData(
       color: color ?? this.color,
@@ -171,6 +188,7 @@ class ProgressIndicatorThemeData with Diagnosticable {
       trackGap: trackGap ?? this.trackGap,
       circularTrackPadding: circularTrackPadding ?? this.circularTrackPadding,
       year2023: year2023 ?? this.year2023,
+      controller: controller ?? this.controller,
     );
   }
 
@@ -205,6 +223,7 @@ class ProgressIndicatorThemeData with Diagnosticable {
         t,
       ),
       year2023: t < 0.5 ? a?.year2023 : b?.year2023,
+      controller: t < 0.5 ? a?.controller : b?.controller,
     );
   }
 
@@ -225,6 +244,7 @@ class ProgressIndicatorThemeData with Diagnosticable {
     trackGap,
     circularTrackPadding,
     year2023,
+    controller,
   );
 
   @override
@@ -250,7 +270,8 @@ class ProgressIndicatorThemeData with Diagnosticable {
         other.constraints == constraints &&
         other.trackGap == trackGap &&
         other.circularTrackPadding == circularTrackPadding &&
-        other.year2023 == year2023;
+        other.year2023 == year2023 &&
+        other.controller == controller;
   }
 
   @override
@@ -283,6 +304,9 @@ class ProgressIndicatorThemeData with Diagnosticable {
       ),
     );
     properties.add(DiagnosticsProperty<bool>('year2023', year2023, defaultValue: null));
+    properties.add(
+      DiagnosticsProperty<AnimationController>('controller', controller, defaultValue: null),
+    );
   }
 }
 
@@ -323,8 +347,8 @@ class ProgressIndicatorTheme extends InheritedTheme {
   /// ProgressIndicatorThemeData theme = ProgressIndicatorTheme.of(context);
   /// ```
   static ProgressIndicatorThemeData of(BuildContext context) {
-    final ProgressIndicatorTheme? progressIndicatorTheme =
-        context.dependOnInheritedWidgetOfExactType<ProgressIndicatorTheme>();
+    final ProgressIndicatorTheme? progressIndicatorTheme = context
+        .dependOnInheritedWidgetOfExactType<ProgressIndicatorTheme>();
     return progressIndicatorTheme?.data ?? Theme.of(context).progressIndicatorTheme;
   }
 

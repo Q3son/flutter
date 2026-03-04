@@ -31,6 +31,8 @@ source_set("flow") {
     "layers/clip_rect_layer.h",
     "layers/clip_rrect_layer.cc",
     "layers/clip_rrect_layer.h",
+    "layers/clip_rsuperellipse_layer.cc",
+    "layers/clip_rsuperellipse_layer.h",
     "layers/clip_shape_layer.h",
     "layers/color_filter_layer.cc",
     "layers/color_filter_layer.h",
@@ -80,8 +82,6 @@ source_set("flow") {
     "stopwatch.h",
     "stopwatch_dl.cc",
     "stopwatch_dl.h",
-    "stopwatch_sk.cc",
-    "stopwatch_sk.h",
     "surface.cc",
     "surface.h",
     "surface_frame.cc",
@@ -97,7 +97,7 @@ source_set("flow") {
     "//flutter/common/graphics",
     "//flutter/display_list",
     "//flutter/fml",
-    "//flutter/third_party/txt",
+    "//flutter/txt",
   ]
 
   deps = [ "//flutter/skia" ]
@@ -105,6 +105,7 @@ source_set("flow") {
   if (impeller_supports_rendering) {
     deps += [
       "//flutter/impeller",
+      "//flutter/impeller/display_list",
       "//flutter/impeller/typographer/backends/skia:typographer_skia_backend",
     ]
   }
@@ -112,8 +113,7 @@ source_set("flow") {
 
 if (enable_unittests) {
   test_fixtures("flow_fixtures") {
-    fixtures =
-        [ "//flutter/third_party/txt/third_party/fonts/Roboto-Regular.ttf" ]
+    fixtures = [ "//flutter/txt/third_party/fonts/Roboto-Regular.ttf" ]
   }
 
   source_set("flow_testing") {
@@ -161,6 +161,7 @@ if (enable_unittests) {
       "layers/clip_path_layer_unittests.cc",
       "layers/clip_rect_layer_unittests.cc",
       "layers/clip_rrect_layer_unittests.cc",
+      "layers/clip_rsuperellipse_layer_unittests.cc",
       "layers/color_filter_layer_unittests.cc",
       "layers/container_layer_unittests.cc",
       "layers/display_list_layer_unittests.cc",

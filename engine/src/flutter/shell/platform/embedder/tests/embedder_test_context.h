@@ -12,6 +12,7 @@
 #include <string>
 #include <vector>
 
+#include "flutter/display_list/geometry/dl_geometry_types.h"
 #include "flutter/fml/closure.h"
 #include "flutter/fml/macros.h"
 #include "flutter/fml/mapping.h"
@@ -34,6 +35,8 @@ using SemanticsActionCallback =
 using LogMessageCallback =
     std::function<void(const char* tag, const char* message)>;
 using ChannelUpdateCallback = std::function<void(const FlutterChannelUpdate*)>;
+using ViewFocusChangeRequestCallback =
+    std::function<void(const FlutterViewFocusChangeRequest*)>;
 
 struct AOTDataDeleter {
   void operator()(FlutterEngineAOTData aot_data) {
@@ -70,7 +73,7 @@ class EmbedderTestContext {
 
   FlutterEngineAOTData GetAOTData() const;
 
-  void SetRootSurfaceTransformation(SkMatrix matrix);
+  void SetRootSurfaceTransformation(DlMatrix matrix);
 
   FlutterRendererConfig& GetRendererConfig();
 
@@ -93,6 +96,9 @@ class EmbedderTestContext {
   void SetLogMessageCallback(const LogMessageCallback& log_message_callback);
 
   void SetChannelUpdateCallback(const ChannelUpdateCallback& callback);
+
+  void SetViewFocusChangeRequestCallback(
+      const ViewFocusChangeRequestCallback& callback);
 
   std::future<sk_sp<SkImage>> GetNextSceneImage();
 
@@ -133,11 +139,12 @@ class EmbedderTestContext {
   SemanticsNodeCallback update_semantics_node_callback_;
   SemanticsActionCallback update_semantics_custom_action_callback_;
   ChannelUpdateCallback channel_update_callback_;
+  ViewFocusChangeRequestCallback view_focus_change_request_callback_;
   std::function<void(const FlutterPlatformMessage*)> platform_message_callback_;
   LogMessageCallback log_message_callback_;
   std::unique_ptr<EmbedderTestCompositor> compositor_;
   NextSceneCallback next_scene_callback_;
-  SkMatrix root_surface_transformation_;
+  DlMatrix root_surface_transformation_;
   std::function<void(intptr_t)> vsync_callback_ = nullptr;
 
   static VoidCallback GetIsolateCreateCallbackHook();
@@ -158,11 +165,13 @@ class EmbedderTestContext {
 
   FlutterChannelUpdateCallback GetChannelUpdateCallbackHook();
 
+  FlutterViewFocusChangeRequestCallback GetViewFocusChangeRequestCallbackHook();
+
   void SetupAOTMappingsIfNecessary();
 
   void SetupAOTDataIfNecessary();
 
-  virtual void SetSurface(SkISize surface_size) = 0;
+  virtual void SetSurface(DlISize surface_size) = 0;
 
   virtual void SetupCompositor() = 0;
 

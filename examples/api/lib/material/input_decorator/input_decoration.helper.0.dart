@@ -14,7 +14,6 @@ class HelperExampleApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      theme: ThemeData(useMaterial3: true),
       home: Scaffold(
         appBar: AppBar(title: const Text('InputDecoration.helper Sample')),
         body: const HelperExample(),
@@ -35,7 +34,13 @@ class HelperExample extends StatelessWidget {
             TextSpan(
               children: <InlineSpan>[
                 WidgetSpan(child: Text('Helper Text ')),
-                WidgetSpan(child: Icon(Icons.help_outline, color: Colors.blue, size: 20.0)),
+                WidgetSpan(
+                  child: Icon(
+                    Icons.help_outline,
+                    color: Colors.blue,
+                    size: 20.0,
+                  ),
+                ),
               ],
             ),
           ),

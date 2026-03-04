@@ -7,9 +7,9 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   testWidgets('Navigation drawer updates destinations when tapped', (WidgetTester tester) async {
-    int mutatedIndex = -1;
-    final GlobalKey<ScaffoldState> scaffoldKey = GlobalKey<ScaffoldState>();
-    final ThemeData theme = ThemeData();
+    var mutatedIndex = -1;
+    final scaffoldKey = GlobalKey<ScaffoldState>();
+    final theme = ThemeData();
     widgetSetup(tester, 3000, viewHeight: 3000);
     final Widget widget = _buildWidget(
       scaffoldKey,
@@ -50,8 +50,8 @@ void main() {
 
   testWidgets('NavigationDrawer can update background color', (WidgetTester tester) async {
     const Color color = Colors.yellow;
-    final GlobalKey<ScaffoldState> scaffoldKey = GlobalKey<ScaffoldState>();
-    final ThemeData theme = ThemeData();
+    final scaffoldKey = GlobalKey<ScaffoldState>();
+    final theme = ThemeData();
 
     await tester.pumpWidget(
       _buildWidget(
@@ -84,8 +84,8 @@ void main() {
     WidgetTester tester,
   ) async {
     const Color color = Colors.yellow;
-    final GlobalKey<ScaffoldState> scaffoldKey = GlobalKey<ScaffoldState>();
-    final ThemeData theme = ThemeData();
+    final scaffoldKey = GlobalKey<ScaffoldState>();
+    final theme = ThemeData();
 
     await tester.pumpWidget(
       _buildWidget(
@@ -123,24 +123,25 @@ void main() {
     await tester.tap(find.text('AC'));
     await tester.pump();
 
-    expect(findDestinationInk('AC'), findsNothing);
+    // When no background color is set, only the non-visible indicator Ink is expected.
+    expect(findDestinationInk('AC'), findsOne);
 
     // Destination with a custom background color.
     await tester.tap(find.byIcon(Icons.access_alarm));
     await tester.pump();
 
     // A Material is added with the custom color.
-    expect(findDestinationInk('Alarm'), findsOne);
-    final BoxDecoration destinationDecoration =
+    expect(findDestinationInk('Alarm'), findsNWidgets(2));
+    final destinationDecoration =
         tester.firstWidget<Ink>(findDestinationInk('Alarm')).decoration! as BoxDecoration;
     expect(destinationDecoration.color, color);
   });
 
   testWidgets('NavigationDrawer can update elevation', (WidgetTester tester) async {
-    const double elevation = 42.0;
-    final GlobalKey<ScaffoldState> scaffoldKey = GlobalKey<ScaffoldState>();
-    final ThemeData theme = ThemeData();
-    final NavigationDrawer drawer = NavigationDrawer(
+    const elevation = 42.0;
+    final scaffoldKey = GlobalKey<ScaffoldState>();
+    final theme = ThemeData();
+    final drawer = NavigationDrawer(
       elevation: elevation,
       children: <Widget>[
         Text('Headline', style: theme.textTheme.bodyLarge),
@@ -165,8 +166,8 @@ void main() {
   testWidgets('NavigationDrawer uses proper defaults when no parameters are given', (
     WidgetTester tester,
   ) async {
-    final GlobalKey<ScaffoldState> scaffoldKey = GlobalKey<ScaffoldState>();
-    final ThemeData theme = ThemeData(useMaterial3: true);
+    final scaffoldKey = GlobalKey<ScaffoldState>();
+    final theme = ThemeData();
     await tester.pumpWidget(
       _buildWidget(
         scaffoldKey,
@@ -206,7 +207,7 @@ void main() {
   });
 
   testWidgets('Navigation drawer is scrollable', (WidgetTester tester) async {
-    final GlobalKey<ScaffoldState> scaffoldKey = GlobalKey<ScaffoldState>();
+    final scaffoldKey = GlobalKey<ScaffoldState>();
     widgetSetup(tester, 500, viewHeight: 300);
     await tester.pumpWidget(
       _buildWidget(
@@ -250,7 +251,7 @@ void main() {
   });
 
   testWidgets('Safe Area test', (WidgetTester tester) async {
-    final GlobalKey<ScaffoldState> scaffoldKey = GlobalKey<ScaffoldState>();
+    final scaffoldKey = GlobalKey<ScaffoldState>();
     const double viewHeight = 300;
     widgetSetup(tester, 500, viewHeight: viewHeight);
     await tester.pumpWidget(
@@ -258,7 +259,6 @@ void main() {
         data: const MediaQueryData(padding: EdgeInsets.all(20.0)),
         child: MaterialApp(
           useInheritedMediaQuery: true,
-          theme: ThemeData.light(),
           home: Scaffold(
             key: scaffoldKey,
             drawer: NavigationDrawer(
@@ -294,8 +294,8 @@ void main() {
   });
 
   testWidgets('Navigation drawer semantics', (WidgetTester tester) async {
-    final GlobalKey<ScaffoldState> scaffoldKey = GlobalKey<ScaffoldState>();
-    final ThemeData theme = ThemeData();
+    final scaffoldKey = GlobalKey<ScaffoldState>();
+    final theme = ThemeData();
     Widget widget({int selectedIndex = 0}) {
       return _buildWidget(
         scaffoldKey,
@@ -327,6 +327,7 @@ void main() {
         textDirection: TextDirection.ltr,
         isFocusable: true,
         isSelected: true,
+        hasSelectedState: true,
         hasTapAction: true,
         hasFocusAction: true,
       ),
@@ -337,6 +338,7 @@ void main() {
         label: 'Alarm\nTab 2 of 2',
         textDirection: TextDirection.ltr,
         isFocusable: true,
+        hasSelectedState: true,
         hasTapAction: true,
         hasFocusAction: true,
       ),
@@ -350,6 +352,7 @@ void main() {
         label: 'AC\nTab 1 of 2',
         textDirection: TextDirection.ltr,
         isFocusable: true,
+        hasSelectedState: true,
         hasTapAction: true,
         hasFocusAction: true,
       ),
@@ -361,6 +364,7 @@ void main() {
         textDirection: TextDirection.ltr,
         isFocusable: true,
         isSelected: true,
+        hasSelectedState: true,
         hasTapAction: true,
         hasFocusAction: true,
       ),
@@ -370,9 +374,9 @@ void main() {
   testWidgets('Navigation destination updates indicator color and shape', (
     WidgetTester tester,
   ) async {
-    final GlobalKey<ScaffoldState> scaffoldKey = GlobalKey<ScaffoldState>();
-    final ThemeData theme = ThemeData(useMaterial3: true);
-    const Color color = Color(0xff0000ff);
+    final scaffoldKey = GlobalKey<ScaffoldState>();
+    final theme = ThemeData();
+    const color = Color(0xff0000ff);
     const ShapeBorder shape = RoundedRectangleBorder();
 
     Widget buildNavigationDrawer({Color? indicatorColor, ShapeBorder? indicatorShape}) {
@@ -420,7 +424,7 @@ void main() {
   testWidgets('NavigationDrawer.tilePadding defaults to EdgeInsets.symmetric(horizontal: 12.0)', (
     WidgetTester tester,
   ) async {
-    final GlobalKey<ScaffoldState> scaffoldKey = GlobalKey<ScaffoldState>();
+    final scaffoldKey = GlobalKey<ScaffoldState>();
     widgetSetup(tester, 3000, viewHeight: 3000);
     final Widget widget = _buildWidget(
       scaffoldKey,
@@ -440,8 +444,8 @@ void main() {
   });
 
   testWidgets('Destinations respect their disabled state', (WidgetTester tester) async {
-    final GlobalKey<ScaffoldState> scaffoldKey = GlobalKey<ScaffoldState>();
-    int selectedIndex = 0;
+    final scaffoldKey = GlobalKey<ScaffoldState>();
+    var selectedIndex = 0;
 
     widgetSetup(tester, 800);
 
@@ -483,6 +487,63 @@ void main() {
 
     await tester.pumpAndSettle();
   });
+
+  testWidgets('NavigationDrawer can display header and footer', (WidgetTester tester) async {
+    final scaffoldKey = GlobalKey<ScaffoldState>();
+    widgetSetup(tester, 3000, viewHeight: 3000);
+    final Widget widget = _buildWidget(
+      scaffoldKey,
+      NavigationDrawer(
+        header: const DrawerHeader(
+          child: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              spacing: 8,
+              children: <Widget>[FlutterLogo(), Text('Header')],
+            ),
+          ),
+        ),
+        footer: ListTile(
+          leading: const FlutterLogo(),
+          title: const Text('Footer'),
+          trailing: const Icon(Icons.settings),
+          onTap: () {},
+        ),
+        children: <Widget>[
+          for (int i = 0; i < 10; i++)
+            NavigationDrawerDestination(icon: const Icon(Icons.home), label: Text('Item $i')),
+        ],
+      ),
+    );
+
+    await tester.pumpWidget(widget);
+    scaffoldKey.currentState!.openDrawer();
+    await tester.pump(const Duration(seconds: 1));
+
+    expect(find.byType(DrawerHeader), findsOneWidget);
+    expect(find.text('Header'), findsOneWidget);
+    expect(find.byType(FlutterLogo), findsNWidgets(2));
+    expect(find.byType(ListTile), findsOneWidget);
+    expect(find.text('Footer'), findsOneWidget);
+    expect(find.byIcon(Icons.settings), findsOneWidget);
+  });
+
+  testWidgets('NavigationDrawer does not crash at zero area', (WidgetTester tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Center(
+          child: SizedBox.shrink(
+            child: NavigationDrawer(
+              children: <Widget>[
+                NavigationDrawerDestination(icon: Icon(Icons.inbox), label: Text('Inbox')),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    expect(tester.getSize(find.byType(NavigationDrawer)), Size.zero);
+  });
 }
 
 Widget _buildWidget(GlobalKey<ScaffoldState> scaffoldKey, Widget child, {bool? useMaterial3}) {
@@ -506,8 +567,8 @@ InkWell? _getInkWell(WidgetTester tester) {
 
 ShapeDecoration? _getIndicatorDecoration(WidgetTester tester) {
   return tester
-          .firstWidget<Container>(
-            find.descendant(of: find.byType(FadeTransition), matching: find.byType(Container)),
+          .firstWidget<Ink>(
+            find.descendant(of: find.byType(NavigationIndicator), matching: find.byType(Ink)),
           )
           .decoration
       as ShapeDecoration?;

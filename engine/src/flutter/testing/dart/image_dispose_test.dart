@@ -14,6 +14,7 @@ void main() {
     final Uint8List bytes = await _readFile('2x2.png');
     final Codec codec = await instantiateImageCodec(bytes);
     final FrameInfo frame = await codec.getNextFrame();
+    codec.dispose();
 
     expect(frame.image.width, 2);
     expect(frame.image.height, 2);
@@ -33,15 +34,16 @@ void main() {
     final Uint8List bytes = await _readFile('2x2.png');
     final Codec codec = await instantiateImageCodec(bytes);
     final FrameInfo frame = await codec.getNextFrame();
+    codec.dispose();
 
     expect(frame.image.width, 2);
     expect(frame.image.height, 2);
     final Image handle1 = frame.image.clone();
 
-    final PictureRecorder recorder = PictureRecorder();
-    final Canvas canvas = Canvas(recorder);
+    final recorder = PictureRecorder();
+    final canvas = Canvas(recorder);
 
-    const Rect rect = Rect.fromLTRB(0, 0, 2, 2);
+    const rect = Rect.fromLTRB(0, 0, 2, 2);
     canvas.drawImage(handle1, Offset.zero, Paint());
     canvas.drawImageRect(handle1, rect, rect, Paint());
     canvas.drawImageNine(handle1, rect, rect, Paint());
@@ -71,6 +73,7 @@ void main() {
     final Uint8List bytes = await _readFile('2x2.png');
     final Codec codec = await instantiateImageCodec(bytes);
     final FrameInfo frame = await codec.getNextFrame();
+    codec.dispose();
 
     final Image handle1 = frame.image.clone();
     final Image handle2 = handle1.clone();
@@ -97,6 +100,7 @@ void main() {
     final Uint8List bytes = await _readFile('2x2.png');
     final Codec codec = await instantiateImageCodec(bytes);
     final FrameInfo frame = await codec.getNextFrame();
+    codec.dispose();
 
     final Image handle1 = frame.image.clone();
     final Image handle2 = handle1.clone();
@@ -112,6 +116,7 @@ void main() {
 
     final Codec codec2 = await instantiateImageCodec(bytes);
     final FrameInfo frame2 = await codec2.getNextFrame();
+    codec2.dispose();
 
     expect(frame2.image.isCloneOf(frame.image), false);
   });
@@ -120,6 +125,7 @@ void main() {
     final Uint8List bytes = await _readFile('2x2.png');
     final Codec codec = await instantiateImageCodec(bytes);
     final FrameInfo frame = await codec.getNextFrame();
+    codec.dispose();
 
     expect(frame.image.debugDisposed, false);
 
@@ -129,6 +135,6 @@ void main() {
 }
 
 Future<Uint8List> _readFile(String fileName) async {
-  final File file = File(path.join('flutter', 'testing', 'resources', fileName));
+  final file = File(path.join('flutter', 'testing', 'resources', fileName));
   return file.readAsBytes();
 }

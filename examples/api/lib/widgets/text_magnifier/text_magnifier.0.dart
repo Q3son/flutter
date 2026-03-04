@@ -20,7 +20,6 @@ class TextMagnifierExampleApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      theme: ThemeData(useMaterial3: true),
       home: Scaffold(
         body: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 48.0),
@@ -95,7 +94,9 @@ class CustomMagnifier extends StatelessWidget {
             focalPointOffset: Offset(0, magnifierSize.height / 2),
             // Decorate it however we'd like!
             decoration: const MagnifierDecoration(
-              shape: StarBorder(side: BorderSide(color: Colors.green, width: 2)),
+              shape: StarBorder(
+                side: BorderSide(color: Colors.green, width: 2),
+              ),
             ),
             size: magnifierSize,
           ),

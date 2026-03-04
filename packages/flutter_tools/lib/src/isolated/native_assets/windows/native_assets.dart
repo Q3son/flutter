@@ -2,13 +2,13 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import 'package:native_assets_cli/code_assets_builder.dart';
+import 'package:code_assets/code_assets.dart';
 
 import '../../../globals.dart' as globals;
 import '../../../windows/visual_studio.dart';
 
 Future<CCompilerConfig?> cCompilerConfigWindows() async {
-  final VisualStudio visualStudio = VisualStudio(
+  final visualStudio = VisualStudio(
     fileSystem: globals.fs,
     platform: globals.platform,
     logger: globals.logger,
@@ -30,8 +30,9 @@ Future<CCompilerConfig?> cCompilerConfigWindows() async {
     compiler: compiler,
     archiver: archiver,
     linker: linker,
-    envScript: envScript,
-    envScriptArgs: <String>[],
+    windows: WindowsCCompilerConfig(
+      developerCommandPrompt: DeveloperCommandPrompt(script: envScript, arguments: <String>[]),
+    ),
   );
 }
 

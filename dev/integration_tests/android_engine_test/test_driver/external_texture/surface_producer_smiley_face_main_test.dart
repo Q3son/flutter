@@ -23,13 +23,13 @@ import '../_luci_skia_gold_prelude.dart';
 ///
 /// For a convenient way to deflake a test, see `tool/deflake.dart`.
 void main() async {
-  const String appName = 'com.example.android_engine_test';
+  const appName = 'com.example.android_engine_test';
   late final FlutterDriver flutterDriver;
   late final NativeDriver nativeDriver;
 
   setUpAll(() async {
     if (isLuci) {
-      await enableSkiaGoldComparator(namePrefix: 'android_engine_test');
+      await enableSkiaGoldComparator(namePrefix: 'android_engine_test$goldenVariant');
     }
     flutterDriver = await FlutterDriver.connect();
     nativeDriver = await AndroidNativeDriver.connect(flutterDriver);

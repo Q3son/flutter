@@ -24,9 +24,11 @@ import 'edge_insets.dart';
 /// interpolated or animated. The [Border] class cannot interpolate between
 /// different shapes.
 enum BoxShape {
-  /// An axis-aligned, 2D rectangle. May have rounded corners (described by a
-  /// [BorderRadius]). The edges of the rectangle will match the edges of the box
-  /// into which the [Border] or [BoxDecoration] is painted.
+  /// An axis-aligned rectangle, optionally with rounded corners.
+  ///
+  /// The amount of corner rounding, if any, is determined by the border radius
+  /// specified by classes such as [BoxDecoration] or [Border]. The rectangle's
+  /// edges match those of the box in which it is painted.
   ///
   /// See also:
   ///
@@ -66,6 +68,48 @@ abstract class BoxBorder extends ShapeBorder {
   /// Abstract const constructor. This constructor enables subclasses to provide
   /// const constructors so that they can be used in const expressions.
   const BoxBorder();
+
+  /// Creates a [Border].
+  ///
+  /// All the sides of the border default to [BorderSide.none].
+  factory BoxBorder.fromLTRB({
+    BorderSide top = BorderSide.none,
+    BorderSide right = BorderSide.none,
+    BorderSide bottom = BorderSide.none,
+    BorderSide left = BorderSide.none,
+  }) => Border(top: top, right: right, bottom: bottom, left: left);
+
+  /// A uniform [Border] with all sides the same color and width.
+  ///
+  /// The sides default to black solid borders, one logical pixel wide.
+  factory BoxBorder.all({Color color, double width, BorderStyle style, double strokeAlign}) =
+      Border.all;
+
+  /// Creates a [Border] whose sides are all the same.
+  const factory BoxBorder.fromBorderSide(BorderSide side) = Border.fromBorderSide;
+
+  /// Creates a [Border] with symmetrical vertical and horizontal sides.
+  ///
+  /// The `vertical` argument applies to the [left] and [right] sides, and the
+  /// `horizontal` argument applies to the [top] and [bottom] sides.
+  ///
+  /// All arguments default to [BorderSide.none].
+  const factory BoxBorder.symmetric({BorderSide vertical, BorderSide horizontal}) =
+      Border.symmetric;
+
+  /// Creates a [BorderDirectional].
+  ///
+  /// The [start] and [end] sides represent the horizontal sides; the start side
+  /// is on the leading edge given the reading direction, and the end side is on
+  /// the trailing edge. They are resolved during [paint].
+  ///
+  /// All the sides of the border default to [BorderSide.none].
+  factory BoxBorder.fromSTEB({
+    BorderSide top = BorderSide.none,
+    BorderSide start = BorderSide.none,
+    BorderSide end = BorderSide.none,
+    BorderSide bottom = BorderSide.none,
+  }) => BorderDirectional(top: top, start: start, end: end, bottom: bottom);
 
   /// The top side of this border.
   ///
@@ -240,7 +284,7 @@ abstract class BoxBorder extends ShapeBorder {
     BorderRadius borderRadius,
   ) {
     assert(side.style != BorderStyle.none);
-    final Paint paint = Paint()..color = side.color;
+    final paint = Paint()..color = side.color;
     final double width = side.width;
     if (width == 0.0) {
       paint
@@ -281,70 +325,30 @@ abstract class BoxBorder extends ShapeBorder {
       case BoxShape.circle:
         assert(
           borderRadius == null,
-          'A borderRadius cannot be given when shape is a BoxShape.circle.',
+          'A circle cannot have a border radius. Remove either the shape or the borderRadius argument.',
         );
         borderRect = RRect.fromRectAndRadius(
           Rect.fromCircle(center: rect.center, radius: rect.shortestSide / 2.0),
           Radius.circular(rect.width),
         );
     }
-    final Paint paint = Paint()..color = color;
-    final RRect inner = _deflateRRect(
-      borderRect,
-      EdgeInsets.fromLTRB(left.strokeInset, top.strokeInset, right.strokeInset, bottom.strokeInset),
-    );
-    final RRect outer = _inflateRRect(
-      borderRect,
-      EdgeInsets.fromLTRB(
-        left.strokeOutset,
-        top.strokeOutset,
-        right.strokeOutset,
-        bottom.strokeOutset,
-      ),
-    );
+    final paint = Paint()..color = color;
+
+    final RRect inner = EdgeInsets.fromLTRB(
+      left.strokeInset,
+      top.strokeInset,
+      right.strokeInset,
+      bottom.strokeInset,
+    ).deflateRRect(borderRect);
+
+    final RRect outer = EdgeInsets.fromLTRB(
+      left.strokeOutset,
+      top.strokeOutset,
+      right.strokeOutset,
+      bottom.strokeOutset,
+    ).inflateRRect(borderRect);
+
     canvas.drawDRRect(outer, inner, paint);
-  }
-
-  static RRect _inflateRRect(RRect rect, EdgeInsets insets) {
-    return RRect.fromLTRBAndCorners(
-      rect.left - insets.left,
-      rect.top - insets.top,
-      rect.right + insets.right,
-      rect.bottom + insets.bottom,
-      topLeft: (rect.tlRadius + Radius.elliptical(insets.left, insets.top)).clamp(
-        minimum: Radius.zero,
-      ),
-      topRight: (rect.trRadius + Radius.elliptical(insets.right, insets.top)).clamp(
-        minimum: Radius.zero,
-      ),
-      bottomRight: (rect.brRadius + Radius.elliptical(insets.right, insets.bottom)).clamp(
-        minimum: Radius.zero,
-      ),
-      bottomLeft: (rect.blRadius + Radius.elliptical(insets.left, insets.bottom)).clamp(
-        minimum: Radius.zero,
-      ),
-    );
-  }
-
-  static RRect _deflateRRect(RRect rect, EdgeInsets insets) {
-    return RRect.fromLTRBAndCorners(
-      rect.left + insets.left,
-      rect.top + insets.top,
-      rect.right - insets.right,
-      rect.bottom - insets.bottom,
-      topLeft: (rect.tlRadius - Radius.elliptical(insets.left, insets.top)).clamp(
-        minimum: Radius.zero,
-      ),
-      topRight: (rect.trRadius - Radius.elliptical(insets.right, insets.top)).clamp(
-        minimum: Radius.zero,
-      ),
-      bottomRight: (rect.brRadius - Radius.elliptical(insets.right, insets.bottom)).clamp(
-        minimum: Radius.zero,
-      ),
-      bottomLeft: (rect.blRadius - Radius.elliptical(insets.left, insets.bottom)).clamp(
-        minimum: Radius.zero,
-      ),
-    );
   }
 
   static void _paintUniformBorderWithCircle(Canvas canvas, Rect rect, BorderSide side) {
@@ -465,12 +469,7 @@ class Border extends BoxBorder {
     BorderStyle style = BorderStyle.solid,
     double strokeAlign = BorderSide.strokeAlignInside,
   }) {
-    final BorderSide side = BorderSide(
-      color: color,
-      width: width,
-      style: style,
-      strokeAlign: strokeAlign,
-    );
+    final side = BorderSide(color: color, width: width, style: style, strokeAlign: strokeAlign);
     return Border.fromBorderSide(side);
   }
 
@@ -661,7 +660,7 @@ class Border extends BoxBorder {
             case BoxShape.circle:
               assert(
                 borderRadius == null,
-                'A borderRadius cannot be given when shape is a BoxShape.circle.',
+                'A circle cannot have a border radius. Remove either the shape or the borderRadius argument.',
               );
               BoxBorder._paintUniformBorderWithCircle(canvas, rect, top);
             case BoxShape.rectangle:
@@ -765,7 +764,7 @@ class Border extends BoxBorder {
     if (isUniform) {
       return '${objectRuntimeType(this, 'Border')}.all($top)';
     }
-    final List<String> arguments = <String>[
+    final arguments = <String>[
       if (top != BorderSide.none) 'top: $top',
       if (right != BorderSide.none) 'right: $right',
       if (bottom != BorderSide.none) 'bottom: $bottom',
@@ -1039,7 +1038,7 @@ class BorderDirectional extends BoxBorder {
             case BoxShape.circle:
               assert(
                 borderRadius == null,
-                'A borderRadius cannot be given when shape is a BoxShape.circle.',
+                'A circle cannot have a border radius. Remove either the shape or the borderRadius argument.',
               );
               BoxBorder._paintUniformBorderWithCircle(canvas, rect, top);
             case BoxShape.rectangle:
@@ -1129,7 +1128,7 @@ class BorderDirectional extends BoxBorder {
 
   @override
   String toString() {
-    final List<String> arguments = <String>[
+    final arguments = <String>[
       if (top != BorderSide.none) 'top: $top',
       if (start != BorderSide.none) 'start: $start',
       if (end != BorderSide.none) 'end: $end',

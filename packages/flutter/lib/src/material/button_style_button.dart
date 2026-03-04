@@ -25,10 +25,11 @@ import 'material.dart';
 import 'material_state.dart';
 import 'outlined_button.dart';
 import 'text_button.dart';
+import 'theme.dart';
 import 'theme_data.dart';
 import 'tooltip.dart';
 
-/// {@template flutter.material.ButtonStyleButton.iconAlignment}
+/// {@template flutter.material.ButtonStyle.iconAlignment}
 /// Determines the alignment of the icon within the widgets such as:
 ///   - [ElevatedButton.icon],
 ///   - [FilledButton.icon],
@@ -47,7 +48,7 @@ import 'tooltip.dart';
 /// This sample demonstrates how to use `iconAlignment` to align the button icon to the start
 /// or the end of the button.
 ///
-/// ** See code in examples/api/lib/material/button_style_button/button_style_button.icon_alignment.0.dart **
+/// ** See code in examples/api/lib/material/icon_alignment/icon_alignment.0.dart **
 /// {@end-tool}
 ///
 /// {@endtemplate}
@@ -162,7 +163,7 @@ abstract class ButtonStyleButton extends StatefulWidget {
   /// Defaults to true.
   final bool? isSemanticButton;
 
-  /// {@macro flutter.material.ButtonStyleButton.iconAlignment}
+  /// {@macro flutter.material.ButtonStyle.iconAlignment}
   @Deprecated(
     'Remove this parameter as it is now ignored. '
     'Use ButtonStyle.iconAlignment instead. '
@@ -254,7 +255,7 @@ abstract class ButtonStyleButton extends StatefulWidget {
   /// Returns null if [value] is null, otherwise `WidgetStatePropertyAll<T>(value)`.
   ///
   /// A convenience method for subclasses.
-  static MaterialStateProperty<T>? allOrNull<T>(T? value) =>
+  static WidgetStateProperty<T>? allOrNull<T>(T? value) =>
       value == null ? null : MaterialStatePropertyAll<T>(value);
 
   /// Returns null if [enabled] and [disabled] are null.
@@ -321,7 +322,7 @@ class _ButtonStyleState extends State<ButtonStyleButton> with TickerProviderStat
   MaterialStatesController? internalStatesController;
 
   void handleStatesControllerChange() {
-    // Force a rebuild to resolve MaterialStateProperty properties
+    // Force a rebuild to resolve WidgetStateProperty properties
     setState(() {});
   }
 
@@ -332,7 +333,7 @@ class _ButtonStyleState extends State<ButtonStyleButton> with TickerProviderStat
     if (widget.statesController == null) {
       internalStatesController = MaterialStatesController();
     }
-    statesController.update(MaterialState.disabled, !widget.enabled);
+    statesController.update(WidgetState.disabled, !widget.enabled);
     statesController.addListener(handleStatesControllerChange);
   }
 
@@ -354,10 +355,10 @@ class _ButtonStyleState extends State<ButtonStyleButton> with TickerProviderStat
       initStatesController();
     }
     if (widget.enabled != oldWidget.enabled) {
-      statesController.update(MaterialState.disabled, !widget.enabled);
+      statesController.update(WidgetState.disabled, !widget.enabled);
       if (!widget.enabled) {
         // The button may have been disabled while a press gesture is currently underway.
-        statesController.update(MaterialState.pressed, false);
+        statesController.update(WidgetState.pressed, false);
       }
     }
   }
@@ -372,6 +373,8 @@ class _ButtonStyleState extends State<ButtonStyleButton> with TickerProviderStat
 
   @override
   Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final IconThemeData iconTheme = IconTheme.of(context);
     final ButtonStyle? widgetStyle = widget.style;
     final ButtonStyle? themeStyle = widget.themeStyleOf(context);
     final ButtonStyle defaultStyle = widget.defaultStyleOf(context);
@@ -383,7 +386,7 @@ class _ButtonStyleState extends State<ButtonStyleButton> with TickerProviderStat
       return widgetValue ?? themeValue ?? defaultValue;
     }
 
-    T? resolve<T>(MaterialStateProperty<T>? Function(ButtonStyle? style) getProperty) {
+    T? resolve<T>(WidgetStateProperty<T>? Function(ButtonStyle? style) getProperty) {
       return effectiveValue((ButtonStyle? style) {
         return getProperty(style)?.resolve(statesController.value);
       });
@@ -426,13 +429,13 @@ class _ButtonStyleState extends State<ButtonStyleButton> with TickerProviderStat
       (ButtonStyle? style) => style?.shape,
     );
 
-    final MaterialStateMouseCursor mouseCursor = _MouseCursor(
-      (Set<MaterialState> states) =>
+    final WidgetStateMouseCursor mouseCursor = _MouseCursor(
+      (Set<WidgetState> states) =>
           effectiveValue((ButtonStyle? style) => style?.mouseCursor?.resolve(states)),
     );
 
-    final MaterialStateProperty<Color?> overlayColor = MaterialStateProperty.resolveWith<Color?>(
-      (Set<MaterialState> states) =>
+    final WidgetStateProperty<Color?> overlayColor = WidgetStateProperty.resolveWith<Color?>(
+      (Set<WidgetState> states) =>
           effectiveValue((ButtonStyle? style) => style?.overlayColor?.resolve(states)),
     );
 
@@ -535,16 +538,16 @@ class _ButtonStyleState extends State<ButtonStyleButton> with TickerProviderStat
         alignment: resolvedAlignment!,
         widthFactor: 1.0,
         heightFactor: 1.0,
-        child:
-            resolvedForegroundBuilder != null
-                ? resolvedForegroundBuilder(context, statesController.value, widget.child)
-                : widget.child,
+        child: resolvedForegroundBuilder != null
+            ? resolvedForegroundBuilder(context, statesController.value, widget.child)
+            : widget.child,
       ),
     );
     if (resolvedBackgroundBuilder != null) {
       result = resolvedBackgroundBuilder(context, statesController.value, result);
     }
 
+<<<<<<< HEAD
     result = InkWell(
       onTap: widget.onPressed,
       onLongPress: widget.onLongPress,
@@ -562,6 +565,28 @@ class _ButtonStyleState extends State<ButtonStyleButton> with TickerProviderStat
       statesController: statesController,
       child: IconTheme.merge(
         data: IconThemeData(color: resolvedIconColor, size: resolvedIconSize),
+=======
+    result = AnimatedTheme(
+      duration: resolvedAnimationDuration,
+      data: theme.copyWith(
+        iconTheme: iconTheme.merge(IconThemeData(color: resolvedIconColor, size: resolvedIconSize)),
+      ),
+      child: InkWell(
+        onTap: widget.onPressed,
+        onLongPress: widget.onLongPress,
+        onHover: widget.onHover,
+        mouseCursor: mouseCursor,
+        enableFeedback: resolvedEnableFeedback,
+        focusNode: widget.focusNode,
+        canRequestFocus: widget.enabled,
+        onFocusChange: widget.onFocusChange,
+        autofocus: widget.autofocus,
+        splashFactory: resolvedSplashFactory,
+        overlayColor: overlayColor,
+        highlightColor: Colors.transparent,
+        customBorder: resolvedShape!.copyWith(side: resolvedSide),
+        statesController: statesController,
+>>>>>>> 48c32af0345e9ad5747f78ddce828c7f795f7159
         child: result,
       ),
     );
@@ -601,6 +626,7 @@ class _ButtonStyleState extends State<ButtonStyleButton> with TickerProviderStat
             type: resolvedBackgroundColor == null ? MaterialType.transparency : MaterialType.button,
             animationDuration: resolvedAnimationDuration,
             clipBehavior: effectiveClipBehavior,
+            borderOnForeground: false,
             child: result,
           ),
         ),
@@ -609,13 +635,13 @@ class _ButtonStyleState extends State<ButtonStyleButton> with TickerProviderStat
   }
 }
 
-class _MouseCursor extends MaterialStateMouseCursor {
+class _MouseCursor extends WidgetStateMouseCursor {
   const _MouseCursor(this.resolveCallback);
 
-  final MaterialPropertyResolver<MouseCursor?> resolveCallback;
+  final WidgetPropertyResolver<MouseCursor?> resolveCallback;
 
   @override
-  MouseCursor resolve(Set<MaterialState> states) => resolveCallback(states)!;
+  MouseCursor resolve(Set<WidgetState> states) => resolveCallback(states)!;
 
   @override
   String get debugDescription => 'ButtonStyleButton_MouseCursor';
@@ -690,9 +716,9 @@ class _RenderInputPadding extends RenderShiftedBox {
   Size _computeSize({required BoxConstraints constraints, required ChildLayouter layoutChild}) {
     if (child != null) {
       final Size childSize = layoutChild(child!, constraints);
-      final double height = math.max(childSize.width, minSize.width);
-      final double width = math.max(childSize.height, minSize.height);
-      return constraints.constrain(Size(height, width));
+      final double width = math.max(childSize.width, minSize.width);
+      final double height = math.max(childSize.height, minSize.height);
+      return constraints.constrain(Size(width, height));
     }
     return Size.zero;
   }
@@ -721,7 +747,7 @@ class _RenderInputPadding extends RenderShiftedBox {
   void performLayout() {
     size = _computeSize(constraints: constraints, layoutChild: ChildLayoutHelper.layoutChild);
     if (child != null) {
-      final BoxParentData childParentData = child!.parentData! as BoxParentData;
+      final childParentData = child!.parentData! as BoxParentData;
       childParentData.offset = Alignment.center.alongOffset(size - child!.size as Offset);
     }
   }

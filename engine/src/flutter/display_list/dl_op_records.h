@@ -9,12 +9,12 @@
 #include "flutter/display_list/dl_blend_mode.h"
 #include "flutter/display_list/dl_op_receiver.h"
 #include "flutter/display_list/dl_sampling_options.h"
+#include "flutter/display_list/dl_text.h"
 #include "flutter/display_list/effects/dl_color_sources.h"
 #include "flutter/display_list/utils/dl_comparable.h"
 #include "flutter/fml/macros.h"
 
-#include "flutter/impeller/geometry/path.h"
-#include "flutter/impeller/typographer/text_frame.h"
+// NOLINTBEGIN(clang-analyzer-core.CallAndMessage)
 
 namespace flutter {
 
@@ -486,7 +486,7 @@ struct TransformResetOp final : TransformClipOpBase {
 // DlRect is 16 more bytes, which packs efficiently into 24 bytes total
 // DlRoundRect is 48 more bytes, which rounds up to 48 bytes
 //         which packs into 56 bytes total
-// CacheablePath is 128 more bytes, which packs efficiently into 136 bytes total
+// DlRoundSuperellipse is the same as DlRoundRect
 //
 // We could pack the clip_op and the bool both into the free 4 bytes after
 // the header, but the Windows compiler keeps wanting to expand that
@@ -503,18 +503,20 @@ struct TransformResetOp final : TransformClipOpBase {
     const shapetype shape;                                                     \
                                                                                \
     void dispatch(DlOpReceiver& receiver) const {                              \
-      receiver.clip##shapename(shape, DlCanvas::ClipOp::k##clipop, is_aa);     \
+      receiver.clip##shapename(shape, DlClipOp::k##clipop, is_aa);             \
     }                                                                          \
   };
 DEFINE_CLIP_SHAPE_OP(Rect, DlRect, Intersect)
 DEFINE_CLIP_SHAPE_OP(Oval, DlRect, Intersect)
 DEFINE_CLIP_SHAPE_OP(RoundRect, DlRoundRect, Intersect)
+DEFINE_CLIP_SHAPE_OP(RoundSuperellipse, DlRoundSuperellipse, Intersect)
 DEFINE_CLIP_SHAPE_OP(Rect, DlRect, Difference)
 DEFINE_CLIP_SHAPE_OP(Oval, DlRect, Difference)
 DEFINE_CLIP_SHAPE_OP(RoundRect, DlRoundRect, Difference)
+DEFINE_CLIP_SHAPE_OP(RoundSuperellipse, DlRoundSuperellipse, Difference)
 #undef DEFINE_CLIP_SHAPE_OP
 
-// 4 byte header + 20 byte payload packs evenly into 24 bytes
+// 4 byte header + 28 byte payload packs evenly into 32 bytes
 #define DEFINE_CLIP_PATH_OP(clipop)                                       \
   struct Clip##clipop##PathOp final : TransformClipOpBase {               \
     static constexpr auto kType = DisplayListOpType::kClip##clipop##Path; \
@@ -526,7 +528,7 @@ DEFINE_CLIP_SHAPE_OP(RoundRect, DlRoundRect, Difference)
     const DlPath path;                                                    \
                                                                           \
     void dispatch(DlOpReceiver& receiver) const {                         \
-      receiver.clipPath(path, DlCanvas::ClipOp::k##clipop, is_aa);        \
+      receiver.clipPath(path, DlClipOp::k##clipop, is_aa);                \
     }                                                                     \
                                                                           \
     DisplayListCompare equals(const Clip##clipop##PathOp* other) const {  \
@@ -578,6 +580,7 @@ struct DrawColorOp final : DrawOpBase {
 // SkOval is same as DlRect
 // DlRoundRect is 48 more bytes, using 52 bytes which rounds up to 56 bytes
 //        total (4 bytes unused)
+// DlRoundSuperellipse is the same as DlRoundRect
 #define DEFINE_DRAW_1ARG_OP(op_name, arg_type, arg_name)             \
   struct Draw##op_name##Op final : DrawOpBase {                      \
     static constexpr auto kType = DisplayListOpType::kDraw##op_name; \
@@ -594,10 +597,11 @@ struct DrawColorOp final : DrawOpBase {
 DEFINE_DRAW_1ARG_OP(Rect, DlRect, rect)
 DEFINE_DRAW_1ARG_OP(Oval, DlRect, oval)
 DEFINE_DRAW_1ARG_OP(RoundRect, DlRoundRect, rrect)
+DEFINE_DRAW_1ARG_OP(RoundSuperellipse, DlRoundSuperellipse, rse)
 #undef DEFINE_DRAW_1ARG_OP
 
-// 4 byte header + 16 byte payload uses 20 bytes but is rounded
-// up to 24 bytes (4 bytes unused)
+// 4 byte header + 24 byte payload uses 28 bytes but is rounded
+// up to 32 bytes (4 bytes unused)
 struct DrawPathOp final : DrawOpBase {
   static constexpr auto kType = DisplayListOpType::kDrawPath;
 
@@ -702,7 +706,7 @@ struct DrawArcOp final : DrawOpBase {
                                                                        \
     void dispatch(DlOpReceiver& receiver) const {                      \
       const DlPoint* pts = reinterpret_cast<const DlPoint*>(this + 1); \
-      receiver.drawPoints(DlCanvas::PointMode::mode, count, pts);      \
+      receiver.drawPoints(DlPointMode::mode, count, pts);              \
     }                                                                  \
   };
 DEFINE_DRAW_POINTS_OP(Points, kPoints);
@@ -769,7 +773,7 @@ struct DrawImageRectOp final : DrawOpBase {
                   const DlRect& dst,
                   DlImageSampling sampling,
                   bool render_with_attributes,
-                  DlCanvas::SrcRectConstraint constraint)
+                  DlSrcRectConstraint constraint)
       : DrawOpBase(kType),
         src(src),
         dst(dst),
@@ -782,7 +786,7 @@ struct DrawImageRectOp final : DrawOpBase {
   const DlRect dst;
   const DlImageSampling sampling;
   const bool render_with_attributes;
-  const DlCanvas::SrcRectConstraint constraint;
+  const DlSrcRectConstraint constraint;
   const sk_sp<DlImage> image;
 
   void dispatch(DlOpReceiver& receiver) const {
@@ -996,39 +1000,26 @@ struct DrawDisplayListOp final : DrawOpBase {
 
 // 4 byte header + 8 payload bytes + an aligned pointer take 24 bytes
 // (4 unused to align the pointer)
-struct DrawTextBlobOp final : DrawOpBase {
-  static constexpr auto kType = DisplayListOpType::kDrawTextBlob;
+struct DrawTextOp final : DrawOpBase {
+  static constexpr auto kType = DisplayListOpType::kDrawText;
 
-  DrawTextBlobOp(const sk_sp<SkTextBlob>& blob, DlScalar x, DlScalar y)
-      : DrawOpBase(kType), x(x), y(y), blob(blob) {}
-
-  const DlScalar x;
-  const DlScalar y;
-  const sk_sp<SkTextBlob> blob;
-
-  void dispatch(DlOpReceiver& receiver) const {
-    receiver.drawTextBlob(blob, x, y);
-  }
-};
-
-struct DrawTextFrameOp final : DrawOpBase {
-  static constexpr auto kType = DisplayListOpType::kDrawTextFrame;
-
-  DrawTextFrameOp(const std::shared_ptr<impeller::TextFrame>& text_frame,
-                  DlScalar x,
-                  DlScalar y)
-      : DrawOpBase(kType), x(x), y(y), text_frame(text_frame) {}
+  DrawTextOp(const std::shared_ptr<DlText>& text, DlScalar x, DlScalar y)
+      : DrawOpBase(kType), x(x), y(y), text(text) {}
 
   const DlScalar x;
   const DlScalar y;
-  const std::shared_ptr<impeller::TextFrame> text_frame;
+  const std::shared_ptr<DlText> text;
 
-  void dispatch(DlOpReceiver& receiver) const {
-    receiver.drawTextFrame(text_frame, x, y);
+  void dispatch(DlOpReceiver& receiver) const { receiver.drawText(text, x, y); }
+
+  DisplayListCompare equals(const DrawTextOp* other) const {
+    return Equals(text, other->text) && x == other->x && y == other->y
+               ? DisplayListCompare::kEqual
+               : DisplayListCompare::kNotEqual;
   }
 };
 
-// 4 byte header + 44 byte payload packs evenly into 48 bytes
+// 4 byte header + 52 byte payload packs evenly into 56 bytes
 #define DEFINE_DRAW_SHADOW_OP(name, transparent_occluder)                     \
   struct Draw##name##Op final : DrawOpBase {                                  \
     static constexpr auto kType = DisplayListOpType::kDraw##name;             \
@@ -1066,5 +1057,7 @@ DEFINE_DRAW_SHADOW_OP(ShadowTransparentOccluder, true)
 #pragma pack(pop, DLOpPackLabel)
 
 }  // namespace flutter
+
+// NOLINTEND(clang-analyzer-core.CallAndMessage)
 
 #endif  // FLUTTER_DISPLAY_LIST_DL_OP_RECORDS_H_

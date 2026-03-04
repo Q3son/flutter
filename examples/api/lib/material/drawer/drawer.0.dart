@@ -13,7 +13,7 @@ class DrawerApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(theme: ThemeData(useMaterial3: true), home: const DrawerExample());
+    return const MaterialApp(home: DrawerExample());
   }
 }
 
@@ -37,7 +37,10 @@ class _DrawerExampleState extends State<DrawerExample> {
           children: <Widget>[
             const DrawerHeader(
               decoration: BoxDecoration(color: Colors.blue),
-              child: Text('Drawer Header', style: TextStyle(color: Colors.white, fontSize: 24)),
+              child: Text(
+                'Drawer Header',
+                style: TextStyle(color: Colors.white, fontSize: 24),
+              ),
             ),
             ListTile(
               leading: const Icon(Icons.message),

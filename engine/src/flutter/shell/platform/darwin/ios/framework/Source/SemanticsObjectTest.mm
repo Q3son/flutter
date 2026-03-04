@@ -245,8 +245,9 @@ const float kFloatCompareEpsilon = 0.001;
       new flutter::testing::MockAccessibilityBridge());
   fml::WeakPtr<flutter::AccessibilityBridgeIos> bridge = factory.GetWeakPtr();
   flutter::SemanticsNode node;
-  node.flags = static_cast<int32_t>(flutter::SemanticsFlags::kHasImplicitScrolling) |
-               static_cast<int32_t>(flutter::SemanticsFlags::kIsHidden);
+
+  node.flags.hasImplicitScrolling = true;
+  node.flags.isHidden = true;
   FlutterSemanticsObject* object = [[FlutterSemanticsObject alloc] initWithBridge:bridge uid:0];
   [object setSemanticsNode:&node];
   XCTAssertEqual(object.isAccessibilityElement, YES);
@@ -257,7 +258,7 @@ const float kFloatCompareEpsilon = 0.001;
       new flutter::testing::MockAccessibilityBridge());
   fml::WeakPtr<flutter::AccessibilityBridgeIos> bridge = factory.GetWeakPtr();
   flutter::SemanticsNode node;
-  node.flags = static_cast<int32_t>(flutter::SemanticsFlags::kHasImplicitScrolling);
+  node.flags.hasImplicitScrolling = true;
   FlutterSemanticsObject* object = [[FlutterSemanticsObject alloc] initWithBridge:bridge uid:0];
   [object setSemanticsNode:&node];
   XCTAssertEqual(object.isAccessibilityElement, NO);
@@ -282,7 +283,7 @@ const float kFloatCompareEpsilon = 0.001;
   fml::WeakPtr<flutter::AccessibilityBridgeIos> bridge = factory.GetWeakPtr();
   flutter::SemanticsNode node;
   node.label = "foo";
-  node.flags = static_cast<int32_t>(flutter::SemanticsFlags::kIsTextField);
+  node.flags.isTextField = true;
   FlutterSemanticsObject* object = [[FlutterSemanticsObject alloc] initWithBridge:bridge uid:0];
   [object setSemanticsNode:&node];
   XCTAssertEqual([object accessibilityTraits], UIAccessibilityTraitNone);
@@ -294,7 +295,8 @@ const float kFloatCompareEpsilon = 0.001;
   fml::WeakPtr<flutter::AccessibilityBridgeIos> bridge = factory.GetWeakPtr();
   flutter::SemanticsNode node;
   node.label = "foo";
-  node.flags = static_cast<int32_t>(flutter::SemanticsFlags::kIsButton);
+
+  node.flags.isButton = true;
   FlutterSemanticsObject* object = [[FlutterSemanticsObject alloc] initWithBridge:bridge uid:0];
   [object setSemanticsNode:&node];
   XCTAssertEqual([object accessibilityTraits], UIAccessibilityTraitButton);
@@ -316,7 +318,7 @@ const float kFloatCompareEpsilon = 0.001;
   float scrollPosition = 150.0;
 
   flutter::SemanticsNode node;
-  node.flags = static_cast<int32_t>(flutter::SemanticsFlags::kHasImplicitScrolling);
+  node.flags.hasImplicitScrolling = true;
   node.actions = flutter::kVerticalScrollSemanticsActions;
   node.rect = SkRect::MakeXYWH(x, y, w, h);
   node.scrollExtentMax = scrollExtentMax;
@@ -360,7 +362,7 @@ const float kFloatCompareEpsilon = 0.001;
   float scrollPosition = 150.0;
 
   flutter::SemanticsNode node;
-  node.flags = static_cast<int32_t>(flutter::SemanticsFlags::kHasImplicitScrolling);
+  node.flags.hasImplicitScrolling = true;
   node.actions = flutter::kVerticalScrollSemanticsActions;
   node.rect = SkRect::MakeXYWH(x, y, w, h);
   node.scrollExtentMax = scrollExtentMax;
@@ -390,7 +392,7 @@ const float kFloatCompareEpsilon = 0.001;
   float scrollPosition = 150.0;
 
   flutter::SemanticsNode node;
-  node.flags = static_cast<int32_t>(flutter::SemanticsFlags::kHasImplicitScrolling);
+  node.flags.hasImplicitScrolling = true;
   node.actions = flutter::kHorizontalScrollSemanticsActions;
   node.rect = SkRect::MakeXYWH(x, y, w, h);
   node.scrollExtentMax = scrollExtentMax;
@@ -436,7 +438,7 @@ const float kFloatCompareEpsilon = 0.001;
   float scrollPosition = 150.0;
 
   flutter::SemanticsNode node;
-  node.flags = static_cast<int32_t>(flutter::SemanticsFlags::kHasImplicitScrolling);
+  node.flags.hasImplicitScrolling = true;
   node.actions = flutter::kVerticalScrollSemanticsActions;
   node.rect = SkRect::MakeXYWH(x, y, w, h);
   node.scrollExtentMax = scrollExtentMax;
@@ -482,7 +484,7 @@ const float kFloatCompareEpsilon = 0.001;
   float scrollPosition = std::nan("");
 
   flutter::SemanticsNode node;
-  node.flags = static_cast<int32_t>(flutter::SemanticsFlags::kHasImplicitScrolling);
+  node.flags.hasImplicitScrolling = true;
   node.actions = flutter::kVerticalScrollSemanticsActions;
   node.rect = SkRect::MakeXYWH(x, y, w, h);
   node.scrollExtentMax = scrollExtentMax;
@@ -518,7 +520,7 @@ const float kFloatCompareEpsilon = 0.001;
   fml::WeakPtr<flutter::AccessibilityBridgeIos> bridge = factory.GetWeakPtr();
 
   flutter::SemanticsNode node;
-  node.flags = static_cast<int32_t>(flutter::SemanticsFlags::kHasImplicitScrolling);
+  node.flags.hasImplicitScrolling = true;
   node.actions = flutter::kHorizontalScrollSemanticsActions;
   node.rect = SkRect::MakeXYWH(0, 0, 100, 200);
   node.scrollExtentMax = 100.0;
@@ -539,7 +541,7 @@ const float kFloatCompareEpsilon = 0.001;
   fml::WeakPtr<flutter::AccessibilityBridgeIos> bridge = factory.GetWeakPtr();
 
   flutter::SemanticsNode node;
-  node.flags = static_cast<int32_t>(flutter::SemanticsFlags::kHasImplicitScrolling);
+  node.flags.hasImplicitScrolling = true;
   node.actions = flutter::kHorizontalScrollSemanticsActions;
   node.rect = SkRect::MakeXYWH(0, 0, 100, 200);
   node.scrollExtentMax = 100.0;
@@ -569,6 +571,64 @@ const float kFloatCompareEpsilon = 0.001;
   XCTAssertTrue([object.accessibilityIdentifier isEqualToString:@"identifier"]);
 }
 
+- (void)testFlutterSemanticsObjectHasLocale {
+  flutter::testing::MockAccessibilityBridge* mock = new flutter::testing::MockAccessibilityBridge();
+  mock->isVoiceOverRunningValue = true;
+  fml::WeakPtrFactory<flutter::AccessibilityBridgeIos> factory(mock);
+  fml::WeakPtr<flutter::AccessibilityBridgeIos> bridge = factory.GetWeakPtr();
+
+  flutter::SemanticsNode node;
+  node.locale = "es-MX";
+
+  FlutterSemanticsObject* object = [[FlutterSemanticsObject alloc] initWithBridge:bridge uid:0];
+  [object setSemanticsNode:&node];
+  XCTAssertTrue([object.accessibilityLanguage isEqualToString:@"es-MX"]);
+}
+
+- (void)testFlutterSemanticsObjectUseDefaultLocale {
+  flutter::testing::MockAccessibilityBridge* mock = new flutter::testing::MockAccessibilityBridge();
+  mock->isVoiceOverRunningValue = true;
+  fml::WeakPtrFactory<flutter::AccessibilityBridgeIos> factory(mock);
+  fml::WeakPtr<flutter::AccessibilityBridgeIos> bridge = factory.GetWeakPtr();
+
+  flutter::SemanticsNode node;
+  mock->mockedLocale = @"es-MX";
+
+  FlutterSemanticsObject* object = [[FlutterSemanticsObject alloc] initWithBridge:bridge uid:0];
+  [object setSemanticsNode:&node];
+  XCTAssertTrue([object.accessibilityLanguage isEqualToString:@"es-MX"]);
+}
+
+- (void)testFlutterSemanticsObjectPrioritizedSectionLocale {
+  flutter::testing::MockAccessibilityBridge* mock = new flutter::testing::MockAccessibilityBridge();
+  mock->isVoiceOverRunningValue = true;
+  fml::WeakPtrFactory<flutter::AccessibilityBridgeIos> factory(mock);
+  fml::WeakPtr<flutter::AccessibilityBridgeIos> bridge = factory.GetWeakPtr();
+
+  flutter::SemanticsNode node;
+  // Set both locales.
+  mock->mockedLocale = @"es-MX";
+  node.locale = "zh-TW";
+
+  FlutterSemanticsObject* object = [[FlutterSemanticsObject alloc] initWithBridge:bridge uid:0];
+  [object setSemanticsNode:&node];
+  // node.locale takes priority.
+  XCTAssertTrue([object.accessibilityLanguage isEqualToString:@"zh-TW"]);
+}
+
+- (void)testFlutterSemanticsObjectLocaleNil {
+  flutter::testing::MockAccessibilityBridge* mock = new flutter::testing::MockAccessibilityBridge();
+  mock->isVoiceOverRunningValue = true;
+  fml::WeakPtrFactory<flutter::AccessibilityBridgeIos> factory(mock);
+  fml::WeakPtr<flutter::AccessibilityBridgeIos> bridge = factory.GetWeakPtr();
+
+  flutter::SemanticsNode node;
+
+  FlutterSemanticsObject* object = [[FlutterSemanticsObject alloc] initWithBridge:bridge uid:0];
+  [object setSemanticsNode:&node];
+  XCTAssertTrue(object.accessibilityLanguage == nil);
+}
+
 - (void)testFlutterScrollableSemanticsObjectWithLabelValueHintIsNotHiddenWhenVoiceOverIsRunning {
   flutter::testing::MockAccessibilityBridge* mock = new flutter::testing::MockAccessibilityBridge();
   mock->isVoiceOverRunningValue = true;
@@ -576,7 +636,7 @@ const float kFloatCompareEpsilon = 0.001;
   fml::WeakPtr<flutter::AccessibilityBridgeIos> bridge = factory.GetWeakPtr();
 
   flutter::SemanticsNode node;
-  node.flags = static_cast<int32_t>(flutter::SemanticsFlags::kHasImplicitScrolling);
+  node.flags.hasImplicitScrolling = true;
   node.actions = flutter::kHorizontalScrollSemanticsActions;
   node.rect = SkRect::MakeXYWH(0, 0, 100, 200);
   node.label = "label";
@@ -614,6 +674,41 @@ const float kFloatCompareEpsilon = 0.001;
   XCTAssertTrue([object.accessibilityLabel isEqualToString:@"label\ntooltip"]);
 }
 
+- (void)testSemanticsObjectContainerAccessibilityFrameCoversEntireScreen {
+  flutter::testing::MockAccessibilityBridge* mock = new flutter::testing::MockAccessibilityBridge();
+  mock->isVoiceOverRunningValue = true;
+  fml::WeakPtrFactory<flutter::AccessibilityBridgeIos> factory(mock);
+  fml::WeakPtr<flutter::AccessibilityBridgeIos> bridge = factory.GetWeakPtr();
+
+  flutter::SemanticsNode parent;
+  parent.id = 0;
+  parent.actions = static_cast<int32_t>(flutter::SemanticsAction::kTap);
+
+  flutter::SemanticsNode child;
+  child.id = 1;
+  child.actions = static_cast<int32_t>(flutter::SemanticsAction::kTap);
+  child.rect = SkRect::MakeXYWH(0, 0, 100, 100);
+  parent.childrenInTraversalOrder.push_back(1);
+
+  FlutterSemanticsObject* parentObject = [[FlutterSemanticsObject alloc] initWithBridge:bridge
+                                                                                    uid:0];
+  [parentObject setSemanticsNode:&parent];
+
+  FlutterSemanticsObject* childObject = [[FlutterSemanticsObject alloc] initWithBridge:bridge
+                                                                                   uid:1];
+  [childObject setSemanticsNode:&child];
+
+  parentObject.children = @[ childObject ];
+  [parentObject accessibilityBridgeDidFinishUpdate];
+  [childObject accessibilityBridgeDidFinishUpdate];
+
+  SemanticsObjectContainer* container =
+      static_cast<SemanticsObjectContainer*>(parentObject.accessibilityContainer);
+
+  XCTAssertTrue(childObject.accessibilityRespondsToUserInteraction);
+  XCTAssertTrue(CGRectEqualToRect(container.accessibilityFrame, UIScreen.mainScreen.bounds));
+}
+
 - (void)testFlutterSemanticsObjectAttributedStringsDoNotCrashWhenEmpty {
   flutter::testing::MockAccessibilityBridge* mock = new flutter::testing::MockAccessibilityBridge();
   mock->isVoiceOverRunningValue = true;
@@ -642,7 +737,7 @@ const float kFloatCompareEpsilon = 0.001;
 
   flutter::SemanticsNode node;
   node.id = 1;
-  node.flags = static_cast<int32_t>(flutter::SemanticsFlags::kHasImplicitScrolling);
+  node.flags.hasImplicitScrolling = true;
   node.actions = flutter::kHorizontalScrollSemanticsActions;
   node.rect = SkRect::MakeXYWH(0, 0, 100, 200);
   node.label = "label";
@@ -676,7 +771,7 @@ const float kFloatCompareEpsilon = 0.001;
   fml::WeakPtr<flutter::AccessibilityBridgeIos> bridge = factory.GetWeakPtr();
 
   flutter::SemanticsNode node;
-  node.flags = static_cast<int32_t>(flutter::SemanticsFlags::kHasImplicitScrolling);
+  node.flags.hasImplicitScrolling = true;
   node.actions = flutter::kHorizontalScrollSemanticsActions;
   node.rect = SkRect::MakeXYWH(0, 0, 100, 200);
   node.scrollExtentMax = 100.0;
@@ -762,7 +857,7 @@ const float kFloatCompareEpsilon = 0.001;
 
   // Handle initial setting of node with liveRegion
   flutter::SemanticsNode node;
-  node.flags = static_cast<int32_t>(flutter::SemanticsFlags::kIsLiveRegion);
+  node.flags.isLiveRegion = true;
   node.label = "foo";
   XCTAssertTrue([object nodeShouldTriggerAnnouncement:&node]);
 
@@ -775,12 +870,12 @@ const float kFloatCompareEpsilon = 0.001;
 
   // Handle update node with new label, still has live region.
   flutter::SemanticsNode updatedNode;
-  updatedNode.flags = static_cast<int32_t>(flutter::SemanticsFlags::kIsLiveRegion);
+  updatedNode.flags.isLiveRegion = true;
   updatedNode.label = "bar";
   XCTAssertTrue([object nodeShouldTriggerAnnouncement:&updatedNode]);
 
   // Handle dropping the live region flag.
-  updatedNode.flags = 0;
+  updatedNode.flags = flutter::SemanticsFlags{};
   XCTAssertFalse([object nodeShouldTriggerAnnouncement:&updatedNode]);
 
   // Handle adding the flag when the label has not changed.
@@ -797,7 +892,7 @@ const float kFloatCompareEpsilon = 0.001;
 
   // Handle initial setting of node with header.
   flutter::SemanticsNode node;
-  node.flags = static_cast<int32_t>(flutter::SemanticsFlags::kIsHeader);
+  node.flags.isHeader = true;
   node.label = "foo";
 
   [object setSemanticsNode:&node];
@@ -818,7 +913,7 @@ const float kFloatCompareEpsilon = 0.001;
 
   // Handle initial setting of node with hidden.
   flutter::SemanticsNode node;
-  node.flags = static_cast<int32_t>(flutter::SemanticsFlags::kIsHidden);
+  node.flags.isHidden = true;
   node.label = "foo";
 
   [object setSemanticsNode:&node];
@@ -840,9 +935,8 @@ const float kFloatCompareEpsilon = 0.001;
 
   // Handle initial setting of node with header.
   flutter::SemanticsNode node;
-  node.flags = static_cast<int32_t>(flutter::SemanticsFlags::kHasToggledState) |
-               static_cast<int32_t>(flutter::SemanticsFlags::kIsToggled) |
-               static_cast<int32_t>(flutter::SemanticsFlags::kIsEnabled);
+  node.flags.isToggled = flutter::SemanticsTristate::kTrue;
+  node.flags.isEnabled = flutter::SemanticsTristate::kTrue;
   node.label = "foo";
   [object setSemanticsNode:&node];
   // Create ab real UISwitch to compare the FlutterSwitchSemanticsObject with.
@@ -854,8 +948,9 @@ const float kFloatCompareEpsilon = 0.001;
 
   // Set the toggled to false;
   flutter::SemanticsNode update;
-  update.flags = static_cast<int32_t>(flutter::SemanticsFlags::kHasToggledState) |
-                 static_cast<int32_t>(flutter::SemanticsFlags::kIsEnabled);
+  update.flags.isToggled = flutter::SemanticsTristate::kFalse;
+  update.flags.isEnabled = flutter::SemanticsTristate::kTrue;
+
   update.label = "foo";
   [object setSemanticsNode:&update];
 
@@ -873,10 +968,9 @@ const float kFloatCompareEpsilon = 0.001;
 
   // Handle initial setting of node with header.
   flutter::SemanticsNode node;
-  node.flags = static_cast<int32_t>(flutter::SemanticsFlags::kIsInMutuallyExclusiveGroup) |
-               static_cast<int32_t>(flutter::SemanticsFlags::kHasCheckedState) |
-               static_cast<int32_t>(flutter::SemanticsFlags::kHasEnabledState) |
-               static_cast<int32_t>(flutter::SemanticsFlags::kIsEnabled);
+  node.flags.isInMutuallyExclusiveGroup = true;
+  node.flags.isChecked = flutter::SemanticsCheckState::kFalse;
+  node.flags.isEnabled = flutter::SemanticsTristate::kTrue;
   node.label = "foo";
   [object setSemanticsNode:&node];
   XCTAssertTrue((object.accessibilityTraits & UIAccessibilityTraitButton) > 0);
@@ -892,8 +986,7 @@ const float kFloatCompareEpsilon = 0.001;
 
   // Handle initial setting of node with header.
   flutter::SemanticsNode node;
-  node.flags = static_cast<int32_t>(flutter::SemanticsFlags::kHasToggledState) |
-               static_cast<int32_t>(flutter::SemanticsFlags::kIsToggled);
+  node.flags.isToggled = flutter::SemanticsTristate::kTrue;
   node.label = "foo";
   [object setSemanticsNode:&node];
   // Create ab real UISwitch to compare the FlutterSwitchSemanticsObject with.
@@ -933,7 +1026,7 @@ const float kFloatCompareEpsilon = 0.001;
 
   flutter::SemanticsNode node;
   node.id = 1;
-  node.flags = static_cast<int32_t>(flutter::SemanticsFlags::kHasImplicitScrolling);
+  node.flags.hasImplicitScrolling = true;
   node.actions = flutter::kHorizontalScrollSemanticsActions;
   node.rect = SkRect::MakeXYWH(0, 0, 100, 200);
   node.label = "label";
@@ -1076,8 +1169,8 @@ const float kFloatCompareEpsilon = 0.001;
 
   flutter::SemanticsNode node;
   node.label = "foo";
-  node.flags = static_cast<int32_t>(flutter::SemanticsFlags::kIsTextField) |
-               static_cast<int32_t>(flutter::SemanticsFlags::kIsReadOnly);
+  node.flags.isTextField = true;
+  node.flags.isReadOnly = true;
   TextInputSemanticsObject* object = [[TextInputSemanticsObject alloc] initWithBridge:bridge uid:0];
   [object setSemanticsNode:&node];
   [object accessibilityBridgeDidFinishUpdate];
@@ -1091,8 +1184,8 @@ const float kFloatCompareEpsilon = 0.001;
 
   flutter::SemanticsNode node;
   node.label = "foo";
-  node.flags = static_cast<int32_t>(flutter::SemanticsFlags::kIsTextField) |
-               static_cast<int32_t>(flutter::SemanticsFlags::kIsReadOnly);
+  node.flags.isTextField = true;
+  node.flags.isReadOnly = true;
   TextInputSemanticsObject* object = [[TextInputSemanticsObject alloc] initWithBridge:bridge uid:0];
   [object setSemanticsNode:&node];
   [object accessibilityBridgeDidFinishUpdate];
@@ -1117,8 +1210,9 @@ const float kFloatCompareEpsilon = 0.001;
 
   flutter::SemanticsNode node;
   node.label = "foo";
-  node.flags = static_cast<int32_t>(flutter::SemanticsFlags::kIsTextField) |
-               static_cast<int32_t>(flutter::SemanticsFlags::kIsReadOnly);
+
+  node.flags.isTextField = true;
+  node.flags.isReadOnly = true;
   TextInputSemanticsObject* object = [[TextInputSemanticsObject alloc] initWithBridge:bridge uid:0];
   [object setSemanticsNode:&node];
   [object accessibilityBridgeDidFinishUpdate];
@@ -1169,7 +1263,7 @@ const float kFloatCompareEpsilon = 0.001;
   fml::WeakPtr<flutter::AccessibilityBridgeIos> bridge = factory.GetWeakPtr();
 
   flutter::SemanticsNode node;
-  node.flags = static_cast<int32_t>(flutter::SemanticsFlags::kIsSlider);
+  node.flags.isSlider = true;
   SemanticsObject* object = [[SemanticsObject alloc] initWithBridge:bridge uid:0];
   [object setSemanticsNode:&node];
   [object accessibilityBridgeDidFinishUpdate];
@@ -1190,11 +1284,11 @@ const float kFloatCompareEpsilon = 0.001;
 
   // canBecomeFocused
   flutter::SemanticsNode childNode;
-  childNode.flags = static_cast<int32_t>(flutter::SemanticsFlags::kIsHidden);
+  childNode.flags.isHidden = true;
   childNode.actions = static_cast<int32_t>(flutter::SemanticsAction::kTap);
   [child setSemanticsNode:&childNode];
   XCTAssertFalse(child.canBecomeFocused);
-  childNode.flags = 0;
+  childNode.flags = flutter::SemanticsFlags{};
   [child setSemanticsNode:&childNode];
   XCTAssertTrue(child.canBecomeFocused);
   childNode.actions = 0;
@@ -1270,7 +1364,7 @@ const float kFloatCompareEpsilon = 0.001;
 
   const SkScalar scrollPosition = p.y + 0.0000000000000001;
   flutter::SemanticsNode node;
-  node.flags = static_cast<int32_t>(flutter::SemanticsFlags::kHasImplicitScrolling);
+  node.flags.hasImplicitScrolling = true;
   node.actions = flutter::kVerticalScrollSemanticsActions;
   node.rect = SkRect::MakeXYWH(0, 0, 100, 200);
   node.scrollExtentMax = 10000;

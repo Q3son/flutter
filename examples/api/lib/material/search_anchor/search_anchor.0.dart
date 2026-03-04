@@ -28,7 +28,9 @@ class _SearchBarAppState extends State<SearchBarApp> {
           icon: const Icon(Icons.call_missed),
           onPressed: () {
             controller.text = color.label;
-            controller.selection = TextSelection.collapsed(offset: controller.text.length);
+            controller.selection = TextSelection.collapsed(
+              offset: controller.text.length,
+            );
           },
         ),
       ),
@@ -47,7 +49,9 @@ class _SearchBarAppState extends State<SearchBarApp> {
               icon: const Icon(Icons.call_missed),
               onPressed: () {
                 controller.text = filteredColor.label;
-                controller.selection = TextSelection.collapsed(offset: controller.text.length);
+                controller.selection = TextSelection.collapsed(
+                  offset: controller.text.length,
+                );
               },
             ),
             onTap: () {
@@ -70,7 +74,7 @@ class _SearchBarAppState extends State<SearchBarApp> {
 
   @override
   Widget build(BuildContext context) {
-    final ThemeData themeData = ThemeData(useMaterial3: true, colorSchemeSeed: selectedColorSeed);
+    final ThemeData themeData = ThemeData(colorSchemeSeed: selectedColorSeed);
     final ColorScheme colors = themeData.colorScheme;
 
     return MaterialApp(
@@ -83,19 +87,23 @@ class _SearchBarAppState extends State<SearchBarApp> {
             children: <Widget>[
               SearchAnchor.bar(
                 barHintText: 'Search colors',
-                suggestionsBuilder: (BuildContext context, SearchController controller) {
-                  if (controller.text.isEmpty) {
-                    if (searchHistory.isNotEmpty) {
-                      return getHistoryList(controller);
-                    }
-                    return <Widget>[
-                      Center(
-                        child: Text('No search history.', style: TextStyle(color: colors.outline)),
-                      ),
-                    ];
-                  }
-                  return getSuggestions(controller);
-                },
+                suggestionsBuilder:
+                    (BuildContext context, SearchController controller) {
+                      if (controller.text.isEmpty) {
+                        if (searchHistory.isNotEmpty) {
+                          return getHistoryList(controller);
+                        }
+                        return <Widget>[
+                          Center(
+                            child: Text(
+                              'No search history.',
+                              style: TextStyle(color: colors.outline),
+                            ),
+                          ),
+                        ];
+                      }
+                      return getSuggestions(controller);
+                    },
               ),
               cardSize,
               Card(color: colors.primary, child: cardSize),

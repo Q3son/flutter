@@ -67,8 +67,8 @@ class BottomAppBar extends StatefulWidget {
   /// The [clipBehavior] argument defaults to [Clip.none].
   /// Additionally, [elevation] must be non-negative.
   ///
-  /// If [color], [elevation], or [shape] are null, their [BottomAppBarTheme] values will be used.
-  /// If the corresponding [BottomAppBarTheme] property is null, then the default
+  /// If [color], [elevation], or [shape] are null, their [BottomAppBarThemeData] values will be used.
+  /// If the corresponding [BottomAppBarThemeData] property is null, then the default
   /// specified in the property's documentation will be used.
   const BottomAppBar({
     super.key,
@@ -100,9 +100,9 @@ class BottomAppBar extends StatefulWidget {
 
   /// The bottom app bar's background color.
   ///
-  /// If this property is null then [BottomAppBarTheme.color] of
-  /// [ThemeData.bottomAppBarTheme] is used. If that's null and [ThemeData.useMaterial3]
-  /// is true, the default value is [ColorScheme.surface]; if [ThemeData.useMaterial3]
+  /// If this property is null then the ambient [BottomAppBarThemeData.color]
+  /// is used. If that's null and [ThemeData.useMaterial3] is true,
+  /// the default value is [ColorScheme.surface]; if [ThemeData.useMaterial3]
   /// is false, then the default value is `Color(0xFF424242)` in dark theme and
   /// [Colors.white] in light theme.
   final Color? color;
@@ -113,16 +113,15 @@ class BottomAppBar extends StatefulWidget {
   /// This controls the size of the shadow below the bottom app bar. The
   /// value is non-negative.
   ///
-  /// If this property is null then [BottomAppBarTheme.elevation] of
-  /// [ThemeData.bottomAppBarTheme] is used. If that's null and
-  /// [ThemeData.useMaterial3] is true, than the default value is 3 else is 8.
+  /// If this property is null then the ambient [BottomAppBarThemeData.elevation]
+  /// is used. If that's null and [ThemeData.useMaterial3] is true,
+  /// then the default value is 3 else is 8.
   final double? elevation;
 
   /// The notch that is made for the floating action button.
   ///
-  /// If this property is null then [BottomAppBarTheme.shape] of
-  /// [ThemeData.bottomAppBarTheme] is used. If that's null then the shape will
-  /// be rectangular with no notch.
+  /// If this property is null then the ambient [BottomAppBarThemeData.shape]
+  /// is used. If that's null then the shape will be rectangular with no notch.
   final NotchedShape? shape;
 
   /// {@macro flutter.material.Material.clipBehavior}
@@ -143,9 +142,8 @@ class BottomAppBar extends StatefulWidget {
   /// which provide more flexibility. The intention is to eventually remove surface tint color from
   /// the framework.
   ///
-  /// If this property is null, then [BottomAppBarTheme.surfaceTintColor]
-  /// of [ThemeData.bottomAppBarTheme] is used. If that is also null, the default
-  /// value is [Colors.transparent].
+  /// If this property is null, then the ambient [BottomAppBarThemeData.surfaceTintColor]
+  /// is used. If that is also null, the default value is [Colors.transparent].
   ///
   /// Ignored if [ThemeData.useMaterial3] is false.
   ///
@@ -154,9 +152,9 @@ class BottomAppBar extends StatefulWidget {
 
   /// The color of the shadow below the app bar.
   ///
-  /// If this property is null, then [BottomAppBarTheme.shadowColor] of
-  /// [ThemeData.bottomAppBarTheme] is used. If that is also null, the default value
-  /// is fully opaque black for Material 2, and transparent for Material 3.
+  /// If this property is null, then the ambient [BottomAppBarThemeData.shadowColor]
+  /// is used. If that is also null, the default value is fully opaque black for
+  /// Material 2, and transparent for Material 3.
   ///
   /// See also:
   ///
@@ -188,30 +186,29 @@ class _BottomAppBarState extends State<BottomAppBar> {
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
     final bool isMaterial3 = theme.useMaterial3;
-    final BottomAppBarTheme babTheme = BottomAppBarTheme.of(context);
-    final BottomAppBarTheme defaults =
-        isMaterial3 ? _BottomAppBarDefaultsM3(context) : _BottomAppBarDefaultsM2(context);
+    final BottomAppBarThemeData babTheme = BottomAppBarTheme.of(context);
+    final BottomAppBarThemeData defaults = isMaterial3
+        ? _BottomAppBarDefaultsM3(context)
+        : _BottomAppBarDefaultsM2(context);
 
     final bool hasFab = Scaffold.of(context).hasFloatingActionButton;
     final NotchedShape? notchedShape = widget.shape ?? babTheme.shape ?? defaults.shape;
-    final CustomClipper<Path> clipper =
-        notchedShape != null && hasFab
-            ? _BottomAppBarClipper(
-              geometry: geometryListenable,
-              shape: notchedShape,
-              materialKey: materialKey,
-              notchMargin: widget.notchMargin,
-            )
-            : const ShapeBorderClipper(shape: RoundedRectangleBorder());
+    final CustomClipper<Path> clipper = notchedShape != null && hasFab
+        ? _BottomAppBarClipper(
+            geometry: geometryListenable,
+            shape: notchedShape,
+            materialKey: materialKey,
+            notchMargin: widget.notchMargin,
+          )
+        : const ShapeBorderClipper(shape: RoundedRectangleBorder());
     final double elevation = widget.elevation ?? babTheme.elevation ?? defaults.elevation!;
     final double? height = widget.height ?? babTheme.height ?? defaults.height;
     final Color color = widget.color ?? babTheme.color ?? defaults.color!;
     final Color surfaceTintColor =
         widget.surfaceTintColor ?? babTheme.surfaceTintColor ?? defaults.surfaceTintColor!;
-    final Color effectiveColor =
-        isMaterial3
-            ? ElevationOverlay.applySurfaceTint(color, surfaceTintColor, elevation)
-            : ElevationOverlay.applyOverlay(context, color, elevation);
+    final Color effectiveColor = isMaterial3
+        ? ElevationOverlay.applySurfaceTint(color, surfaceTintColor, elevation)
+        : ElevationOverlay.applyOverlay(context, color, elevation);
     final Color shadowColor = widget.shadowColor ?? babTheme.shadowColor ?? defaults.shadowColor!;
 
     final Widget child = SizedBox(
@@ -227,7 +224,7 @@ class _BottomAppBarState extends State<BottomAppBar> {
       ),
     );
 
-    final Material material = Material(
+    final material = Material(
       key: materialKey,
       type: MaterialType.transparency,
       child: SafeArea(child: child),
@@ -267,7 +264,7 @@ class _BottomAppBarClipper extends CustomClipper<Path> {
     if (bottomNavigationBarTop != null) {
       return bottomNavigationBarTop;
     }
-    final RenderBox? box = materialKey.currentContext?.findRenderObject() as RenderBox?;
+    final box = materialKey.currentContext?.findRenderObject() as RenderBox?;
     return box?.localToGlobal(Offset.zero).dy ?? 0;
   }
 
@@ -291,14 +288,14 @@ class _BottomAppBarClipper extends CustomClipper<Path> {
   }
 }
 
-class _BottomAppBarDefaultsM2 extends BottomAppBarTheme {
+class _BottomAppBarDefaultsM2 extends BottomAppBarThemeData {
   const _BottomAppBarDefaultsM2(this.context) : super(elevation: 8.0);
 
   final BuildContext context;
 
   @override
   Color? get color =>
-      Theme.of(context).brightness == Brightness.dark ? Colors.grey[800]! : Colors.white;
+      Theme.brightnessOf(context) == Brightness.dark ? Colors.grey[800]! : Colors.white;
 
   @override
   Color? get surfaceTintColor => Theme.of(context).colorScheme.surfaceTint;
@@ -315,7 +312,7 @@ class _BottomAppBarDefaultsM2 extends BottomAppBarTheme {
 //   dev/tools/gen_defaults/bin/gen_defaults.dart.
 
 // dart format off
-class _BottomAppBarDefaultsM3 extends BottomAppBarTheme {
+class _BottomAppBarDefaultsM3 extends BottomAppBarThemeData {
   _BottomAppBarDefaultsM3(this.context)
     : super(
       elevation: 3.0,

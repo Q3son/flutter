@@ -9,6 +9,7 @@
 #include <gdk/gdkx.h>
 #endif
 
+#include "flutter/shell/platform/linux/fl_engine_private.h"
 #include "flutter/shell/platform/linux/public/flutter_linux/fl_dart_project.h"
 #include "flutter/shell/platform/linux/public/flutter_linux/fl_plugin_registry.h"
 #include "flutter/shell/platform/linux/public/flutter_linux/fl_view.h"

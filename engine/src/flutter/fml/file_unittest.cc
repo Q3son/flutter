@@ -36,7 +36,7 @@ static std::string ReadStringFromFile(const fml::UniqueFD& fd) {
   fml::FileMapping mapping(fd);
 
   if (mapping.GetMapping() == nullptr) {
-    return nullptr;
+    return {};
   }
 
   return {reinterpret_cast<const char*>(mapping.GetMapping()),
@@ -343,7 +343,7 @@ TEST(FileTest, FileTestsWork) {
 TEST(FileTest, FileTestsSupportsUnicode) {
   fml::ScopedTemporaryDirectory dir;
   ASSERT_TRUE(dir.fd().is_valid());
-  const char* filename = u8"äëïöüテスト☃";
+  const auto* filename = reinterpret_cast<const char*>(u8"äëïöüテスト☃");
   auto fd =
       fml::OpenFile(dir.fd(), filename, true, fml::FilePermission::kWrite);
   ASSERT_TRUE(fd.is_valid());

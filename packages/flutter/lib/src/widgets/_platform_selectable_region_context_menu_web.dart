@@ -17,7 +17,8 @@ const String _viewType = 'Browser__WebContextMenuViewType__';
 const String _kClassName = 'web-selectable-region-context-menu';
 // These css rules hides the dom element with the class name.
 const String _kClassSelectionRule = '.$_kClassName::selection { background: transparent; }';
-const String _kClassRule = '''
+const String _kClassRule =
+    '''
 .$_kClassName {
   color: transparent;
   user-select: text;
@@ -75,6 +76,12 @@ class PlatformSelectableRegionContextMenu extends StatelessWidget {
   @visibleForTesting
   static RegisterViewFactory? debugOverrideRegisterViewFactory;
 
+  /// Resets the view factory registration to its initial state.
+  @visibleForTesting
+  static void debugResetRegistry() {
+    _registeredViewType = null;
+  }
+
   // Registers the view factories for the interceptor widgets.
   static void _register() {
     assert(_registeredViewType == null);
@@ -85,7 +92,7 @@ class PlatformSelectableRegionContextMenu extends StatelessWidget {
       final SelectionContainerDelegate? client = _activeClient;
       if (client != null) {
         // Converts the html right click event to flutter coordinate.
-        final Offset localOffset = Offset(event.offsetX.toDouble(), event.offsetY.toDouble());
+        final localOffset = Offset(event.offsetX.toDouble(), event.offsetY.toDouble());
         final Matrix4 transform = client.getTransformTo(null);
         final Offset globalOffset = MatrixUtils.transformPoint(transform, localOffset);
         client.dispatchSelectionEvent(SelectWordSelectionEvent(globalPosition: globalOffset));
@@ -104,25 +111,25 @@ class PlatformSelectableRegionContextMenu extends StatelessWidget {
   }
 
   static String _registerWebSelectionCallback(_WebSelectionCallBack callback) {
-    _registerViewFactory(_viewType, (int viewId) {
-      final web.HTMLElement htmlElement = web.document.createElement('div') as web.HTMLElement;
+    // Create css style for _kClassName.
+    final styleElement = web.document.createElement('style') as web.HTMLStyleElement;
+    web.document.head!.append(styleElement as JSAny);
+    final web.CSSStyleSheet sheet = styleElement.sheet!;
+    sheet.insertRule(_kClassRule, 0);
+    sheet.insertRule(_kClassSelectionRule, 1);
+
+    _registerViewFactory(_viewType, (int viewId, {Object? params}) {
+      final htmlElement = web.document.createElement('div') as web.HTMLElement;
       htmlElement
         ..style.width = '100%'
         ..style.height = '100%'
         ..classList.add(_kClassName);
 
-      // Create css style for _kClassName.
-      final web.HTMLStyleElement styleElement =
-          web.document.createElement('style') as web.HTMLStyleElement;
-      web.document.head!.append(styleElement as JSAny);
-      final web.CSSStyleSheet sheet = styleElement.sheet!;
-      sheet.insertRule(_kClassRule, 0);
-      sheet.insertRule(_kClassSelectionRule, 1);
-
       htmlElement.addEventListener(
         'mousedown',
         (web.Event event) {
-          final web.MouseEvent mouseEvent = event as web.MouseEvent;
+          final mouseEvent = event as web.MouseEvent;
+          mouseEvent.preventDefault();
           if (mouseEvent.button != _kRightClickButton) {
             return;
           }
@@ -137,7 +144,10 @@ class PlatformSelectableRegionContextMenu extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Stack(
-      children: <Widget>[const Positioned.fill(child: HtmlElementView(viewType: _viewType)), child],
+      children: <Widget>[
+        const Positioned.fill(child: HtmlElementView(viewType: _viewType)),
+        child,
+      ],
     );
   }
 }

@@ -8,11 +8,12 @@ import 'package:flutter_tools/src/reporting/unified_analytics.dart';
 import 'package:unified_analytics/unified_analytics.dart';
 
 import '../src/common.dart';
+import '../src/context.dart';
 import '../src/fakes.dart';
 
 void main() {
-  const String userBranch = 'abc123';
-  const String clientIde = 'VSCode';
+  const userBranch = 'abc123';
+  const clientIde = 'VSCode';
 
   late MemoryFileSystem fs;
   late Config config;
@@ -30,21 +31,17 @@ void main() {
   });
 
   group('Unit testing util:', () {
-    test('getEnabledFeatures is null', () {
+    testUsingContext('getEnabledFeatures is null', () {
       final String? enabledFeatures = getEnabledFeatures(config);
       expect(enabledFeatures, isNull);
     });
 
-    testWithoutContext('getEnabledFeatures not null', () {
+    testUsingContext('getEnabledFeatures not null', () {
       config.setValue('cli-animations', true);
-      config.setValue('enable-flutter-preview', true);
 
       final String? enabledFeatures = getEnabledFeatures(config);
       expect(enabledFeatures, isNotNull);
-      expect(
-        enabledFeatures!.split(','),
-        unorderedEquals(<String>['enable-flutter-preview', 'cli-animations']),
-      );
+      expect(enabledFeatures!.split(','), unorderedEquals(<String>['cli-animations']));
     });
   });
 

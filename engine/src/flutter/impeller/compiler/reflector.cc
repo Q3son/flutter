@@ -7,6 +7,7 @@
 #include "impeller/compiler/reflector.h"
 
 #include <atomic>
+#include <format>
 #include <optional>
 #include <set>
 #include <sstream>
@@ -189,6 +190,20 @@ std::optional<nlohmann::json> Reflector::GenerateTemplateArguments() const {
       for (auto uniform_buffer : storage_buffers_json.value()) {
         uniform_buffer["descriptor_type"] = "DescriptorType::kStorageBuffer";
         buffers.emplace_back(std::move(uniform_buffer));
+      }
+    } else {
+      return std::nullopt;
+    }
+  }
+
+  {
+    auto& uniforms = root["uniforms"] = nlohmann::json::array_t{};
+    if (auto uniforms_json =
+            ReflectResources(shader_resources.gl_plain_uniforms);
+        uniforms_json.has_value()) {
+      for (auto uniform : uniforms_json.value()) {
+        uniform["descriptor_type"] = "DescriptorType::kUniform";
+        uniforms.emplace_back(std::move(uniform));
       }
     } else {
       return std::nullopt;
@@ -827,13 +842,13 @@ std::vector<StructMember> Reflector::ReadStructMembers(
       result.emplace_back(StructMember{
           TypeNameWithPaddingOfSize(alignment_pad),  // type
           spirv_cross::SPIRType::BaseType::Void,     // basetype
-          SPrintF("_PADDING_%s_",
-                  GetMemberNameAtIndex(struct_type, i).c_str()),  // name
-          current_byte_offset,                                    // offset
-          alignment_pad,                                          // size
-          alignment_pad,                                          // byte_length
-          std::nullopt,  // array_elements
-          0,             // element_padding
+          std::format("_PADDING_{}_",
+                      GetMemberNameAtIndex(struct_type, i)),  // name
+          current_byte_offset,                                // offset
+          alignment_pad,                                      // size
+          alignment_pad,                                      // byte_length
+          std::nullopt,                                       // array_elements
+          0,                                                  // element_padding
       });
       current_byte_offset += alignment_pad;
     }

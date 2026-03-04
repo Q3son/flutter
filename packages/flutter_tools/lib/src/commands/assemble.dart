@@ -24,11 +24,10 @@ import '../cache.dart';
 import '../convert.dart';
 import '../globals.dart' as globals;
 import '../project.dart';
-import '../reporting/reporting.dart';
 import '../runner/flutter_command.dart';
 
 /// All currently implemented targets.
-List<Target> _kDefaultTargets = <Target>[
+var _kDefaultTargets = <Target>[
   // Shared targets
   const CopyAssets(),
   const KernelSnapshot(),
@@ -93,13 +92,22 @@ List<Target> _kDefaultTargets = <Target>[
 /// system.
 class AssembleCommand extends FlutterCommand {
   AssembleCommand({bool verboseHelp = false, required BuildSystem buildSystem})
-    : _buildSystem = buildSystem {
+    : _verboseHelp = verboseHelp,
+      _buildSystem = buildSystem {
     argParser.addMultiOption(
       'define',
       abbr: 'd',
       valueHelp: 'target=key=value',
-      help: 'Allows passing configuration to a target, as in "--define=target=key=value".',
+      hide: !verboseHelp,
+      help:
+          'DEPRECATED. Use "--dart-define" or "-D" instead for consistency.\n'
+          '\n'
+          'Allows passing configuration to a target, as in "--define=target=key=value".',
     );
+
+    // New -D/--dart-define (consistent across app)
+    usesDartDefineOption();
+
     argParser.addOption(
       'performance-measurement-file',
       help: 'Output individual target performance to a JSON file.',
@@ -143,12 +151,16 @@ class AssembleCommand extends FlutterCommand {
           'root of the current Flutter project.',
     );
     usesExtraDartFlagOptions(verboseHelp: verboseHelp);
-    usesDartDefineOption();
     argParser.addOption(
       'resource-pool-size',
       help: 'The maximum number of concurrent tasks the build system will run.',
     );
   }
+
+  final bool _verboseHelp;
+
+  @override
+  bool get hidden => !_verboseHelp;
 
   final BuildSystem _buildSystem;
 
@@ -162,12 +174,6 @@ class AssembleCommand extends FlutterCommand {
 
   @override
   String get category => FlutterCommandCategory.project;
-
-  @override
-  Future<CustomDimensions> get usageValues async => CustomDimensions(
-    commandBuildBundleTargetPlatform: _environment.defines[kTargetPlatform],
-    commandBuildBundleIsModule: _flutterProject.isModule,
-  );
 
   @override
   Future<Event> unifiedAnalyticsUsageValues(String commandPath) async => Event.commandUsageValues(
@@ -199,10 +205,10 @@ class AssembleCommand extends FlutterCommand {
       throwToolExit('missing target name for flutter assemble.');
     }
     final String name = argumentResults.rest.first;
-    final Map<String, Target> targetMap = <String, Target>{
+    final targetMap = <String, Target>{
       for (final Target target in _kDefaultTargets) target.name: target,
     };
-    final List<Target> results = <Target>[
+    final results = <Target>[
       for (final String targetName in argumentResults.rest)
         if (targetMap.containsKey(targetName)) targetMap[targetName]!,
     ];
@@ -243,14 +249,27 @@ class AssembleCommand extends FlutterCommand {
       output = globals.fs.path.join(_flutterProject.directory.path, output);
     }
     final Artifacts artifacts = globals.artifacts!;
-    final Environment result = Environment(
+
+    List<String> decodedDefines;
+    try {
+      decodedDefines = decodeDartDefines({
+        'dart-define': stringsArg('dart-define').join(','),
+      }, 'dart-define');
+    } on FormatException {
+      throwToolExit(
+        'Error parsing assemble command: your generated configuration may be out of date. '
+        "Try re-running 'flutter build ios' or the appropriate build command.",
+      );
+    }
+
+    return Environment(
       outputDir: globals.fs.directory(output),
       buildDir: _flutterProject.directory
           .childDirectory('.dart_tool')
           .childDirectory('flutter_build'),
       projectDir: _flutterProject.directory,
       packageConfigPath: packageConfigPath(),
-      defines: _parseDefines(stringsArg('define')),
+      defines: _parseDefines([...stringsArg('define'), ...decodedDefines]),
       inputs: _parseDefines(stringsArg('input')),
       cacheDir: globals.cache.getRoot(),
       flutterRootDir: globals.fs.directory(Cache.flutterRoot),
@@ -258,18 +277,19 @@ class AssembleCommand extends FlutterCommand {
       fileSystem: globals.fs,
       logger: globals.logger,
       processManager: globals.processManager,
-      usage: globals.flutterUsage,
       analytics: globals.analytics,
       platform: globals.platform,
       engineVersion: artifacts.usesLocalArtifacts ? null : globals.flutterVersion.engineRevision,
       generateDartPluginRegistry: true,
     );
-    return result;
   }
 
   Map<String, String> _parseDefines(List<String> values) {
-    final Map<String, String> results = <String, String>{};
-    for (final String chunk in values) {
+    final results = <String, String>{};
+    for (final chunk in values) {
+      if (chunk.isEmpty) {
+        continue;
+      }
       final int indexEquals = chunk.indexOf('=');
       if (indexEquals == -1) {
         throwToolExit('Improperly formatted define flag: $chunk');
@@ -306,9 +326,9 @@ class AssembleCommand extends FlutterCommand {
   @override
   Future<FlutterCommandResult> runCommand() async {
     final List<Target> targets = createTargets();
-    final List<Target> nonDeferredTargets = <Target>[];
+    final nonDeferredTargets = <Target>[];
     final List<Target> deferredTargets = <AndroidAotDeferredComponentsBundle>[];
-    for (final Target target in targets) {
+    for (final target in targets) {
       if (deferredComponentsTargets.contains(target.name)) {
         deferredTargets.add(target);
       } else {
@@ -316,15 +336,6 @@ class AssembleCommand extends FlutterCommand {
       }
     }
     Target? target;
-    List<String> decodedDefines;
-    try {
-      decodedDefines = decodeDartDefines(_environment.defines, kDartDefines);
-    } on FormatException {
-      throwToolExit(
-        'Error parsing assemble command: your generated configuration may be out of date. '
-        "Try re-running 'flutter build ios' or the appropriate build command.",
-      );
-    }
     if (deferredTargets.isNotEmpty) {
       // Record to analytics that DeferredComponents is being used.
       globals.analytics.send(
@@ -336,7 +347,7 @@ class AssembleCommand extends FlutterCommand {
       );
     }
     if (_flutterProject.manifest.deferredComponents != null &&
-        decodedDefines.contains('validate-deferred-components=true') &&
+        _environment.defines['validate-deferred-components'] == 'true' &&
         deferredTargets.isNotEmpty &&
         !isDebug()) {
       // Add deferred components validation target that require loading units.
@@ -355,10 +366,9 @@ class AssembleCommand extends FlutterCommand {
       target!,
       _environment,
       buildSystemConfig: BuildSystemConfig(
-        resourcePoolSize:
-            argumentResults.wasParsed('resource-pool-size')
-                ? int.tryParse(stringArg('resource-pool-size')!)
-                : null,
+        resourcePoolSize: argumentResults.wasParsed('resource-pool-size')
+            ? int.tryParse(stringArg('resource-pool-size')!)
+            : null,
       ),
     );
     if (!result.success) {
@@ -386,7 +396,7 @@ class AssembleCommand extends FlutterCommand {
     }
     if (argumentResults.wasParsed('depfile')) {
       final File depfileFile = globals.fs.file(stringArg('depfile'));
-      final Depfile depfile = Depfile(result.inputFiles, result.outputFiles);
+      final depfile = Depfile(result.inputFiles, result.outputFiles);
       _environment.depFileService.writeToFile(depfile, globals.fs.file(depfileFile));
     }
     return FlutterCommandResult.success();
@@ -396,12 +406,12 @@ class AssembleCommand extends FlutterCommand {
 @visibleForTesting
 void writeListIfChanged(List<File> files, String path) {
   final File file = globals.fs.file(path);
-  final StringBuffer buffer = StringBuffer();
+  final buffer = StringBuffer();
   // These files are already sorted.
-  for (final File file in files) {
+  for (final file in files) {
     buffer.writeln(file.path);
   }
-  final String newContents = buffer.toString();
+  final newContents = buffer.toString();
   if (!file.existsSync()) {
     file.writeAsStringSync(newContents);
   }
@@ -414,7 +424,7 @@ void writeListIfChanged(List<File> files, String path) {
 /// Output performance measurement data in [outFile].
 @visibleForTesting
 void writePerformanceData(Iterable<PerformanceMeasurement> measurements, File outFile) {
-  final Map<String, Object> jsonData = <String, Object>{
+  final jsonData = <String, Object>{
     'targets': <Object>[
       for (final PerformanceMeasurement measurement in measurements)
         <String, Object>{

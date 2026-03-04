@@ -37,13 +37,16 @@ G_DECLARE_FINAL_TYPE(FlViewAccessible,
 
 /**
  * fl_view_accessible_new:
+ * @engine: the #FlEngine.
+ * @view_id: the Flutter view id.
  *
  * Creates a new accessibility object that exposes Flutter accessibility
  * information to ATK.
  *
  * Returns: a new #FlViewAccessible.
  */
-FlViewAccessible* fl_view_accessible_new(FlEngine* engine);
+FlViewAccessible* fl_view_accessible_new(FlEngine* engine,
+                                         FlutterViewId view_id);
 
 /**
  * fl_view_accessible_handle_update_semantics:
@@ -55,6 +58,18 @@ FlViewAccessible* fl_view_accessible_new(FlEngine* engine);
 void fl_view_accessible_handle_update_semantics(
     FlViewAccessible* accessible,
     const FlutterSemanticsUpdate2* update);
+
+/**
+ * fl_view_accessible_send_announcement:
+ * @accessible: an #FlViewAccessible.
+ * @message: text to be announced.
+ * @assertive: %TRUE if the message should be in an assertive voice.
+ *
+ * Sends an annoucement to a screen reader.
+ */
+void fl_view_accessible_send_announcement(FlViewAccessible* accessible,
+                                          const char* message,
+                                          gboolean assertive);
 
 G_END_DECLS
 

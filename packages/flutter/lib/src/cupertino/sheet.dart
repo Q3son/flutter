@@ -11,13 +11,38 @@ import 'interface_level.dart';
 import 'route.dart';
 import 'theme.dart';
 
+// Smoothing factor applied to the device's top padding (which approximates the corner radius)
+// to achieve a smoother end to the corner radius animation.  A value of 1.0 would use
+// the full top padding. Values less than 1.0 reduce the effective corner radius, improving
+// the animation's appearance.  Determined through empirical testing.
+const double _kDeviceCornerRadiusSmoothingFactor = 0.9;
+
+// Threshold in logical pixels. If the calculated device corner radius (after applying
+// the smoothing factor) is below this value, the corner radius transition animation will
+// start from zero. This prevents abrupt transitions for devices with small or negligible
+// corner radii.  This value, combined with the smoothing factor, corresponds roughly
+// to double the targeted radius of 12.  Determined through testing and visual inspection.
+const double _kRoundedDeviceCornersThreshold = 20.0;
+
+// The distance from the top of the open sheet to the top of the screen, as a ratio
+// of the total height of the screen. Found from eyeballing a simulator running
+// iOS 18.0.
+const double _kTopGapRatio = 0.08;
+
+// The minimum distance (i.e., maximum upward stretch) from the top of the sheet
+// to the top of the screen, as a ratio of total screen height. This value represents
+// how far the sheet can be temporarily pulled upward before snapping back.
+// Determined through visual tuning to feel natural on <iPhone16, iPhone 16 Pro>
+// running iOS 18.0 simulators.
+const double _kStretchedTopGapRatio = 0.072;
+
 // Tween for animating a Cupertino sheet onto the screen.
 //
 // Begins fully offscreen below the screen and ends onscreen with a small gap at
 // the top of the screen. Values found from eyeballing a simulator running iOS 18.0.
 final Animatable<Offset> _kBottomUpTween = Tween<Offset>(
   begin: const Offset(0.0, 1.0),
-  end: const Offset(0.0, 0.08),
+  end: Offset.zero,
 );
 
 // Offset change for when a new sheet covers another sheet. '0.0' represents the
@@ -67,6 +92,8 @@ final Animatable<double> _kScaleTween = Tween<double>(begin: 1.0, end: 1.0 - _kS
 /// Shows a Cupertino-style sheet widget that slides up from the bottom of the
 /// screen and stacks the previous route behind the new sheet.
 ///
+/// {@youtube 560 315 https://www.youtube.com/watch?v=5H-WvH5O29I}
+///
 /// This is a convenience method for displaying [CupertinoSheetRoute] for common,
 /// straightforward use cases. The Widget returned from `pageBuilder` will be
 /// used to display the content on the [CupertinoSheetRoute].
@@ -76,7 +103,7 @@ final Animatable<double> _kScaleTween = Tween<double>(begin: 1.0, end: 1.0 - _kS
 ///
 /// When `useNestedNavigation` is set to `true`, any route pushed to the stack
 /// from within the context of the [CupertinoSheetRoute] will display within that
-/// sheet. System back gestures and programatic pops on the initial route in a
+/// sheet. System back gestures and programmatic pops on the initial route in a
 /// sheet will also be intercepted to pop the whole [CupertinoSheetRoute]. If
 /// a custom [Navigator] setup is needed, like for example to enable named routes
 /// or the pages API, then it is recommended to directly push a [CupertinoSheetRoute]
@@ -85,6 +112,20 @@ final Animatable<double> _kScaleTween = Tween<double>(begin: 1.0, end: 1.0 - _kS
 ///
 /// The whole sheet can be popped at once by either dragging down on the sheet,
 /// or calling [CupertinoSheetRoute.popSheet].
+///
+/// When `enableDrag` is set to `true` (the default), users can dismiss the sheet
+/// by dragging it down or by calling [CupertinoSheetRoute.popSheet]. When
+/// `enableDrag` is `false`, users cannot dismiss the sheet by dragging, and it
+/// can only be closed by calling [CupertinoSheetRoute.popSheet].
+///
+/// The `topGap` parameter can be used to customize the gap between the top of
+/// the screen and the top of the sheet as a ratio of the screen height.
+/// It should be a value between 0.0 and 0.9, where 0.0 means no gap and 0.9
+/// means the sheet takes up only the bottom 10% of the screen. If not provided, defaults
+/// to 0.08 (8% of screen height).
+///
+/// When `showDragHandle` is set to `true`, then a drag handle will be placed at
+/// the top of the sheet. This flag will default to false.
 ///
 /// iOS sheet widgets are generally designed to be tightly coupled to the context
 /// of the widget that opened the sheet. As such, it is not recommended to push
@@ -115,15 +156,27 @@ final Animatable<double> _kScaleTween = Tween<double>(begin: 1.0, end: 1.0 - _kS
 ///  * <https://developer.apple.com/design/human-interface-guidelines/sheets>
 Future<T?> showCupertinoSheet<T>({
   required BuildContext context,
-  required WidgetBuilder pageBuilder,
+  @Deprecated(
+    'Use builder instead. '
+    'This feature was deprecated after v3.33.0-0.2.pre.',
+  )
+  WidgetBuilder? pageBuilder,
+  WidgetBuilder? builder,
   bool useNestedNavigation = false,
+  bool enableDrag = true,
+  double? topGap,
+  bool showDragHandle = false,
 }) {
-  final WidgetBuilder builder;
-  final GlobalKey<NavigatorState> nestedNavigatorKey = GlobalKey<NavigatorState>();
+  assert(topGap == null || (topGap >= 0.0 && topGap <= 0.9), 'topGap must be between 0.0 and 0.9');
+  assert(pageBuilder != null || builder != null);
+
+  final WidgetBuilder? effectivePageBuilder = builder ?? pageBuilder;
+  final WidgetBuilder widgetBuilder;
+  final nestedNavigatorKey = GlobalKey<NavigatorState>();
   if (!useNestedNavigation) {
-    builder = pageBuilder;
+    widgetBuilder = effectivePageBuilder!;
   } else {
-    builder = (BuildContext context) {
+    widgetBuilder = (BuildContext context) {
       return NavigatorPopHandler(
         onPopWithResult: (T? result) {
           nestedNavigatorKey.currentState!.maybePop();
@@ -143,7 +196,7 @@ Future<T?> showCupertinoSheet<T>({
                       }
                       Navigator.of(context, rootNavigator: true).pop(result);
                     },
-                    child: pageBuilder(context),
+                    child: effectivePageBuilder!(context),
                   );
                 },
               ),
@@ -154,10 +207,14 @@ Future<T?> showCupertinoSheet<T>({
     };
   }
 
-  return Navigator.of(
-    context,
-    rootNavigator: true,
-  ).push<T>(CupertinoSheetRoute<T>(builder: builder));
+  return Navigator.of(context, rootNavigator: true).push<T>(
+    CupertinoSheetRoute<T>(
+      builder: widgetBuilder,
+      enableDrag: enableDrag,
+      showDragHandle: showDragHandle,
+      topGap: topGap,
+    ),
+  );
 }
 
 /// Provides an iOS-style sheet transition.
@@ -173,6 +230,7 @@ class CupertinoSheetTransition extends StatefulWidget {
     required this.secondaryRouteAnimation,
     required this.child,
     required this.linearTransition,
+    this.topGap = _kTopGapRatio,
   });
 
   /// `primaryRouteAnimation` is a linear route animation from 0.0 to 1.0 when
@@ -190,6 +248,18 @@ class CupertinoSheetTransition extends StatefulWidget {
   ///
   /// Used to respond to a drag gesture.
   final bool linearTransition;
+
+  /// The gap between the top of the screen and the top of the sheet as a ratio
+  /// of the screen height.
+  ///
+  ///{@template flutter.cupertino.CupertinoSheetTransition.topGap}
+  /// This value should be between 0.0 and 0.9, where 0.0 means no gap (sheet
+  /// extends to the top of the screen) and 0.9 means the sheet covers only the
+  /// bottom 10% of the screen. A value of 0.08 represents 8% of the screen height.
+  ///
+  /// If not provided, defaults to a value of 0.08.
+  /// {@endtemplate}
+  final double topGap;
 
   /// The primary delegated transition. Will slide a non [CupertinoSheetRoute] page down.
   ///
@@ -211,15 +281,20 @@ class CupertinoSheetTransition extends StatefulWidget {
 
     final Curve curve = linear ? Curves.linear : Curves.linearToEaseOut;
     final Curve reverseCurve = linear ? Curves.linear : Curves.easeInToLinear;
-    final CurvedAnimation curvedAnimation = CurvedAnimation(
+    final curvedAnimation = CurvedAnimation(
       curve: curve,
       reverseCurve: reverseCurve,
       parent: secondaryAnimation,
     );
-    final double deviceCornerRadius = MediaQuery.maybeViewPaddingOf(context)?.top ?? 0;
+
+    final double deviceCornerRadius =
+        (MediaQuery.maybeViewPaddingOf(context)?.top ?? 0) * _kDeviceCornerRadiusSmoothingFactor;
+    final bool roundedDeviceCorners = deviceCornerRadius > _kRoundedDeviceCornersThreshold;
 
     final Animatable<BorderRadiusGeometry> decorationTween = Tween<BorderRadiusGeometry>(
-      begin: BorderRadius.circular(deviceCornerRadius),
+      begin: BorderRadius.vertical(
+        top: Radius.circular(roundedDeviceCorners ? deviceCornerRadius : 0),
+      ),
       end: BorderRadius.circular(12),
     );
 
@@ -229,38 +304,53 @@ class CupertinoSheetTransition extends StatefulWidget {
     final Animation<double> scaleAnimation = curvedAnimation.drive(_kScaleTween);
     curvedAnimation.dispose();
 
-    SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle.light);
+    final isDarkMode = CupertinoTheme.brightnessOf(context) == Brightness.dark;
+    final overlayColor = isDarkMode ? const Color(0xFFc8c8c8) : const Color(0xFF000000);
 
-    final bool isDarkMode = CupertinoTheme.brightnessOf(context) == Brightness.dark;
-    final Color overlayColor = isDarkMode ? const Color(0xFFc8c8c8) : const Color(0xFF000000);
+    final Widget? contrastedChild = child != null && !secondaryAnimation.isDismissed
+        ? Stack(
+            children: <Widget>[
+              child,
+              FadeTransition(
+                opacity: opacityAnimation,
+                child: ColoredBox(color: overlayColor, child: const SizedBox.expand()),
+              ),
+            ],
+          )
+        : child;
 
-    final Widget? contrastedChild =
-        child != null && !secondaryAnimation.isDismissed
-            ? Stack(
-              children: <Widget>[
-                child,
-                FadeTransition(
-                  opacity: opacityAnimation,
-                  child: ColoredBox(color: overlayColor, child: const SizedBox.expand()),
-                ),
-              ],
-            )
-            : child;
+    final double topGapHeight = MediaQuery.sizeOf(context).height * _kTopGapRatio;
 
-    return SlideTransition(
-      position: slideAnimation,
-      child: ScaleTransition(
-        scale: scaleAnimation,
-        filterQuality: FilterQuality.medium,
-        alignment: Alignment.topCenter,
-        child: AnimatedBuilder(
-          animation: radiusAnimation,
-          child: child,
-          builder: (BuildContext context, Widget? child) {
-            return ClipRRect(borderRadius: radiusAnimation.value, child: contrastedChild);
-          },
+    return Stack(
+      children: <Widget>[
+        AnnotatedRegion<SystemUiOverlayStyle>(
+          value: const SystemUiOverlayStyle(
+            statusBarBrightness: Brightness.dark,
+            statusBarIconBrightness: Brightness.light,
+          ),
+          child: SizedBox(height: topGapHeight, width: double.infinity),
         ),
-      ),
+        SlideTransition(
+          position: slideAnimation,
+          child: ScaleTransition(
+            scale: scaleAnimation,
+            filterQuality: FilterQuality.medium,
+            alignment: Alignment.topCenter,
+            child: AnimatedBuilder(
+              animation: radiusAnimation,
+              child: child,
+              builder: (BuildContext context, Widget? child) {
+                return ClipRSuperellipse(
+                  borderRadius: !secondaryAnimation.isDismissed
+                      ? radiusAnimation.value
+                      : BorderRadius.circular(0),
+                  child: contrastedChild,
+                );
+              },
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -270,7 +360,7 @@ class CupertinoSheetTransition extends StatefulWidget {
   ) {
     const Curve curve = Curves.linearToEaseOut;
     const Curve reverseCurve = Curves.easeInToLinear;
-    final CurvedAnimation curvedAnimation = CurvedAnimation(
+    final curvedAnimation = CurvedAnimation(
       curve: curve,
       reverseCurve: reverseCurve,
       parent: secondaryAnimation,
@@ -287,7 +377,7 @@ class CupertinoSheetTransition extends StatefulWidget {
         scale: scaleAnimation,
         filterQuality: FilterQuality.medium,
         alignment: Alignment.topCenter,
-        child: ClipRRect(
+        child: ClipRSuperellipse(
           borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
           child: child,
         ),
@@ -299,7 +389,14 @@ class CupertinoSheetTransition extends StatefulWidget {
   State<CupertinoSheetTransition> createState() => _CupertinoSheetTransitionState();
 }
 
-class _CupertinoSheetTransitionState extends State<CupertinoSheetTransition> {
+class _CupertinoSheetTransitionState extends State<CupertinoSheetTransition>
+    with SingleTickerProviderStateMixin {
+  // Controls the top padding animation when the sheet is being slightly stretched upward.
+  late AnimationController _stretchDragController;
+
+  // Animates the top padding of the sheet based on the _stretchDragController’s value.
+  late Animation<double> _stretchDragAnimation;
+
   // The offset animation when this page is being covered by another sheet.
   late Animation<Offset> _secondaryPositionAnimation;
 
@@ -315,6 +412,11 @@ class _CupertinoSheetTransitionState extends State<CupertinoSheetTransition> {
   @override
   void initState() {
     super.initState();
+
+    _stretchDragController = AnimationController(
+      duration: const Duration(microseconds: 1),
+      vsync: this,
+    );
     _setupAnimation();
   }
 
@@ -331,6 +433,7 @@ class _CupertinoSheetTransitionState extends State<CupertinoSheetTransition> {
   @override
   void dispose() {
     _disposeCurve();
+    _stretchDragController.dispose();
     super.dispose();
   }
 
@@ -344,6 +447,12 @@ class _CupertinoSheetTransitionState extends State<CupertinoSheetTransition> {
       curve: Curves.linearToEaseOut,
       reverseCurve: Curves.easeInToLinear,
       parent: widget.secondaryRouteAnimation,
+    );
+    // Maintain the same stretch distance (0.008 of screen height) regardless of custom topGap.
+    const double stretchDistance = _kTopGapRatio - _kStretchedTopGapRatio;
+    final double stretchedTopGap = widget.topGap - stretchDistance;
+    _stretchDragAnimation = _stretchDragController.drive(
+      Tween<double>(begin: widget.topGap, end: stretchedTopGap),
     );
     _secondaryPositionAnimation = _secondaryPositionCurve!.drive(_kMidUpTween);
     _secondaryScaleAnimation = _secondaryPositionCurve!.drive(_kScaleTween);
@@ -362,12 +471,11 @@ class _CupertinoSheetTransitionState extends State<CupertinoSheetTransition> {
     bool linearTransition,
     Widget? child,
   ) {
-    final Animatable<Offset> offsetTween =
-        CupertinoSheetRoute.hasParentSheet(context)
-            ? _kBottomUpTweenWhenCoveringOtherSheet
-            : _kBottomUpTween;
+    final Animatable<Offset> offsetTween = CupertinoSheetRoute.hasParentSheet(context)
+        ? _kBottomUpTweenWhenCoveringOtherSheet
+        : _kBottomUpTween;
 
-    final CurvedAnimation curvedAnimation = CurvedAnimation(
+    final curvedAnimation = CurvedAnimation(
       parent: animation,
       curve: linearTransition ? Curves.linear : Curves.fastEaseInToSlowEaseOut,
       reverseCurve: linearTransition ? Curves.linear : Curves.fastEaseInToSlowEaseOut.flipped,
@@ -388,34 +496,59 @@ class _CupertinoSheetTransitionState extends State<CupertinoSheetTransition> {
         scale: _secondaryScaleAnimation,
         filterQuality: FilterQuality.medium,
         alignment: Alignment.topCenter,
-        child: ClipRRect(
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
-          child: child,
-        ),
+        child: child,
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox.expand(
-      child: _coverSheetSecondaryTransition(
-        widget.secondaryRouteAnimation,
-        _coverSheetPrimaryTransition(
-          context,
-          widget.primaryRouteAnimation,
-          widget.linearTransition,
-          ClipRRect(
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
-            child: widget.child,
-          ),
+    return _StretchDragControllerProvider(
+      controller: _stretchDragController,
+      child: SizedBox.expand(
+        child: AnimatedBuilder(
+          animation: _stretchDragAnimation,
+          builder: (BuildContext context, Widget? child) {
+            return Padding(
+              padding: EdgeInsets.only(
+                top: MediaQuery.heightOf(context) * _stretchDragAnimation.value,
+              ),
+              child: _coverSheetSecondaryTransition(
+                widget.secondaryRouteAnimation,
+                _coverSheetPrimaryTransition(
+                  context,
+                  widget.primaryRouteAnimation,
+                  widget.linearTransition,
+                  widget.child,
+                ),
+              ),
+            );
+          },
         ),
       ),
     );
   }
 }
 
+// Internally used to provide the controller for upward stretch animation.
+class _StretchDragControllerProvider extends InheritedWidget {
+  const _StretchDragControllerProvider({required this.controller, required super.child});
+
+  final AnimationController controller;
+
+  static _StretchDragControllerProvider? maybeOf(BuildContext context) {
+    return context.getInheritedWidgetOfExactType<_StretchDragControllerProvider>();
+  }
+
+  @override
+  bool updateShouldNotify(_StretchDragControllerProvider oldWidget) {
+    return false;
+  }
+}
+
 /// Route for displaying an iOS sheet styled page.
+///
+/// {@youtube 560 315 https://www.youtube.com/watch?v=5H-WvH5O29I}
 ///
 /// The `CupertinoSheetRoute` will slide up from the bottom of the screen and stop
 /// below the top of the screen. If the previous route is a non-sheet route, then
@@ -449,16 +582,89 @@ class _CupertinoSheetTransitionState extends State<CupertinoSheetTransition> {
 ///     `CupertinoSheetRoute`, with optional nested navigation built in.
 class CupertinoSheetRoute<T> extends PageRoute<T> with _CupertinoSheetRouteTransitionMixin<T> {
   /// Creates a page route that displays an iOS styled sheet.
-  CupertinoSheetRoute({super.settings, required this.builder});
+  CupertinoSheetRoute({
+    super.settings,
+    required this.builder,
+    this.enableDrag = true,
+    double? topGap,
+    this.showDragHandle = false,
+  }) : assert(
+         topGap == null || (topGap >= 0.0 && topGap <= 0.9),
+         'topGap must be between 0.0 and 0.9',
+       ),
+       _topGap = topGap;
 
   /// Builds the primary contents of the sheet route.
   final WidgetBuilder builder;
 
   @override
+  final bool enableDrag;
+
+  // The gap between the top of the screen and the top of the sheet.
+  final double? _topGap;
+
+  @override
+  double get topGap => _topGap ?? _kTopGapRatio;
+
+  @override
+  bool get _hasCustomTopGap => _topGap != null;
+
+  /// Shows a drag handle at the top of the sheet.
+  ///
+  /// Defaults to false.
+  final bool showDragHandle;
+
+  Widget _sheetWithDragHandle(BuildContext context) {
+    if (!showDragHandle) {
+      return builder(context);
+    }
+
+    // Values derived from Apple's Figma files and a simulator running iOS 18.2.
+    const dragHandleTopPadding = 5.0;
+    const dragHandleHeight = 5.0;
+    const dragHandleWidth = 36.0;
+    const dragHandlePadding = 15.0;
+
+    return Stack(
+      fit: StackFit.expand,
+      children: <Widget>[
+        MediaQuery(
+          data: MediaQuery.of(
+            context,
+          ).copyWith(padding: const EdgeInsets.only(top: dragHandlePadding)),
+          child: builder(context),
+        ),
+        const Align(
+          alignment: Alignment.topCenter,
+          child: Padding(
+            padding: EdgeInsetsGeometry.only(top: dragHandleTopPadding),
+            child: DecoratedBox(
+              decoration: ShapeDecoration(
+                shape: RoundedSuperellipseBorder(
+                  borderRadius: BorderRadiusGeometry.all(Radius.circular(dragHandleWidth / 2)),
+                ),
+                color: CupertinoColors.tertiaryLabel,
+              ),
+              child: SizedBox(height: dragHandleHeight, width: dragHandleWidth),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  @override
   Widget buildContent(BuildContext context) {
-    return CupertinoUserInterfaceLevel(
-      data: CupertinoUserInterfaceLevelData.elevated,
-      child: _CupertinoSheetScope(child: builder(context)),
+    return MediaQuery.removePadding(
+      context: context,
+      removeTop: true,
+      child: ClipRSuperellipse(
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+        child: CupertinoUserInterfaceLevel(
+          data: CupertinoUserInterfaceLevelData.elevated,
+          child: _CupertinoSheetScope(child: _sheetWithDragHandle(context)),
+        ),
+      ),
     );
   }
 
@@ -470,7 +676,7 @@ class CupertinoSheetRoute<T> extends PageRoute<T> with _CupertinoSheetRouteTrans
 
   /// Pops the entire [CupertinoSheetRoute], if a sheet route exists in the stack.
   ///
-  /// Used if to pop an entire sheet at once, if there is nested navigtion within
+  /// Used if to pop an entire sheet at once, if there is nested navigation within
   /// that sheet.
   static void popSheet(BuildContext context) {
     if (hasParentSheet(context)) {
@@ -521,8 +727,26 @@ mixin _CupertinoSheetRouteTransitionMixin<T> on PageRoute<T> {
   Duration get transitionDuration => const Duration(milliseconds: 500);
 
   @override
-  DelegatedTransitionBuilder? get delegatedTransition =>
-      CupertinoSheetTransition.delegateTransition;
+  DelegatedTransitionBuilder? get delegatedTransition {
+    if (_hasCustomTopGap) {
+      return null;
+    }
+    return CupertinoSheetTransition.delegateTransition;
+  }
+
+  /// Determines whether the content can be dragged.
+  ///
+  /// If `true`, dragging is enabled; otherwise, it remains fixed.
+  bool get enableDrag;
+
+  /// The gap between the top of the screen and the top of the sheet as a ratio
+  /// of the screen height.
+  ///
+  /// {@macro flutter.cupertino.CupertinoSheetTransition.topGap}
+  double get topGap;
+
+  /// Whether a custom top gap has been set.
+  bool get _hasCustomTopGap;
 
   @override
   Widget buildPage(
@@ -533,12 +757,16 @@ mixin _CupertinoSheetRouteTransitionMixin<T> on PageRoute<T> {
     return buildContent(context);
   }
 
-  static _CupertinoDownGestureController<T> _startPopGesture<T>(ModalRoute<T> route) {
-    return _CupertinoDownGestureController<T>(
+  static _CupertinoDragGestureController<T> _startPopGesture<T>(
+    ModalRoute<T> route,
+    double topGap,
+  ) {
+    return _CupertinoDragGestureController<T>(
+      topGap: topGap,
       navigator: route.navigator!,
       getIsCurrent: () => route.isCurrent,
       getIsActive: () => route.isActive,
-      controller: route.controller!, // protected access
+      popDragController: route.controller!, // protected access
     );
   }
 
@@ -549,22 +777,33 @@ mixin _CupertinoSheetRouteTransitionMixin<T> on PageRoute<T> {
     Animation<double> animation,
     Animation<double> secondaryAnimation,
     Widget child,
+    bool enableDrag,
+    double topGap,
   ) {
     final bool linearTransition = route.popGestureInProgress;
     return CupertinoSheetTransition(
       primaryRouteAnimation: animation,
       secondaryRouteAnimation: secondaryAnimation,
       linearTransition: linearTransition,
-      child: _CupertinoDownGestureDetector<T>(
-        enabledCallback: () => true,
-        onStartPopGesture: () => _startPopGesture<T>(route),
+      topGap: topGap,
+      child: _CupertinoDragGestureDetector<T>(
+        enabledCallback: () => enableDrag,
+        onStartPopGesture: () => _startPopGesture<T>(route, topGap),
         child: child,
       ),
     );
   }
 
   @override
+  bool canTransitionFrom(TransitionRoute<dynamic> previousRoute) {
+    return !_hasCustomTopGap;
+  }
+
+  @override
   bool canTransitionTo(TransitionRoute<dynamic> nextRoute) {
+    if (this is CupertinoSheetRoute<dynamic> && _hasCustomTopGap) {
+      return false;
+    }
     return nextRoute is _CupertinoSheetRouteTransitionMixin;
   }
 
@@ -575,12 +814,20 @@ mixin _CupertinoSheetRouteTransitionMixin<T> on PageRoute<T> {
     Animation<double> secondaryAnimation,
     Widget child,
   ) {
-    return buildPageTransitions<T>(this, context, animation, secondaryAnimation, child);
+    return buildPageTransitions<T>(
+      this,
+      context,
+      animation,
+      secondaryAnimation,
+      child,
+      enableDrag,
+      topGap,
+    );
   }
 }
 
-class _CupertinoDownGestureDetector<T> extends StatefulWidget {
-  const _CupertinoDownGestureDetector({
+class _CupertinoDragGestureDetector<T> extends StatefulWidget {
+  const _CupertinoDragGestureDetector({
     super.key,
     required this.enabledCallback,
     required this.onStartPopGesture,
@@ -591,26 +838,34 @@ class _CupertinoDownGestureDetector<T> extends StatefulWidget {
 
   final ValueGetter<bool> enabledCallback;
 
-  final ValueGetter<_CupertinoDownGestureController<T>> onStartPopGesture;
+  final ValueGetter<_CupertinoDragGestureController<T>> onStartPopGesture;
 
   @override
-  _CupertinoDownGestureDetectorState<T> createState() => _CupertinoDownGestureDetectorState<T>();
+  _CupertinoDragGestureDetectorState<T> createState() => _CupertinoDragGestureDetectorState<T>();
 }
 
-class _CupertinoDownGestureDetectorState<T> extends State<_CupertinoDownGestureDetector<T>> {
-  _CupertinoDownGestureController<T>? _downGestureController;
+class _CupertinoDragGestureDetectorState<T> extends State<_CupertinoDragGestureDetector<T>> {
+  _CupertinoDragGestureController<T>? _dragGestureController;
 
   late VerticalDragGestureRecognizer _recognizer;
+  _StretchDragControllerProvider? _stretchDragController;
 
   @override
   void initState() {
     super.initState();
-    _recognizer =
-        VerticalDragGestureRecognizer(debugOwner: this)
-          ..onStart = _handleDragStart
-          ..onUpdate = _handleDragUpdate
-          ..onEnd = _handleDragEnd
-          ..onCancel = _handleDragCancel;
+    assert(_stretchDragController == null);
+    _stretchDragController = _StretchDragControllerProvider.maybeOf(context);
+    _recognizer = VerticalDragGestureRecognizer(debugOwner: this)
+      ..onStart = _handleDragStart
+      ..onUpdate = _handleDragUpdate
+      ..onEnd = _handleDragEnd
+      ..onCancel = _handleDragCancel;
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _stretchDragController = _StretchDragControllerProvider.maybeOf(context);
   }
 
   @override
@@ -618,12 +873,12 @@ class _CupertinoDownGestureDetectorState<T> extends State<_CupertinoDownGestureD
     _recognizer.dispose();
 
     // If this is disposed during a drag, call navigator.didStopUserGesture.
-    if (_downGestureController != null) {
+    if (_dragGestureController != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (_downGestureController?.navigator.mounted ?? false) {
-          _downGestureController?.navigator.didStopUserGesture();
+        if (_dragGestureController?.navigator.mounted ?? false) {
+          _dragGestureController?.navigator.didStopUserGesture();
         }
-        _downGestureController = null;
+        _dragGestureController = null;
       });
     }
     super.dispose();
@@ -631,34 +886,43 @@ class _CupertinoDownGestureDetectorState<T> extends State<_CupertinoDownGestureD
 
   void _handleDragStart(DragStartDetails details) {
     assert(mounted);
-    assert(_downGestureController == null);
-    _downGestureController = widget.onStartPopGesture();
+    assert(_dragGestureController == null);
+    _dragGestureController = widget.onStartPopGesture();
   }
 
   void _handleDragUpdate(DragUpdateDetails details) {
     assert(mounted);
-    assert(_downGestureController != null);
-    final double topGapRatio = (_kBottomUpTween as Tween<Offset>).end?.dy ?? 0.08;
-    _downGestureController!.dragUpdate(
-      // Devide by size of the sheet. The gap between the top of the sheet and
-      // top of the screen is 0.08.
-      details.primaryDelta! / (context.size!.height - (context.size!.height * topGapRatio)),
-    );
+    assert(_dragGestureController != null);
+    if (_stretchDragController == null) {
+      return;
+    }
+    _dragGestureController!.dragUpdate(details.primaryDelta!, _stretchDragController!.controller);
   }
 
   void _handleDragEnd(DragEndDetails details) {
     assert(mounted);
-    assert(_downGestureController != null);
-    _downGestureController!.dragEnd(details.velocity.pixelsPerSecond.dy / context.size!.height);
-    _downGestureController = null;
+    assert(_dragGestureController != null);
+    if (_stretchDragController == null) {
+      _dragGestureController = null;
+      return;
+    }
+    _dragGestureController!.dragEnd(
+      details.velocity.pixelsPerSecond.dy / context.size!.height,
+      _stretchDragController!.controller,
+    );
+    _dragGestureController = null;
   }
 
   void _handleDragCancel() {
     assert(mounted);
     // This can be called even if start is not called, paired with the "down" event
     // that we don't consider here.
-    _downGestureController?.dragEnd(0.0);
-    _downGestureController = null;
+    if (_stretchDragController == null) {
+      _dragGestureController = null;
+      return;
+    }
+    _dragGestureController?.dragEnd(0.0, _stretchDragController!.controller);
+    _dragGestureController = null;
   }
 
   void _handlePointerDown(PointerDownEvent event) {
@@ -677,31 +941,54 @@ class _CupertinoDownGestureDetectorState<T> extends State<_CupertinoDownGestureD
   }
 }
 
-class _CupertinoDownGestureController<T> {
+class _CupertinoDragGestureController<T> {
   /// Creates a controller for an iOS-style back gesture.
-  _CupertinoDownGestureController({
+  _CupertinoDragGestureController({
     required this.navigator,
-    required this.controller,
+    required this.popDragController,
     required this.getIsActive,
     required this.getIsCurrent,
+    required this.topGap,
   }) {
     navigator.didStartUserGesture();
   }
 
-  final AnimationController controller;
+  final AnimationController popDragController;
   final NavigatorState navigator;
   final ValueGetter<bool> getIsActive;
   final ValueGetter<bool> getIsCurrent;
+  final double topGap;
 
   /// The drag gesture has changed by [delta]. The total range of the drag
   /// should be 0.0 to 1.0.
-  void dragUpdate(double delta) {
-    controller.value -= delta;
+  void dragUpdate(double delta, AnimationController upController) {
+    if (popDragController.value == 1.0 && delta < 0) {
+      // Divide by stretchable range (when dragging upward at max extent).
+      // Maintain the same stretch distance regardless of custom topGap.
+      const double stretchDistance = _kTopGapRatio - _kStretchedTopGapRatio;
+      upController.value -= delta / (navigator.context.size!.height * stretchDistance);
+    } else {
+      // Divide by size of the sheet.
+      popDragController.value -=
+          delta / (navigator.context.size!.height - (navigator.context.size!.height * topGap));
+    }
   }
 
   /// The drag gesture has ended with a vertical motion of [velocity] as a
   /// fraction of screen height per second.
-  void dragEnd(double velocity) {
+  void dragEnd(double velocity, AnimationController upController) {
+    // If the sheet is in a stretched state (dragged upward beyond max size),
+    // reverse the stretch to return to the normal max height.
+    if (upController.value > 0) {
+      upController.animateBack(
+        0.0,
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOut,
+      );
+      navigator.didStopUserGesture();
+      return;
+    }
+
     // Fling in the appropriate direction.
     //
     // This curve has been determined through rigorously eyeballing native iOS
@@ -727,11 +1014,11 @@ class _CupertinoDownGestureController<T> {
       // If the drag is dropped with low velocity, the sheet will pop if the
       // the drag goes a little past the halfway point on the screen. This is
       // eyeballed on a simulator running iOS 18.0.
-      animateForward = controller.value > 0.52;
+      animateForward = popDragController.value > 0.52;
     }
 
     if (animateForward) {
-      controller.animateTo(
+      popDragController.animateTo(
         1.0,
         duration: _kDroppedSheetDragAnimationDuration,
         curve: animationCurve,
@@ -739,12 +1026,11 @@ class _CupertinoDownGestureController<T> {
     } else {
       if (isCurrent) {
         // This route is destined to pop at this point. Reuse navigator's pop.
-        final NavigatorState rootNavigator = Navigator.of(navigator.context, rootNavigator: true);
-        rootNavigator.pop();
+        navigator.pop();
       }
 
-      if (controller.isAnimating) {
-        controller.animateBack(
+      if (popDragController.isAnimating) {
+        popDragController.animateBack(
           0.0,
           duration: _kDroppedSheetDragAnimationDuration,
           curve: animationCurve,
@@ -752,17 +1038,17 @@ class _CupertinoDownGestureController<T> {
       }
     }
 
-    if (controller.isAnimating) {
+    if (popDragController.isAnimating) {
       // Keep the userGestureInProgress in true state so we don't change the
       // curve of the page transition mid-flight since CupertinoPageTransition
       // depends on userGestureInProgress.
       // late AnimationStatusListener animationStatusCallback;
       void animationStatusCallback(AnimationStatus status) {
         navigator.didStopUserGesture();
-        controller.removeStatusListener(animationStatusCallback);
+        popDragController.removeStatusListener(animationStatusCallback);
       }
 
-      controller.addStatusListener(animationStatusCallback);
+      popDragController.addStatusListener(animationStatusCallback);
     } else {
       navigator.didStopUserGesture();
     }

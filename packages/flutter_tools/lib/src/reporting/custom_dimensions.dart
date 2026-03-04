@@ -27,7 +27,6 @@ class CustomDimensions {
     this.commandRunProjectType,
     this.commandRunProjectHostLanguage,
     this.commandCreateAndroidLanguage,
-    this.commandCreateIosLanguage,
     this.commandRunProjectModule,
     this.commandCreateProjectType,
     this.commandPackagesNumberPlugins,
@@ -57,9 +56,6 @@ class CustomDimensions {
     this.commandResultEventMaxRss,
     this.commandRunAndroidEmbeddingVersion,
     this.commandPackagesAndroidEmbeddingVersion,
-    this.nullSafety,
-    this.nullSafeMigratedLibraries,
-    this.nullSafeTotalLibraries,
     this.hotEventCompileTimeInMs,
     this.hotEventFindInvalidatedTimeInMs,
     this.hotEventScannedSourcesCount,
@@ -86,7 +82,6 @@ class CustomDimensions {
   final String? commandRunProjectType; // cd14
   final String? commandRunProjectHostLanguage; // cd15
   final String? commandCreateAndroidLanguage; // cd16
-  final String? commandCreateIosLanguage; // cd17
   final bool? commandRunProjectModule; // cd18
   final String? commandCreateProjectType; // cd19
   final int? commandPackagesNumberPlugins; // cd20
@@ -116,10 +111,7 @@ class CustomDimensions {
   final int? commandResultEventMaxRss; // cd44
   final String? commandRunAndroidEmbeddingVersion; // cd45
   final String? commandPackagesAndroidEmbeddingVersion; // cd46
-  final bool? nullSafety; // cd47
   // cd48 was fastReassemble but that feature was removed
-  final int? nullSafeMigratedLibraries; // cd49
-  final int? nullSafeTotalLibraries; // cd50
   final int? hotEventCompileTimeInMs; // cd51
   final int? hotEventFindInvalidatedTimeInMs; // cd52
   final int? hotEventScannedSourcesCount; // cd53
@@ -148,13 +140,13 @@ class CustomDimensions {
     if (hotEventSyncedClassesCount != null)
       CustomDimensionsEnum.hotEventSyncedClassesCount.cdKey: hotEventSyncedClassesCount.toString(),
     if (hotEventSyncedProceduresCount != null)
-      CustomDimensionsEnum.hotEventSyncedProceduresCount.cdKey:
-          hotEventSyncedProceduresCount.toString(),
+      CustomDimensionsEnum.hotEventSyncedProceduresCount.cdKey: hotEventSyncedProceduresCount
+          .toString(),
     if (hotEventSyncedBytes != null)
       CustomDimensionsEnum.hotEventSyncedBytes.cdKey: hotEventSyncedBytes.toString(),
     if (hotEventInvalidatedSourcesCount != null)
-      CustomDimensionsEnum.hotEventInvalidatedSourcesCount.cdKey:
-          hotEventInvalidatedSourcesCount.toString(),
+      CustomDimensionsEnum.hotEventInvalidatedSourcesCount.cdKey: hotEventInvalidatedSourcesCount
+          .toString(),
     if (hotEventTransferTimeInMs != null)
       CustomDimensionsEnum.hotEventTransferTimeInMs.cdKey: hotEventTransferTimeInMs.toString(),
     if (hotEventOverallTimeInMs != null)
@@ -162,30 +154,28 @@ class CustomDimensions {
     if (commandRunProjectType != null)
       CustomDimensionsEnum.commandRunProjectType.cdKey: commandRunProjectType.toString(),
     if (commandRunProjectHostLanguage != null)
-      CustomDimensionsEnum.commandRunProjectHostLanguage.cdKey:
-          commandRunProjectHostLanguage.toString(),
+      CustomDimensionsEnum.commandRunProjectHostLanguage.cdKey: commandRunProjectHostLanguage
+          .toString(),
     if (commandCreateAndroidLanguage != null)
-      CustomDimensionsEnum.commandCreateAndroidLanguage.cdKey:
-          commandCreateAndroidLanguage.toString(),
-    if (commandCreateIosLanguage != null)
-      CustomDimensionsEnum.commandCreateIosLanguage.cdKey: commandCreateIosLanguage.toString(),
+      CustomDimensionsEnum.commandCreateAndroidLanguage.cdKey: commandCreateAndroidLanguage
+          .toString(),
     if (commandRunProjectModule != null)
       CustomDimensionsEnum.commandRunProjectModule.cdKey: commandRunProjectModule.toString(),
     if (commandCreateProjectType != null)
       CustomDimensionsEnum.commandCreateProjectType.cdKey: commandCreateProjectType.toString(),
     if (commandPackagesNumberPlugins != null)
-      CustomDimensionsEnum.commandPackagesNumberPlugins.cdKey:
-          commandPackagesNumberPlugins.toString(),
+      CustomDimensionsEnum.commandPackagesNumberPlugins.cdKey: commandPackagesNumberPlugins
+          .toString(),
     if (commandPackagesProjectModule != null)
-      CustomDimensionsEnum.commandPackagesProjectModule.cdKey:
-          commandPackagesProjectModule.toString(),
+      CustomDimensionsEnum.commandPackagesProjectModule.cdKey: commandPackagesProjectModule
+          .toString(),
     if (commandRunTargetOsVersion != null)
       CustomDimensionsEnum.commandRunTargetOsVersion.cdKey: commandRunTargetOsVersion.toString(),
     if (commandRunModeName != null)
       CustomDimensionsEnum.commandRunModeName.cdKey: commandRunModeName.toString(),
     if (commandBuildBundleTargetPlatform != null)
-      CustomDimensionsEnum.commandBuildBundleTargetPlatform.cdKey:
-          commandBuildBundleTargetPlatform.toString(),
+      CustomDimensionsEnum.commandBuildBundleTargetPlatform.cdKey: commandBuildBundleTargetPlatform
+          .toString(),
     if (commandBuildBundleIsModule != null)
       CustomDimensionsEnum.commandBuildBundleIsModule.cdKey: commandBuildBundleIsModule.toString(),
     if (commandResult != null) CustomDimensionsEnum.commandResult.cdKey: commandResult.toString(),
@@ -203,8 +193,8 @@ class CustomDimensions {
       CustomDimensionsEnum.enabledFlutterFeatures.cdKey: enabledFlutterFeatures.toString(),
     if (localTime != null) CustomDimensionsEnum.localTime.cdKey: localTime.toString(),
     if (commandBuildAarTargetPlatform != null)
-      CustomDimensionsEnum.commandBuildAarTargetPlatform.cdKey:
-          commandBuildAarTargetPlatform.toString(),
+      CustomDimensionsEnum.commandBuildAarTargetPlatform.cdKey: commandBuildAarTargetPlatform
+          .toString(),
     if (commandBuildAarProjectType != null)
       CustomDimensionsEnum.commandBuildAarProjectType.cdKey: commandBuildAarProjectType.toString(),
     if (buildEventCommand != null)
@@ -212,8 +202,8 @@ class CustomDimensions {
     if (buildEventSettings != null)
       CustomDimensionsEnum.buildEventSettings.cdKey: buildEventSettings.toString(),
     if (commandBuildApkTargetPlatform != null)
-      CustomDimensionsEnum.commandBuildApkTargetPlatform.cdKey:
-          commandBuildApkTargetPlatform.toString(),
+      CustomDimensionsEnum.commandBuildApkTargetPlatform.cdKey: commandBuildApkTargetPlatform
+          .toString(),
     if (commandBuildApkBuildMode != null)
       CustomDimensionsEnum.commandBuildApkBuildMode.cdKey: commandBuildApkBuildMode.toString(),
     if (commandBuildApkSplitPerAbi != null)
@@ -222,8 +212,8 @@ class CustomDimensions {
       CustomDimensionsEnum.commandBuildAppBundleTargetPlatform.cdKey:
           commandBuildAppBundleTargetPlatform.toString(),
     if (commandBuildAppBundleBuildMode != null)
-      CustomDimensionsEnum.commandBuildAppBundleBuildMode.cdKey:
-          commandBuildAppBundleBuildMode.toString(),
+      CustomDimensionsEnum.commandBuildAppBundleBuildMode.cdKey: commandBuildAppBundleBuildMode
+          .toString(),
     if (buildEventError != null)
       CustomDimensionsEnum.buildEventError.cdKey: buildEventError.toString(),
     if (commandResultEventMaxRss != null)
@@ -234,19 +224,14 @@ class CustomDimensions {
     if (commandPackagesAndroidEmbeddingVersion != null)
       CustomDimensionsEnum.commandPackagesAndroidEmbeddingVersion.cdKey:
           commandPackagesAndroidEmbeddingVersion.toString(),
-    if (nullSafety != null) CustomDimensionsEnum.nullSafety.cdKey: nullSafety.toString(),
-    if (nullSafeMigratedLibraries != null)
-      CustomDimensionsEnum.nullSafeMigratedLibraries.cdKey: nullSafeMigratedLibraries.toString(),
-    if (nullSafeTotalLibraries != null)
-      CustomDimensionsEnum.nullSafeTotalLibraries.cdKey: nullSafeTotalLibraries.toString(),
     if (hotEventCompileTimeInMs != null)
       CustomDimensionsEnum.hotEventCompileTimeInMs.cdKey: hotEventCompileTimeInMs.toString(),
     if (hotEventFindInvalidatedTimeInMs != null)
-      CustomDimensionsEnum.hotEventFindInvalidatedTimeInMs.cdKey:
-          hotEventFindInvalidatedTimeInMs.toString(),
+      CustomDimensionsEnum.hotEventFindInvalidatedTimeInMs.cdKey: hotEventFindInvalidatedTimeInMs
+          .toString(),
     if (hotEventScannedSourcesCount != null)
-      CustomDimensionsEnum.hotEventScannedSourcesCount.cdKey:
-          hotEventScannedSourcesCount.toString(),
+      CustomDimensionsEnum.hotEventScannedSourcesCount.cdKey: hotEventScannedSourcesCount
+          .toString(),
     if (hotEventReassembleTimeInMs != null)
       CustomDimensionsEnum.hotEventReassembleTimeInMs.cdKey: hotEventReassembleTimeInMs.toString(),
     if (hotEventReloadVMTimeInMs != null)
@@ -287,7 +272,6 @@ class CustomDimensions {
           other.commandRunProjectHostLanguage ?? commandRunProjectHostLanguage,
       commandCreateAndroidLanguage:
           other.commandCreateAndroidLanguage ?? commandCreateAndroidLanguage,
-      commandCreateIosLanguage: other.commandCreateIosLanguage ?? commandCreateIosLanguage,
       commandRunProjectModule: other.commandRunProjectModule ?? commandRunProjectModule,
       commandCreateProjectType: other.commandCreateProjectType ?? commandCreateProjectType,
       commandPackagesNumberPlugins:
@@ -326,9 +310,6 @@ class CustomDimensions {
           other.commandRunAndroidEmbeddingVersion ?? commandRunAndroidEmbeddingVersion,
       commandPackagesAndroidEmbeddingVersion:
           other.commandPackagesAndroidEmbeddingVersion ?? commandPackagesAndroidEmbeddingVersion,
-      nullSafety: other.nullSafety ?? nullSafety,
-      nullSafeMigratedLibraries: other.nullSafeMigratedLibraries ?? nullSafeMigratedLibraries,
-      nullSafeTotalLibraries: other.nullSafeTotalLibraries ?? nullSafeTotalLibraries,
       hotEventCompileTimeInMs: other.hotEventCompileTimeInMs ?? hotEventCompileTimeInMs,
       hotEventFindInvalidatedTimeInMs:
           other.hotEventFindInvalidatedTimeInMs ?? hotEventFindInvalidatedTimeInMs,
@@ -370,7 +351,6 @@ class CustomDimensions {
       map,
       CustomDimensionsEnum.commandCreateAndroidLanguage,
     ),
-    commandCreateIosLanguage: _extractString(map, CustomDimensionsEnum.commandCreateIosLanguage),
     commandRunProjectModule: _extractBool(map, CustomDimensionsEnum.commandRunProjectModule),
     commandCreateProjectType: _extractString(map, CustomDimensionsEnum.commandCreateProjectType),
     commandPackagesNumberPlugins: _extractInt(
@@ -430,9 +410,6 @@ class CustomDimensions {
       map,
       CustomDimensionsEnum.commandPackagesAndroidEmbeddingVersion,
     ),
-    nullSafety: _extractBool(map, CustomDimensionsEnum.nullSafety),
-    nullSafeMigratedLibraries: _extractInt(map, CustomDimensionsEnum.nullSafeMigratedLibraries),
-    nullSafeTotalLibraries: _extractInt(map, CustomDimensionsEnum.nullSafeTotalLibraries),
     hotEventCompileTimeInMs: _extractInt(map, CustomDimensionsEnum.hotEventCompileTimeInMs),
     hotEventFindInvalidatedTimeInMs: _extractInt(
       map,
@@ -492,7 +469,8 @@ enum CustomDimensionsEnum {
   commandRunProjectType, // cd14
   commandRunProjectHostLanguage, // cd15
   commandCreateAndroidLanguage, // cd16
-  commandCreateIosLanguage, // cd17
+  // ignore: unused_field
+  _nullCreateIosLanguageDeprecatedDoNotUse, // cd17
   commandRunProjectModule, // cd18
   commandCreateProjectType, // cd19
   commandPackagesNumberPlugins, // cd20
@@ -522,10 +500,13 @@ enum CustomDimensionsEnum {
   commandResultEventMaxRss, // cd44
   commandRunAndroidEmbeddingVersion, // cd45
   commandPackagesAndroidEmbeddingVersion, // cd46
-  nullSafety, // cd47
+  // ignore: unused_field
+  _nullSafetyDeprecatedDoNotUse, // cd47
   obsolete1, // cd48 (was fastReassemble)
-  nullSafeMigratedLibraries, // cd49
-  nullSafeTotalLibraries, // cd50
+  // ignore: unused_field
+  _nullSafeMigratedLibrariesDoNotUse, // cd49
+  // ignore: unused_field
+  _nullSafeTotalLibrariesDoNotUse, // cd50
   hotEventCompileTimeInMs, // cd51
   hotEventFindInvalidatedTimeInMs, // cd52
   hotEventScannedSourcesCount, // cd53

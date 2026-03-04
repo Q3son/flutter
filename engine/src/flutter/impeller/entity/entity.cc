@@ -23,6 +23,8 @@ Entity Entity::FromSnapshot(const Snapshot& snapshot, BlendMode blend_mode) {
   contents->SetSamplerDescriptor(snapshot.sampler_descriptor);
   contents->SetSourceRect(texture_rect);
   contents->SetOpacity(snapshot.opacity);
+  contents->SetNeedsRasterizationForRuntimeEffects(
+      snapshot.needs_rasterization_for_runtime_effects);
 
   Entity entity;
   entity.SetBlendMode(blend_mode);
@@ -90,8 +92,7 @@ Scalar Entity::GetShaderClipDepth() const {
 }
 
 Scalar Entity::GetShaderClipDepth(uint32_t clip_depth) {
-  Scalar result = std::clamp(clip_depth * kDepthEpsilon, 0.0f, 1.0f);
-  return std::min(result, 1.0f - kDepthEpsilon);
+  return std::clamp(clip_depth * kDepthEpsilon, 0.0f, 1.0f - kDepthEpsilon);
 }
 
 void Entity::SetBlendMode(BlendMode blend_mode) {
@@ -106,9 +107,8 @@ bool Entity::SetInheritedOpacity(Scalar alpha) {
   if (alpha >= 1.0) {
     return true;
   }
-  if (blend_mode_ == BlendMode::kSource &&
-      contents_->IsOpaque(GetTransform())) {
-    blend_mode_ = BlendMode::kSourceOver;
+  if (blend_mode_ == BlendMode::kSrc && contents_->IsOpaque(GetTransform())) {
+    blend_mode_ = BlendMode::kSrcOver;
   }
   contents_->SetInheritedOpacity(alpha);
   return true;
@@ -128,12 +128,12 @@ std::optional<Color> Entity::AsBackgroundColor(ISize target_size) const {
 bool Entity::IsBlendModeDestructive(BlendMode blend_mode) {
   switch (blend_mode) {
     case BlendMode::kClear:
-    case BlendMode::kSource:
-    case BlendMode::kSourceIn:
-    case BlendMode::kDestinationIn:
-    case BlendMode::kSourceOut:
-    case BlendMode::kDestinationOut:
-    case BlendMode::kDestinationATop:
+    case BlendMode::kSrc:
+    case BlendMode::kSrcIn:
+    case BlendMode::kDstIn:
+    case BlendMode::kSrcOut:
+    case BlendMode::kDstOut:
+    case BlendMode::kDstATop:
     case BlendMode::kXor:
     case BlendMode::kModulate:
       return true;

@@ -202,12 +202,25 @@ public class PlatformPlugin {
         view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
         break;
       case HEAVY_IMPACT:
-        if (Build.VERSION.SDK_INT >= API_LEVELS.API_23) {
-          view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK);
-        }
+        view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK);
         break;
       case SELECTION_CLICK:
         view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK);
+        break;
+      case SUCCESS_NOTIFICATION:
+        if (Build.VERSION.SDK_INT >= API_LEVELS.API_30) {
+          view.performHapticFeedback(HapticFeedbackConstants.CONFIRM);
+        }
+        break;
+      case WARNING_NOTIFICATION:
+        if (Build.VERSION.SDK_INT >= API_LEVELS.API_30) {
+          view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
+        }
+        break;
+      case ERROR_NOTIFICATION:
+        if (Build.VERSION.SDK_INT >= API_LEVELS.API_30) {
+          view.performHapticFeedback(HapticFeedbackConstants.REJECT);
+        }
         break;
     }
   }
@@ -270,10 +283,13 @@ public class PlatformPlugin {
       // LEAN BACK
       // Available starting at Android SDK 4.1 (API 16).
       //
-      // If the Flutter Android app targets Android SDK 15 (API 35) or later then the Android
+      // If the Flutter Android app targets Android SDK 15 (API 35), then the Android
       // system will ignore this value unless the app also follows the opt out
       // instructions found in
       // https://docs.flutter.dev/release/breaking-changes/default-systemuimode-edge-to-edge.
+      //
+      // If the Flutter Android app targets Android SDK 16 (API 36) or later, then the Android
+      // system will ignore this value.
       //
       // Should not show overlays, tap to reveal overlays, needs onChange callback
       // When the overlays come in on tap, the app does not receive the gesture and does not know
@@ -290,10 +306,13 @@ public class PlatformPlugin {
       // IMMERSIVE
       // Available starting at Android SDK 4.4 (API 19).
       //
-      // If the Flutter Android app targets Android SDK 15 (API 35) or later then the Android
+      // If the Flutter Android app targets Android SDK 15 (API 35), then the Android
       // system will ignore this value unless the app also follows the opt out
       // instructions found in
       // https://docs.flutter.dev/release/breaking-changes/default-systemuimode-edge-to-edge.
+      //
+      // If the Flutter Android app targets Android SDK 16 (API 36) or later, then the Android
+      // system will ignore this value.
       //
       // Should not show overlays, swipe from edges to reveal overlays, needs onChange callback
       // When the overlays come in on swipe, the app does not receive the gesture and does not know
@@ -311,10 +330,13 @@ public class PlatformPlugin {
       // STICKY IMMERSIVE
       // Available starting at Android SDK 4.4 (API 19).
       //
-      // If the Flutter Android app targets Android SDK 15 (API 35) or later then the Android
+      // If the Flutter Android app targets Android SDK 15 (API 35), then the Android
       // system will ignore this value unless the app also follows the opt out
       // instructions found in
       // https://docs.flutter.dev/release/breaking-changes/default-systemuimode-edge-to-edge.
+      //
+      // If the Flutter Android app targets Android SDK 16 (API 36) or later, then the Android
+      // system will ignore this value.
       //
       // Should not show overlays, swipe from edges to reveal overlays. The app will also receive
       // the swipe gesture. The overlays cannot be dismissed, so adding callback support will
@@ -362,7 +384,7 @@ public class PlatformPlugin {
             | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
             | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION;
 
-    if (overlaysToShow.size() == 0) {
+    if (overlaysToShow.isEmpty()) {
       enabledOverlays |= View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY;
     }
 
@@ -403,7 +425,13 @@ public class PlatformPlugin {
     updateSystemUiOverlays();
   }
 
-  @SuppressWarnings("deprecation")
+  /**
+   * @deprecated This method is outdated because it calls {@code setStatusBarColor}, {@code
+   *     setNavigationBarColor} and {@code setNavigationBarDividerColor}, which are deprecated in
+   *     Android 15 and above. Consider using the new WindowInsetsController or other Android 15+
+   *     APIs for system UI styling.
+   */
+  @Deprecated
   private void setSystemChromeSystemUIOverlayStyle(
       PlatformChannel.SystemChromeStyle systemChromeStyle) {
     Window window = activity.getWindow();
@@ -433,25 +461,23 @@ public class PlatformPlugin {
     // If transparent, SDK 29 and higher may apply a translucent scrim behind the bar to ensure
     // proper contrast. This can be overridden with
     // SystemChromeStyle.systemStatusBarContrastEnforced.
-    if (Build.VERSION.SDK_INT >= API_LEVELS.API_23) {
-      if (systemChromeStyle.statusBarIconBrightness != null) {
-        switch (systemChromeStyle.statusBarIconBrightness) {
-          case DARK:
-            // Dark status bar icon brightness.
-            // Light status bar appearance.
-            windowInsetsControllerCompat.setAppearanceLightStatusBars(true);
-            break;
-          case LIGHT:
-            // Light status bar icon brightness.
-            // Dark status bar appearance.
-            windowInsetsControllerCompat.setAppearanceLightStatusBars(false);
-            break;
-        }
+    if (systemChromeStyle.statusBarIconBrightness != null) {
+      switch (systemChromeStyle.statusBarIconBrightness) {
+        case DARK:
+          // Dark status bar icon brightness.
+          // Light status bar appearance.
+          windowInsetsControllerCompat.setAppearanceLightStatusBars(true);
+          break;
+        case LIGHT:
+          // Light status bar icon brightness.
+          // Dark status bar appearance.
+          windowInsetsControllerCompat.setAppearanceLightStatusBars(false);
+          break;
       }
+    }
 
-      if (systemChromeStyle.statusBarColor != null) {
-        window.setStatusBarColor(systemChromeStyle.statusBarColor);
-      }
+    if (systemChromeStyle.statusBarColor != null) {
+      window.setStatusBarColor(systemChromeStyle.statusBarColor);
     }
     // You can't override the enforced contrast for a transparent status bar until SDK 29.
     // This overrides the translucent scrim that may be placed behind the bar on SDK 29+ to ensure

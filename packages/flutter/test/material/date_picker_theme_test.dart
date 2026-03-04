@@ -9,7 +9,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  const DatePickerThemeData datePickerTheme = DatePickerThemeData(
+  const datePickerTheme = DatePickerThemeData(
     backgroundColor: Color(0xfffffff0),
     elevation: 6,
     shadowColor: Color(0xfffffff1),
@@ -32,6 +32,7 @@ void main() {
     yearForegroundColor: MaterialStatePropertyAll<Color>(Color(0xfffffffa)),
     yearBackgroundColor: MaterialStatePropertyAll<Color>(Color(0xfffffffb)),
     yearOverlayColor: MaterialStatePropertyAll<Color>(Color(0xfffffffc)),
+    yearShape: MaterialStatePropertyAll<OutlinedBorder>(RoundedRectangleBorder()),
     rangePickerBackgroundColor: Color(0xfffffffd),
     rangePickerElevation: 7,
     rangePickerShadowColor: Color(0xfffffffe),
@@ -55,6 +56,8 @@ void main() {
       foregroundColor: MaterialStatePropertyAll<Color>(Color(0xffffff7f)),
     ),
     locale: Locale('en'),
+    subHeaderForegroundColor: Color(0xffffff8f),
+    toggleButtonTextStyle: TextStyle(fontSize: 13),
   );
 
   Material findDialogMaterial(WidgetTester tester) {
@@ -69,11 +72,11 @@ void main() {
     );
   }
 
-  BoxDecoration? findTextDecoration(WidgetTester tester, String date) {
+  ShapeDecoration? findTextDecoration(WidgetTester tester, String date) {
     final Container container = tester.widget<Container>(
       find.ancestor(of: find.text(date), matching: find.byType(Container)).first,
     );
-    return container.decoration as BoxDecoration?;
+    return container.decoration as ShapeDecoration?;
   }
 
   ShapeDecoration? findDayDecoration(WidgetTester tester, String day) {
@@ -87,8 +90,8 @@ void main() {
     return tester.widget<TextButton>(find.widgetWithText(TextButton, text)).style!;
   }
 
-  const Size wideWindowSize = Size(1920.0, 1080.0);
-  const Size narrowWindowSize = Size(1070.0, 1770.0);
+  const wideWindowSize = Size(1920.0, 1080.0);
+  const narrowWindowSize = Size(1070.0, 1770.0);
 
   test('DatePickerThemeData copyWith, ==, hashCode basics', () {
     expect(const DatePickerThemeData(), const DatePickerThemeData().copyWith());
@@ -96,12 +99,12 @@ void main() {
   });
 
   test('DatePickerThemeData lerp special cases', () {
-    const DatePickerThemeData data = DatePickerThemeData();
+    const data = DatePickerThemeData();
     expect(identical(DatePickerThemeData.lerp(data, data, 0.5), data), true);
   });
 
   test('DatePickerThemeData defaults', () {
-    const DatePickerThemeData theme = DatePickerThemeData();
+    const theme = DatePickerThemeData();
     expect(theme.backgroundColor, null);
     expect(theme.elevation, null);
     expect(theme.shadowColor, null);
@@ -140,6 +143,8 @@ void main() {
     expect(theme.cancelButtonStyle, null);
     expect(theme.confirmButtonStyle, null);
     expect(theme.locale, null);
+    expect(theme.subHeaderForegroundColor, null);
+    expect(theme.toggleButtonTextStyle, null);
   });
 
   testWidgets('DatePickerTheme.defaults M3 defaults', (WidgetTester tester) async {
@@ -150,7 +155,6 @@ void main() {
 
     await tester.pumpWidget(
       MaterialApp(
-        theme: ThemeData(useMaterial3: true),
         home: Builder(
           builder: (BuildContext context) {
             m3 = DatePickerTheme.defaults(context);
@@ -174,113 +178,113 @@ void main() {
     expect(m3.headerHelpStyle, textTheme.labelLarge);
     expect(m3.weekdayStyle, textTheme.bodyLarge?.apply(color: colorScheme.onSurface));
     expect(m3.dayStyle, textTheme.bodyLarge);
-    expect(m3.dayForegroundColor?.resolve(<MaterialState>{}), colorScheme.onSurface);
+    expect(m3.dayForegroundColor?.resolve(<WidgetState>{}), colorScheme.onSurface);
     expect(
-      m3.dayForegroundColor?.resolve(<MaterialState>{MaterialState.selected}),
+      m3.dayForegroundColor?.resolve(<WidgetState>{WidgetState.selected}),
       colorScheme.onPrimary,
     );
     expect(
-      m3.dayForegroundColor?.resolve(<MaterialState>{MaterialState.disabled}),
+      m3.dayForegroundColor?.resolve(<WidgetState>{WidgetState.disabled}),
       colorScheme.onSurface.withOpacity(0.38),
     );
-    expect(m3.dayBackgroundColor?.resolve(<MaterialState>{}), null);
+    expect(m3.dayBackgroundColor?.resolve(<WidgetState>{}), null);
     expect(
-      m3.dayBackgroundColor?.resolve(<MaterialState>{MaterialState.selected}),
+      m3.dayBackgroundColor?.resolve(<WidgetState>{WidgetState.selected}),
       colorScheme.primary,
     );
-    expect(m3.dayOverlayColor?.resolve(<MaterialState>{}), null);
+    expect(m3.dayOverlayColor?.resolve(<WidgetState>{}), null);
     expect(
-      m3.dayOverlayColor?.resolve(<MaterialState>{MaterialState.selected, MaterialState.hovered}),
+      m3.dayOverlayColor?.resolve(<WidgetState>{WidgetState.selected, WidgetState.hovered}),
       colorScheme.onPrimary.withOpacity(0.08),
     );
     expect(
-      m3.dayOverlayColor?.resolve(<MaterialState>{MaterialState.selected, MaterialState.focused}),
+      m3.dayOverlayColor?.resolve(<WidgetState>{WidgetState.selected, WidgetState.focused}),
       colorScheme.onPrimary.withOpacity(0.1),
     );
     expect(
-      m3.dayOverlayColor?.resolve(<MaterialState>{MaterialState.hovered}),
+      m3.dayOverlayColor?.resolve(<WidgetState>{WidgetState.hovered}),
       colorScheme.onSurfaceVariant.withOpacity(0.08),
     );
     expect(
-      m3.dayOverlayColor?.resolve(<MaterialState>{MaterialState.focused}),
+      m3.dayOverlayColor?.resolve(<WidgetState>{WidgetState.focused}),
       colorScheme.onSurfaceVariant.withOpacity(0.1),
     );
     expect(
-      m3.dayOverlayColor?.resolve(<MaterialState>{MaterialState.pressed}),
+      m3.dayOverlayColor?.resolve(<WidgetState>{WidgetState.pressed}),
       colorScheme.onSurfaceVariant.withOpacity(0.1),
     );
     expect(
-      m3.dayOverlayColor?.resolve(<MaterialState>{
-        MaterialState.selected,
-        MaterialState.hovered,
-        MaterialState.focused,
+      m3.dayOverlayColor?.resolve(<WidgetState>{
+        WidgetState.selected,
+        WidgetState.hovered,
+        WidgetState.focused,
       }),
       colorScheme.onPrimary.withOpacity(0.08),
     );
     expect(
-      m3.dayOverlayColor?.resolve(<MaterialState>{
-        MaterialState.selected,
-        MaterialState.hovered,
-        MaterialState.pressed,
+      m3.dayOverlayColor?.resolve(<WidgetState>{
+        WidgetState.selected,
+        WidgetState.hovered,
+        WidgetState.pressed,
       }),
       colorScheme.onPrimary.withOpacity(0.1),
     );
     expect(
-      m3.dayOverlayColor?.resolve(<MaterialState>{MaterialState.hovered, MaterialState.focused}),
+      m3.dayOverlayColor?.resolve(<WidgetState>{WidgetState.hovered, WidgetState.focused}),
       colorScheme.onSurfaceVariant.withOpacity(0.08),
     );
     expect(
-      m3.dayOverlayColor?.resolve(<MaterialState>{MaterialState.hovered, MaterialState.pressed}),
+      m3.dayOverlayColor?.resolve(<WidgetState>{WidgetState.hovered, WidgetState.pressed}),
       colorScheme.onSurfaceVariant.withOpacity(0.1),
     );
-    expect(m3.dayShape?.resolve(<MaterialState>{}), const CircleBorder());
-    expect(m3.todayForegroundColor?.resolve(<MaterialState>{}), colorScheme.primary);
+    expect(m3.dayShape?.resolve(<WidgetState>{}), const CircleBorder());
+    expect(m3.todayForegroundColor?.resolve(<WidgetState>{}), colorScheme.primary);
     expect(
-      m3.todayForegroundColor?.resolve(<MaterialState>{MaterialState.disabled}),
+      m3.todayForegroundColor?.resolve(<WidgetState>{WidgetState.disabled}),
       colorScheme.primary.withOpacity(0.38),
     );
     expect(m3.todayBorder, BorderSide(color: colorScheme.primary));
     expect(m3.yearStyle, textTheme.bodyLarge);
-    expect(m3.yearForegroundColor?.resolve(<MaterialState>{}), colorScheme.onSurfaceVariant);
+    expect(m3.yearForegroundColor?.resolve(<WidgetState>{}), colorScheme.onSurfaceVariant);
     expect(
-      m3.yearForegroundColor?.resolve(<MaterialState>{MaterialState.selected}),
+      m3.yearForegroundColor?.resolve(<WidgetState>{WidgetState.selected}),
       colorScheme.onPrimary,
     );
     expect(
-      m3.yearForegroundColor?.resolve(<MaterialState>{MaterialState.disabled}),
+      m3.yearForegroundColor?.resolve(<WidgetState>{WidgetState.disabled}),
       colorScheme.onSurfaceVariant.withOpacity(0.38),
     );
-    expect(m3.yearBackgroundColor?.resolve(<MaterialState>{}), null);
+    expect(m3.yearBackgroundColor?.resolve(<WidgetState>{}), null);
     expect(
-      m3.yearBackgroundColor?.resolve(<MaterialState>{MaterialState.selected}),
+      m3.yearBackgroundColor?.resolve(<WidgetState>{WidgetState.selected}),
       colorScheme.primary,
     );
-    expect(m3.yearOverlayColor?.resolve(<MaterialState>{}), null);
+    expect(m3.yearOverlayColor?.resolve(<WidgetState>{}), null);
     expect(
-      m3.yearOverlayColor?.resolve(<MaterialState>{MaterialState.selected, MaterialState.hovered}),
+      m3.yearOverlayColor?.resolve(<WidgetState>{WidgetState.selected, WidgetState.hovered}),
       colorScheme.onPrimary.withOpacity(0.08),
     );
     expect(
-      m3.yearOverlayColor?.resolve(<MaterialState>{MaterialState.selected, MaterialState.focused}),
+      m3.yearOverlayColor?.resolve(<WidgetState>{WidgetState.selected, WidgetState.focused}),
       colorScheme.onPrimary.withOpacity(0.1),
     );
     expect(
-      m3.yearOverlayColor?.resolve(<MaterialState>{MaterialState.hovered}),
+      m3.yearOverlayColor?.resolve(<WidgetState>{WidgetState.hovered}),
       colorScheme.onSurfaceVariant.withOpacity(0.08),
     );
     expect(
-      m3.yearOverlayColor?.resolve(<MaterialState>{MaterialState.focused}),
+      m3.yearOverlayColor?.resolve(<WidgetState>{WidgetState.focused}),
       colorScheme.onSurfaceVariant.withOpacity(0.1),
     );
     expect(
-      m3.yearOverlayColor?.resolve(<MaterialState>{MaterialState.pressed}),
+      m3.yearOverlayColor?.resolve(<WidgetState>{WidgetState.pressed}),
       colorScheme.onSurfaceVariant.withOpacity(0.1),
     );
     expect(m3.rangePickerElevation, 0);
     expect(m3.rangePickerShape, const RoundedRectangleBorder());
     expect(m3.rangePickerShadowColor, Colors.transparent);
     expect(m3.rangePickerSurfaceTintColor, Colors.transparent);
-    expect(m3.rangeSelectionOverlayColor?.resolve(<MaterialState>{}), null);
+    expect(m3.rangeSelectionOverlayColor?.resolve(<WidgetState>{}), null);
     expect(m3.rangePickerHeaderBackgroundColor, Colors.transparent);
     expect(m3.rangePickerHeaderForegroundColor, colorScheme.onSurfaceVariant);
     expect(m3.rangePickerHeaderHeadlineStyle, textTheme.titleLarge);
@@ -296,6 +300,11 @@ void main() {
       equalsIgnoringHashCodes(TextButton.styleFrom().toString()),
     );
     expect(m3.locale, null);
+    expect(m3.subHeaderForegroundColor, colorScheme.onSurface.withOpacity(0.60));
+    expect(
+      m3.toggleButtonTextStyle,
+      textTheme.titleSmall?.apply(color: m3.subHeaderForegroundColor),
+    );
   });
 
   testWidgets('DatePickerTheme.defaults M2 defaults', (WidgetTester tester) async {
@@ -333,65 +342,65 @@ void main() {
       textTheme.bodySmall?.apply(color: colorScheme.onSurface.withOpacity(0.60)),
     );
     expect(m2.dayStyle, textTheme.bodySmall);
-    expect(m2.dayForegroundColor?.resolve(<MaterialState>{}), colorScheme.onSurface);
+    expect(m2.dayForegroundColor?.resolve(<WidgetState>{}), colorScheme.onSurface);
     expect(
-      m2.dayForegroundColor?.resolve(<MaterialState>{MaterialState.selected}),
+      m2.dayForegroundColor?.resolve(<WidgetState>{WidgetState.selected}),
       colorScheme.onPrimary,
     );
     expect(
-      m2.dayForegroundColor?.resolve(<MaterialState>{MaterialState.disabled}),
+      m2.dayForegroundColor?.resolve(<WidgetState>{WidgetState.disabled}),
       colorScheme.onSurface.withOpacity(0.38),
     );
-    expect(m2.dayBackgroundColor?.resolve(<MaterialState>{}), null);
+    expect(m2.dayBackgroundColor?.resolve(<WidgetState>{}), null);
     expect(
-      m2.dayBackgroundColor?.resolve(<MaterialState>{MaterialState.selected}),
+      m2.dayBackgroundColor?.resolve(<WidgetState>{WidgetState.selected}),
       colorScheme.primary,
     );
-    expect(m2.dayOverlayColor?.resolve(<MaterialState>{}), null);
+    expect(m2.dayOverlayColor?.resolve(<WidgetState>{}), null);
     expect(
-      m2.dayOverlayColor?.resolve(<MaterialState>{MaterialState.selected, MaterialState.hovered}),
+      m2.dayOverlayColor?.resolve(<WidgetState>{WidgetState.selected, WidgetState.hovered}),
       colorScheme.onPrimary.withOpacity(0.08),
     );
     expect(
-      m2.dayOverlayColor?.resolve(<MaterialState>{MaterialState.selected, MaterialState.focused}),
+      m2.dayOverlayColor?.resolve(<WidgetState>{WidgetState.selected, WidgetState.focused}),
       colorScheme.onPrimary.withOpacity(0.12),
     );
     expect(
-      m2.dayOverlayColor?.resolve(<MaterialState>{MaterialState.selected, MaterialState.pressed}),
+      m2.dayOverlayColor?.resolve(<WidgetState>{WidgetState.selected, WidgetState.pressed}),
       colorScheme.onPrimary.withOpacity(0.38),
     );
     expect(
-      m2.dayOverlayColor?.resolve(<MaterialState>{
-        MaterialState.selected,
-        MaterialState.hovered,
-        MaterialState.focused,
+      m2.dayOverlayColor?.resolve(<WidgetState>{
+        WidgetState.selected,
+        WidgetState.hovered,
+        WidgetState.focused,
       }),
       colorScheme.onPrimary.withOpacity(0.08),
     );
     expect(
-      m2.dayOverlayColor?.resolve(<MaterialState>{
-        MaterialState.selected,
-        MaterialState.hovered,
-        MaterialState.pressed,
+      m2.dayOverlayColor?.resolve(<WidgetState>{
+        WidgetState.selected,
+        WidgetState.hovered,
+        WidgetState.pressed,
       }),
       colorScheme.onPrimary.withOpacity(0.38),
     );
     expect(
-      m2.dayOverlayColor?.resolve(<MaterialState>{MaterialState.hovered}),
+      m2.dayOverlayColor?.resolve(<WidgetState>{WidgetState.hovered}),
       colorScheme.onSurfaceVariant.withOpacity(0.08),
     );
     expect(
-      m2.dayOverlayColor?.resolve(<MaterialState>{MaterialState.focused}),
+      m2.dayOverlayColor?.resolve(<WidgetState>{WidgetState.focused}),
       colorScheme.onSurfaceVariant.withOpacity(0.12),
     );
     expect(
-      m2.dayOverlayColor?.resolve(<MaterialState>{MaterialState.pressed}),
+      m2.dayOverlayColor?.resolve(<WidgetState>{WidgetState.pressed}),
       colorScheme.onSurfaceVariant.withOpacity(0.12),
     );
-    expect(m2.dayShape?.resolve(<MaterialState>{}), const CircleBorder());
-    expect(m2.todayForegroundColor?.resolve(<MaterialState>{}), colorScheme.primary);
+    expect(m2.dayShape?.resolve(<WidgetState>{}), const CircleBorder());
+    expect(m2.todayForegroundColor?.resolve(<WidgetState>{}), colorScheme.primary);
     expect(
-      m2.todayForegroundColor?.resolve(<MaterialState>{MaterialState.disabled}),
+      m2.todayForegroundColor?.resolve(<WidgetState>{WidgetState.disabled}),
       colorScheme.onSurface.withOpacity(0.38),
     );
     expect(m2.todayBorder, BorderSide(color: colorScheme.primary));
@@ -401,38 +410,38 @@ void main() {
     expect(m2.rangePickerShape, const RoundedRectangleBorder());
     expect(m2.rangePickerShadowColor, Colors.transparent);
     expect(m2.rangePickerSurfaceTintColor, Colors.transparent);
-    expect(m2.rangeSelectionOverlayColor?.resolve(<MaterialState>{}), null);
+    expect(m2.rangeSelectionOverlayColor?.resolve(<WidgetState>{}), null);
     expect(
-      m2.rangeSelectionOverlayColor?.resolve(<MaterialState>{
-        MaterialState.selected,
-        MaterialState.hovered,
+      m2.rangeSelectionOverlayColor?.resolve(<WidgetState>{
+        WidgetState.selected,
+        WidgetState.hovered,
       }),
       colorScheme.onPrimary.withOpacity(0.08),
     );
     expect(
-      m2.rangeSelectionOverlayColor?.resolve(<MaterialState>{
-        MaterialState.selected,
-        MaterialState.focused,
+      m2.rangeSelectionOverlayColor?.resolve(<WidgetState>{
+        WidgetState.selected,
+        WidgetState.focused,
       }),
       colorScheme.onPrimary.withOpacity(0.12),
     );
     expect(
-      m2.rangeSelectionOverlayColor?.resolve(<MaterialState>{
-        MaterialState.selected,
-        MaterialState.pressed,
+      m2.rangeSelectionOverlayColor?.resolve(<WidgetState>{
+        WidgetState.selected,
+        WidgetState.pressed,
       }),
       colorScheme.onPrimary.withOpacity(0.38),
     );
     expect(
-      m2.rangeSelectionOverlayColor?.resolve(<MaterialState>{MaterialState.hovered}),
+      m2.rangeSelectionOverlayColor?.resolve(<WidgetState>{WidgetState.hovered}),
       colorScheme.onSurfaceVariant.withOpacity(0.08),
     );
     expect(
-      m2.rangeSelectionOverlayColor?.resolve(<MaterialState>{MaterialState.focused}),
+      m2.rangeSelectionOverlayColor?.resolve(<WidgetState>{WidgetState.focused}),
       colorScheme.onSurfaceVariant.withOpacity(0.12),
     );
     expect(
-      m2.rangeSelectionOverlayColor?.resolve(<MaterialState>{MaterialState.pressed}),
+      m2.rangeSelectionOverlayColor?.resolve(<WidgetState>{WidgetState.pressed}),
       colorScheme.onSurfaceVariant.withOpacity(0.12),
     );
     expect(m2.rangePickerHeaderBackgroundColor, colorScheme.primary);
@@ -450,31 +459,35 @@ void main() {
       equalsIgnoringHashCodes(TextButton.styleFrom().toString()),
     );
     expect(m2.locale, null);
+    expect(m2.yearShape?.resolve(<WidgetState>{}), const StadiumBorder());
+    expect(m2.subHeaderForegroundColor, colorScheme.onSurface.withOpacity(0.60));
+    expect(
+      m2.toggleButtonTextStyle,
+      textTheme.titleSmall?.apply(color: m2.subHeaderForegroundColor),
+    );
   });
 
   testWidgets('Default DatePickerThemeData debugFillProperties', (WidgetTester tester) async {
-    final DiagnosticPropertiesBuilder builder = DiagnosticPropertiesBuilder();
+    final builder = DiagnosticPropertiesBuilder();
     const DatePickerThemeData().debugFillProperties(builder);
 
-    final List<String> description =
-        builder.properties
-            .where((DiagnosticsNode node) => !node.isFiltered(DiagnosticLevel.info))
-            .map((DiagnosticsNode node) => node.toString())
-            .toList();
+    final List<String> description = builder.properties
+        .where((DiagnosticsNode node) => !node.isFiltered(DiagnosticLevel.info))
+        .map((DiagnosticsNode node) => node.toString())
+        .toList();
 
     expect(description, <String>[]);
   });
 
   testWidgets('DatePickerThemeData implements debugFillProperties', (WidgetTester tester) async {
-    final DiagnosticPropertiesBuilder builder = DiagnosticPropertiesBuilder();
+    final builder = DiagnosticPropertiesBuilder();
 
     datePickerTheme.debugFillProperties(builder);
 
-    final List<String> description =
-        builder.properties
-            .where((DiagnosticsNode node) => !node.isFiltered(DiagnosticLevel.info))
-            .map((DiagnosticsNode node) => node.toString())
-            .toList();
+    final List<String> description = builder.properties
+        .where((DiagnosticsNode node) => !node.isFiltered(DiagnosticLevel.info))
+        .map((DiagnosticsNode node) => node.toString())
+        .toList();
 
     expect(
       description,
@@ -501,6 +514,7 @@ void main() {
         'yearForegroundColor: WidgetStatePropertyAll(${const Color(0xfffffffa)})',
         'yearBackgroundColor: WidgetStatePropertyAll(${const Color(0xfffffffb)})',
         'yearOverlayColor: WidgetStatePropertyAll(${const Color(0xfffffffc)})',
+        'yearShape: WidgetStatePropertyAll(RoundedRectangleBorder(BorderSide(width: 0.0, style: none), BorderRadius.zero))',
         'rangePickerBackgroundColor: ${const Color(0xfffffffd)}',
         'rangePickerElevation: 7.0',
         'rangePickerShadowColor: ${const Color(0xfffffffe)}',
@@ -513,10 +527,12 @@ void main() {
         'rangeSelectionBackgroundColor: ${const Color(0xffffff2f)}',
         'rangeSelectionOverlayColor: WidgetStatePropertyAll(${const Color(0xffffff3f)})',
         'dividerColor: ${const Color(0xffffff4f)}',
-        'inputDecorationTheme: InputDecorationTheme#00000(fillColor: ${const Color(0xffffff5f)}, border: UnderlineInputBorder())',
+        'inputDecorationTheme: InputDecorationThemeData#00000(fillColor: ${const Color(0xffffff5f)}, border: UnderlineInputBorder())',
         'cancelButtonStyle: ButtonStyle#00000(foregroundColor: WidgetStatePropertyAll(${const Color(0xffffff6f)}))',
         'confirmButtonStyle: ButtonStyle#00000(foregroundColor: WidgetStatePropertyAll(${const Color(0xffffff7f)}))',
         'locale: en',
+        'toggleButtonTextStyle: TextStyle(inherit: true, size: 13.0)',
+        'subHeaderForegroundColor: ${const Color(0xffffff8f)}',
       ]),
     );
   });
@@ -526,7 +542,7 @@ void main() {
   ) async {
     await tester.pumpWidget(
       MaterialApp(
-        theme: ThemeData(datePickerTheme: datePickerTheme, useMaterial3: true),
+        theme: ThemeData(datePickerTheme: datePickerTheme),
         home: Directionality(
           textDirection: TextDirection.ltr,
           child: Material(
@@ -566,28 +582,35 @@ void main() {
 
     final Text day31 = tester.widget<Text>(find.text('31'));
     final ShapeDecoration day31Decoration = findDayDecoration(tester, '31')!;
-    expect(day31.style?.color, datePickerTheme.dayForegroundColor?.resolve(<MaterialState>{}));
+    expect(day31.style?.color, datePickerTheme.dayForegroundColor?.resolve(<WidgetState>{}));
     expect(day31.style?.fontSize, datePickerTheme.dayStyle?.fontSize);
-    expect(day31Decoration.color, datePickerTheme.dayBackgroundColor?.resolve(<MaterialState>{}));
-    expect(day31Decoration.shape, datePickerTheme.dayShape?.resolve(<MaterialState>{}));
+    expect(day31Decoration.color, datePickerTheme.dayBackgroundColor?.resolve(<WidgetState>{}));
+    expect(day31Decoration.shape, datePickerTheme.dayShape?.resolve(<WidgetState>{}));
 
     final Text day24 = tester.widget<Text>(find.text('24')); // DatePickerDialog.currentDate
     final ShapeDecoration day24Decoration = findDayDecoration(tester, '24')!;
-    final OutlinedBorder day24Shape = day24Decoration.shape as OutlinedBorder;
+    final day24Shape = day24Decoration.shape as OutlinedBorder;
     expect(day24.style?.fontSize, datePickerTheme.dayStyle?.fontSize);
-    expect(day24.style?.color, datePickerTheme.todayForegroundColor?.resolve(<MaterialState>{}));
-    expect(day24Decoration.color, datePickerTheme.todayBackgroundColor?.resolve(<MaterialState>{}));
+    expect(day24.style?.color, datePickerTheme.todayForegroundColor?.resolve(<WidgetState>{}));
+    expect(day24Decoration.color, datePickerTheme.todayBackgroundColor?.resolve(<WidgetState>{}));
     expect(
       day24Decoration.shape,
       datePickerTheme.dayShape
-          ?.resolve(<MaterialState>{})!
+          ?.resolve(<WidgetState>{})!
           .copyWith(
             side: datePickerTheme.todayBorder?.copyWith(
-              color: datePickerTheme.todayForegroundColor?.resolve(<MaterialState>{}),
+              color: datePickerTheme.todayForegroundColor?.resolve(<WidgetState>{}),
             ),
           ),
     );
     expect(day24Shape.side.width, datePickerTheme.todayBorder?.width);
+
+    // Test the toggle mode button style.
+    final Text january2023 = tester.widget<Text>(find.text('January 2023'));
+    expect(january2023.style?.fontSize, datePickerTheme.toggleButtonTextStyle?.fontSize);
+    expect(january2023.style?.color, datePickerTheme.subHeaderForegroundColor);
+    final Icon arrowIcon = tester.widget<Icon>(find.byIcon(Icons.arrow_drop_down));
+    expect(arrowIcon.color, datePickerTheme.subHeaderForegroundColor);
 
     // Test the day overlay color.
     final RenderObject inkFeatures = tester.allRenderObjects.firstWhere(
@@ -599,7 +622,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(
       inkFeatures,
-      paints..circle(color: datePickerTheme.dayOverlayColor?.resolve(<MaterialState>{})),
+      paints..circle(color: datePickerTheme.dayOverlayColor?.resolve(<WidgetState>{})),
     );
 
     // Show the year selector.
@@ -608,31 +631,25 @@ void main() {
     await tester.pumpAndSettle();
 
     final Text year2022 = tester.widget<Text>(find.text('2022'));
-    final BoxDecoration year2022Decoration = findTextDecoration(tester, '2022')!;
+    final ShapeDecoration year2022Decoration = findTextDecoration(tester, '2022')!;
     expect(year2022.style?.fontSize, datePickerTheme.yearStyle?.fontSize);
-    expect(year2022.style?.color, datePickerTheme.yearForegroundColor?.resolve(<MaterialState>{}));
-    expect(
-      year2022Decoration.color,
-      datePickerTheme.yearBackgroundColor?.resolve(<MaterialState>{}),
-    );
+    expect(year2022.style?.color, datePickerTheme.yearForegroundColor?.resolve(<WidgetState>{}));
+    expect(year2022Decoration.color, datePickerTheme.yearBackgroundColor?.resolve(<WidgetState>{}));
+    expect(year2022Decoration.shape, datePickerTheme.yearShape?.resolve(<WidgetState>{}));
 
     final Text year2023 = tester.widget<Text>(find.text('2023')); // DatePickerDialog.currentDate
-    final BoxDecoration year2023Decoration = findTextDecoration(tester, '2023')!;
+    final ShapeDecoration year2023Decoration = findTextDecoration(tester, '2023')!;
     expect(year2023.style?.fontSize, datePickerTheme.yearStyle?.fontSize);
-    expect(year2023.style?.color, datePickerTheme.todayForegroundColor?.resolve(<MaterialState>{}));
+    expect(year2023.style?.color, datePickerTheme.todayForegroundColor?.resolve(<WidgetState>{}));
     expect(
       year2023Decoration.color,
-      datePickerTheme.todayBackgroundColor?.resolve(<MaterialState>{}),
+      datePickerTheme.todayBackgroundColor?.resolve(<WidgetState>{}),
     );
-    expect(year2023Decoration.border?.top.width, datePickerTheme.todayBorder?.width);
-    expect(year2023Decoration.border?.bottom.width, datePickerTheme.todayBorder?.width);
+    final roundedRectangleBorder = year2023Decoration.shape as RoundedRectangleBorder;
+    expect(roundedRectangleBorder.side.width, datePickerTheme.todayBorder?.width);
     expect(
-      year2023Decoration.border?.top.color,
-      datePickerTheme.todayForegroundColor?.resolve(<MaterialState>{}),
-    );
-    expect(
-      year2023Decoration.border?.bottom.color,
-      datePickerTheme.todayForegroundColor?.resolve(<MaterialState>{}),
+      roundedRectangleBorder.side.color,
+      datePickerTheme.todayForegroundColor?.resolve(<WidgetState>{}),
     );
 
     // Test the year overlay color.
@@ -640,7 +657,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(
       inkFeatures,
-      paints..rect(color: datePickerTheme.yearOverlayColor?.resolve(<MaterialState>{})),
+      paints..rect(color: datePickerTheme.yearOverlayColor?.resolve(<WidgetState>{})),
     );
 
     final ButtonStyle cancelButtonStyle = actionButtonStyle(tester, 'Cancel');
@@ -661,7 +678,7 @@ void main() {
   ) async {
     await tester.pumpWidget(
       MaterialApp(
-        theme: ThemeData(datePickerTheme: datePickerTheme, useMaterial3: true),
+        theme: ThemeData(datePickerTheme: datePickerTheme),
         home: Directionality(
           textDirection: TextDirection.ltr,
           child: Material(
@@ -692,8 +709,9 @@ void main() {
     expect(selectDate.style?.fontSize, datePickerTheme.headerHelpStyle?.fontSize);
     expect(headerMaterial.color, datePickerTheme.headerBackgroundColor);
 
-    final InputDecoration inputDecoration =
-        tester.widget<TextField>(find.byType(TextField)).decoration!;
+    final InputDecoration inputDecoration = tester
+        .widget<TextField>(find.byType(TextField))
+        .decoration!;
     expect(inputDecoration.fillColor, datePickerTheme.inputDecorationTheme?.fillColor);
 
     final ButtonStyle cancelButtonStyle = actionButtonStyle(tester, 'Cancel');
@@ -712,7 +730,7 @@ void main() {
   testWidgets('DateRangePickerDialog uses ThemeData datePicker theme', (WidgetTester tester) async {
     await tester.pumpWidget(
       MaterialApp(
-        theme: ThemeData(datePickerTheme: datePickerTheme, useMaterial3: true),
+        theme: ThemeData(datePickerTheme: datePickerTheme),
         home: Directionality(
           textDirection: TextDirection.ltr,
           child: Material(
@@ -764,7 +782,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(
       inkFeatures,
-      paints..circle(color: datePickerTheme.dayOverlayColor?.resolve(<MaterialState>{})),
+      paints..circle(color: datePickerTheme.dayOverlayColor?.resolve(<WidgetState>{})),
     );
 
     // Test the range selection overlay color.
@@ -772,7 +790,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(
       inkFeatures,
-      paints..circle(color: datePickerTheme.rangeSelectionOverlayColor?.resolve(<MaterialState>{})),
+      paints..circle(color: datePickerTheme.rangeSelectionOverlayColor?.resolve(<WidgetState>{})),
     );
   });
 
@@ -833,7 +851,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(
       inkFeatures,
-      paints..circle(color: datePickerTheme.dayOverlayColor?.resolve(<MaterialState>{})),
+      paints..circle(color: datePickerTheme.dayOverlayColor?.resolve(<WidgetState>{})),
     );
 
     // Test the range selection overlay color.
@@ -841,7 +859,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(
       inkFeatures,
-      paints..circle(color: datePickerTheme.rangeSelectionOverlayColor?.resolve(<MaterialState>{})),
+      paints..circle(color: datePickerTheme.rangeSelectionOverlayColor?.resolve(<WidgetState>{})),
     );
   });
 
@@ -852,7 +870,7 @@ void main() {
       addTearDown(tester.view.reset);
       await tester.pumpWidget(
         MaterialApp(
-          theme: ThemeData(datePickerTheme: datePickerTheme, useMaterial3: true),
+          theme: ThemeData(datePickerTheme: datePickerTheme),
           home: Directionality(
             textDirection: TextDirection.ltr,
             child: Material(
@@ -887,12 +905,11 @@ void main() {
   testWidgets('DatePicker uses ThemeData.inputDecorationTheme properties '
       'which are null in DatePickerThemeData.inputDecorationTheme', (WidgetTester tester) async {
     Widget buildWidget({
-      InputDecorationTheme? inputDecorationTheme,
+      InputDecorationThemeData? inputDecorationTheme,
       DatePickerThemeData? datePickerTheme,
     }) {
       return MaterialApp(
         theme: ThemeData(
-          useMaterial3: true,
           inputDecorationTheme: inputDecorationTheme,
           datePickerTheme: datePickerTheme,
         ),
@@ -916,7 +933,7 @@ void main() {
     // Test DatePicker with DatePickerThemeData.inputDecorationTheme.
     await tester.pumpWidget(
       buildWidget(
-        inputDecorationTheme: const InputDecorationTheme(filled: true),
+        inputDecorationTheme: const InputDecorationThemeData(filled: true),
         datePickerTheme: datePickerTheme,
       ),
     );
@@ -927,7 +944,7 @@ void main() {
     // Test DatePicker with ThemeData.inputDecorationTheme.
     await tester.pumpWidget(
       buildWidget(
-        inputDecorationTheme: const InputDecorationTheme(
+        inputDecorationTheme: const InputDecorationThemeData(
           filled: true,
           fillColor: Color(0xFF00FF00),
           border: OutlineInputBorder(),
@@ -944,16 +961,16 @@ void main() {
   testWidgets('DatePickerDialog resolves DatePickerTheme.dayOverlayColor states', (
     WidgetTester tester,
   ) async {
-    final MaterialStateProperty<Color> dayOverlayColor = MaterialStateProperty.resolveWith<Color>((
-      Set<MaterialState> states,
+    final WidgetStateProperty<Color> dayOverlayColor = WidgetStateProperty.resolveWith<Color>((
+      Set<WidgetState> states,
     ) {
-      if (states.contains(MaterialState.hovered)) {
+      if (states.contains(WidgetState.hovered)) {
         return const Color(0xff00ff00);
       }
-      if (states.contains(MaterialState.focused)) {
+      if (states.contains(WidgetState.focused)) {
         return const Color(0xffff00ff);
       }
-      if (states.contains(MaterialState.pressed)) {
+      if (states.contains(WidgetState.pressed)) {
         return const Color(0xffffff00);
       }
       return Colors.transparent;
@@ -997,7 +1014,7 @@ void main() {
       paints
         ..circle() // Today decoration.
         ..circle() // Selected day decoration.
-        ..circle(color: dayOverlayColor.resolve(<MaterialState>{MaterialState.hovered})),
+        ..circle(color: dayOverlayColor.resolve(<WidgetState>{WidgetState.hovered})),
     );
 
     // Test the pressed overlay color.
@@ -1010,9 +1027,9 @@ void main() {
         paints
           ..circle() // Today decoration.
           ..circle() // Selected day decoration.
-          ..circle(color: dayOverlayColor.resolve(<MaterialState>{MaterialState.hovered}))
-          ..circle(color: dayOverlayColor.resolve(<MaterialState>{MaterialState.hovered}))
-          ..circle(color: dayOverlayColor.resolve(<MaterialState>{MaterialState.pressed})),
+          ..circle(color: dayOverlayColor.resolve(<WidgetState>{WidgetState.hovered}))
+          ..circle(color: dayOverlayColor.resolve(<WidgetState>{WidgetState.hovered}))
+          ..circle(color: dayOverlayColor.resolve(<WidgetState>{WidgetState.pressed})),
       );
     } else {
       expect(
@@ -1020,8 +1037,8 @@ void main() {
         paints
           ..circle() // Today decoration.
           ..circle() // Selected day decoration.
-          ..circle(color: dayOverlayColor.resolve(<MaterialState>{MaterialState.hovered}))
-          ..circle(color: dayOverlayColor.resolve(<MaterialState>{MaterialState.pressed})),
+          ..circle(color: dayOverlayColor.resolve(<WidgetState>{WidgetState.hovered}))
+          ..circle(color: dayOverlayColor.resolve(<WidgetState>{WidgetState.pressed})),
       );
     }
 
@@ -1029,7 +1046,7 @@ void main() {
     await tester.pumpAndSettle();
 
     // Focus day selection.
-    for (int i = 0; i < 5; i++) {
+    for (var i = 0; i < 5; i++) {
       await tester.sendKeyEvent(LogicalKeyboardKey.tab);
       await tester.pumpAndSettle();
     }
@@ -1040,23 +1057,23 @@ void main() {
       paints
         ..circle() // Today decoration.
         ..circle() // Selected day decoration.
-        ..circle(color: dayOverlayColor.resolve(<MaterialState>{MaterialState.focused})),
+        ..circle(color: dayOverlayColor.resolve(<WidgetState>{WidgetState.focused})),
     );
   });
 
   testWidgets('DatePickerDialog resolves DatePickerTheme.yearOverlayColor states', (
     WidgetTester tester,
   ) async {
-    final MaterialStateProperty<Color> yearOverlayColor = MaterialStateProperty.resolveWith<Color>((
-      Set<MaterialState> states,
+    final WidgetStateProperty<Color> yearOverlayColor = WidgetStateProperty.resolveWith<Color>((
+      Set<WidgetState> states,
     ) {
-      if (states.contains(MaterialState.hovered)) {
+      if (states.contains(WidgetState.hovered)) {
         return const Color(0xff00ff00);
       }
-      if (states.contains(MaterialState.focused)) {
+      if (states.contains(WidgetState.focused)) {
         return const Color(0xffff00ff);
       }
-      if (states.contains(MaterialState.pressed)) {
+      if (states.contains(WidgetState.pressed)) {
         return const Color(0xffffff00);
       }
       return Colors.transparent;
@@ -1064,10 +1081,7 @@ void main() {
 
     await tester.pumpWidget(
       MaterialApp(
-        theme: ThemeData(
-          datePickerTheme: DatePickerThemeData(yearOverlayColor: yearOverlayColor),
-          useMaterial3: true,
-        ),
+        theme: ThemeData(datePickerTheme: DatePickerThemeData(yearOverlayColor: yearOverlayColor)),
         home: Directionality(
           textDirection: TextDirection.ltr,
           child: Material(
@@ -1097,7 +1111,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(
       inkFeatures,
-      paints..rect(color: yearOverlayColor.resolve(<MaterialState>{MaterialState.hovered})),
+      paints..rect(color: yearOverlayColor.resolve(<WidgetState>{WidgetState.hovered})),
     );
 
     // Test the pressed overlay color.
@@ -1106,15 +1120,15 @@ void main() {
     expect(
       inkFeatures,
       paints
-        ..rect(color: yearOverlayColor.resolve(<MaterialState>{MaterialState.hovered}))
-        ..rect(color: yearOverlayColor.resolve(<MaterialState>{MaterialState.pressed})),
+        ..rect(color: yearOverlayColor.resolve(<WidgetState>{WidgetState.hovered}))
+        ..rect(color: yearOverlayColor.resolve(<WidgetState>{WidgetState.pressed})),
     );
 
     await gesture.removePointer();
     await tester.pumpAndSettle();
 
     // Focus year selection.
-    for (int i = 0; i < 3; i++) {
+    for (var i = 0; i < 3; i++) {
       await tester.sendKeyEvent(LogicalKeyboardKey.tab);
       await tester.pumpAndSettle();
     }
@@ -1122,19 +1136,19 @@ void main() {
     // Test the focused overlay color.
     expect(
       inkFeatures,
-      paints..rect(color: yearOverlayColor.resolve(<MaterialState>{MaterialState.focused})),
+      paints..rect(color: yearOverlayColor.resolve(<WidgetState>{WidgetState.focused})),
     );
   });
 
   testWidgets('DateRangePickerDialog resolves DatePickerTheme.rangeSelectionOverlayColor states', (
     WidgetTester tester,
   ) async {
-    final MaterialStateProperty<Color> rangeSelectionOverlayColor =
-        MaterialStateProperty.resolveWith<Color>((Set<MaterialState> states) {
-          if (states.contains(MaterialState.hovered)) {
+    final WidgetStateProperty<Color> rangeSelectionOverlayColor =
+        WidgetStateProperty.resolveWith<Color>((Set<WidgetState> states) {
+          if (states.contains(WidgetState.hovered)) {
             return const Color(0xff00ff00);
           }
-          if (states.contains(MaterialState.pressed)) {
+          if (states.contains(WidgetState.pressed)) {
             return const Color(0xffffff00);
           }
           return Colors.transparent;
@@ -1146,7 +1160,6 @@ void main() {
           datePickerTheme: DatePickerThemeData(
             rangeSelectionOverlayColor: rangeSelectionOverlayColor,
           ),
-          useMaterial3: true,
         ),
         home: Directionality(
           textDirection: TextDirection.ltr,
@@ -1177,8 +1190,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(
       inkFeatures,
-      paints
-        ..circle(color: rangeSelectionOverlayColor.resolve(<MaterialState>{MaterialState.hovered})),
+      paints..circle(color: rangeSelectionOverlayColor.resolve(<WidgetState>{WidgetState.hovered})),
     );
 
     // Test the pressed overlay color.
@@ -1189,27 +1201,177 @@ void main() {
       expect(
         inkFeatures,
         paints
-          ..circle(
-            color: rangeSelectionOverlayColor.resolve(<MaterialState>{MaterialState.hovered}),
-          )
-          ..circle(
-            color: rangeSelectionOverlayColor.resolve(<MaterialState>{MaterialState.hovered}),
-          )
-          ..circle(
-            color: rangeSelectionOverlayColor.resolve(<MaterialState>{MaterialState.pressed}),
-          ),
+          ..circle(color: rangeSelectionOverlayColor.resolve(<WidgetState>{WidgetState.hovered}))
+          ..circle(color: rangeSelectionOverlayColor.resolve(<WidgetState>{WidgetState.hovered}))
+          ..circle(color: rangeSelectionOverlayColor.resolve(<WidgetState>{WidgetState.pressed})),
       );
     } else {
       expect(
         inkFeatures,
         paints
-          ..circle(
-            color: rangeSelectionOverlayColor.resolve(<MaterialState>{MaterialState.hovered}),
-          )
-          ..circle(
-            color: rangeSelectionOverlayColor.resolve(<MaterialState>{MaterialState.pressed}),
-          ),
+          ..circle(color: rangeSelectionOverlayColor.resolve(<WidgetState>{WidgetState.hovered}))
+          ..circle(color: rangeSelectionOverlayColor.resolve(<WidgetState>{WidgetState.pressed})),
       );
     }
   });
+
+  testWidgets('YearPicker maintains default year shape at textScaleFactor 1, 1.5, 2', (
+    WidgetTester tester,
+  ) async {
+    var textScaleFactor = 1.0;
+    Widget buildFrame() {
+      return MaterialApp(
+        home: Builder(
+          builder: (BuildContext context) {
+            return MediaQuery.withClampedTextScaling(
+              minScaleFactor: textScaleFactor,
+              maxScaleFactor: textScaleFactor,
+              child: Scaffold(
+                body: YearPicker(
+                  currentDate: DateTime(2025),
+                  firstDate: DateTime(2021),
+                  lastDate: DateTime(2030),
+                  selectedDate: DateTime(2025),
+                  onChanged: (DateTime value) {},
+                ),
+              ),
+            );
+          },
+        ),
+      );
+    }
+
+    await tester.pumpWidget(buildFrame());
+
+    // Find container whose child is text 2025.
+    final Finder yearContainer = find
+        .ancestor(of: find.text('2025'), matching: find.byType(Container))
+        .first;
+
+    expect(
+      tester.renderObject(yearContainer),
+      paints..rrect(
+        rrect: RRect.fromLTRBR(0.5, 0.5, 71.5, 35.5, const Radius.circular(17.5)),
+        color: const Color(0xFF6750A4),
+      ),
+    );
+
+    textScaleFactor = 1.5;
+    await tester.pumpWidget(buildFrame());
+
+    expect(
+      tester.renderObject(yearContainer),
+      paints..rrect(
+        rrect: RRect.fromLTRBR(0.5, 0.5, 107.5, 51.5, const Radius.circular(25.5)),
+        color: const Color(0xFF6750A4),
+      ),
+    );
+
+    textScaleFactor = 2;
+    await tester.pumpWidget(buildFrame());
+
+    expect(
+      tester.renderObject(yearContainer),
+      paints..rrect(
+        rrect: RRect.fromLTRBR(0.5, 0.5, 143.5, 51.5, const Radius.circular(25.5)),
+        color: const Color(0xFF6750A4),
+      ),
+    );
+  });
+
+  testWidgets('YearPicker applies shape from DatePickerThemeData.yearShape correctly', (
+    WidgetTester tester,
+  ) async {
+    const OutlinedBorder yearShpae = CircleBorder();
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ThemeData(
+          datePickerTheme: datePickerTheme.copyWith(
+            yearShape: WidgetStateProperty.all<OutlinedBorder>(yearShpae),
+          ),
+        ),
+        home: Directionality(
+          textDirection: TextDirection.ltr,
+          child: Material(
+            child: Center(
+              child: YearPicker(
+                currentDate: DateTime(2025),
+                firstDate: DateTime(2021),
+                lastDate: DateTime(2030),
+                selectedDate: DateTime(2025),
+                onChanged: (DateTime value) {},
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final ShapeDecoration year2022Decoration = findTextDecoration(tester, '2022')!;
+    final OutlinedBorder year2022roundedRectangleBorder = year2022Decoration.shape as CircleBorder;
+    expect(year2022roundedRectangleBorder.side.width, 0.0);
+    expect(year2022roundedRectangleBorder.side.color, yearShpae.side.color);
+
+    final ShapeDecoration year2025Decoration = findTextDecoration(tester, '2025')!;
+    final OutlinedBorder year2022RoundedRectangleBorder = year2025Decoration.shape as CircleBorder;
+    expect(year2022RoundedRectangleBorder.side.width, datePickerTheme.todayBorder?.width);
+    expect(
+      year2022RoundedRectangleBorder.side.color,
+      datePickerTheme.todayForegroundColor?.resolve(<WidgetState>{}),
+    );
+  });
+
+  testWidgets('Toggle button uses DatePickerTheme.toggleButtonTextStyle.color when it is defined', (
+    WidgetTester tester,
+  ) async {
+    const toggleButtonTextColor = Color(0xff00ff00);
+    const subHeaderForegroundColor = Color(0xffff0000);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ThemeData(
+          datePickerTheme: const DatePickerThemeData(
+            toggleButtonTextStyle: TextStyle(color: toggleButtonTextColor),
+            subHeaderForegroundColor: subHeaderForegroundColor,
+          ),
+        ),
+        home: DatePickerDialog(
+          initialDate: DateTime(2023, DateTime.january, 25),
+          firstDate: DateTime(2022),
+          lastDate: DateTime(2024, DateTime.december, 31),
+          currentDate: DateTime(2023, DateTime.january, 24),
+        ),
+      ),
+    );
+
+    final Text toggleButtonText = tester.widget(find.text('January 2023'));
+    expect(toggleButtonText.style?.color, toggleButtonTextColor);
+  });
+
+  testWidgets(
+    'Toggle button uses DatePickerTheme.subHeaderForegroundColor when DatePickerTheme.toggleButtonTextStyle.color is not defined',
+    (WidgetTester tester) async {
+      const subHeaderForegroundColor = Color(0xffff0000);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ThemeData(
+            datePickerTheme: const DatePickerThemeData(
+              toggleButtonTextStyle: TextStyle(),
+              subHeaderForegroundColor: subHeaderForegroundColor,
+            ),
+          ),
+          home: DatePickerDialog(
+            initialDate: DateTime(2023, DateTime.january, 25),
+            firstDate: DateTime(2022),
+            lastDate: DateTime(2024, DateTime.december, 31),
+            currentDate: DateTime(2023, DateTime.january, 24),
+          ),
+        ),
+      );
+
+      final Text toggleButtonText = tester.widget(find.text('January 2023'));
+      expect(toggleButtonText.style?.color, subHeaderForegroundColor);
+    },
+  );
 }

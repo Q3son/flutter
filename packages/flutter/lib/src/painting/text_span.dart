@@ -85,6 +85,7 @@ class TextSpan extends InlineSpan implements HitTestTarget, MouseTrackerAnnotati
     this.onEnter,
     this.onExit,
     this.semanticsLabel,
+    this.semanticsIdentifier,
     this.locale,
     this.spellOut,
   }) : mouseCursor =
@@ -230,6 +231,14 @@ class TextSpan extends InlineSpan implements HitTestTarget, MouseTrackerAnnotati
   /// ```
   final String? semanticsLabel;
 
+  /// A unique identifier for the semantics node for this [TextSpan].
+  ///
+  /// This is useful for cases where the text content of the [TextSpan] needs
+  /// to be uniquely identified through the automation tools without having
+  /// a dependency on the actual content of the text that can possibly be
+  /// dynamic in nature.
+  final String? semanticsIdentifier;
+
   /// The language of the text in this span and its span children.
   ///
   /// Setting the locale of this text span affects the way that assistive
@@ -280,7 +289,7 @@ class TextSpan extends InlineSpan implements HitTestTarget, MouseTrackerAnnotati
     List<PlaceholderDimensions>? dimensions,
   }) {
     assert(debugAssertIsValid());
-    final bool hasStyle = style != null;
+    final hasStyle = style != null;
     if (hasStyle) {
       builder.pushStyle(style!.getTextStyle(textScaler: textScaler));
     }
@@ -414,6 +423,7 @@ class TextSpan extends InlineSpan implements HitTestTarget, MouseTrackerAnnotati
               ),
           ],
           semanticsLabel: semanticsLabel,
+          semanticsIdentifier: semanticsIdentifier,
           recognizer: recognizer,
         ),
       );
@@ -475,14 +485,15 @@ class TextSpan extends InlineSpan implements HitTestTarget, MouseTrackerAnnotati
     if (other.runtimeType != runtimeType) {
       return RenderComparison.layout;
     }
-    final TextSpan textSpan = other as TextSpan;
+    final textSpan = other as TextSpan;
     if (textSpan.text != text ||
         children?.length != textSpan.children?.length ||
         (style == null) != (textSpan.style == null)) {
       return RenderComparison.layout;
     }
-    RenderComparison result =
-        recognizer == textSpan.recognizer ? RenderComparison.identical : RenderComparison.metadata;
+    RenderComparison result = recognizer == textSpan.recognizer
+        ? RenderComparison.identical
+        : RenderComparison.metadata;
     if (style != null) {
       final RenderComparison candidate = style!.compareTo(textSpan.style!);
       if (candidate.index > result.index) {
@@ -493,7 +504,7 @@ class TextSpan extends InlineSpan implements HitTestTarget, MouseTrackerAnnotati
       }
     }
     if (children != null) {
-      for (int index = 0; index < children!.length; index += 1) {
+      for (var index = 0; index < children!.length; index += 1) {
         final RenderComparison candidate = children![index].compareTo(textSpan.children![index]);
         if (candidate.index > result.index) {
           result = candidate;
@@ -521,6 +532,7 @@ class TextSpan extends InlineSpan implements HitTestTarget, MouseTrackerAnnotati
         other.text == text &&
         other.recognizer == recognizer &&
         other.semanticsLabel == semanticsLabel &&
+        other.semanticsIdentifier == semanticsIdentifier &&
         onEnter == other.onEnter &&
         onExit == other.onExit &&
         mouseCursor == other.mouseCursor &&
@@ -533,6 +545,7 @@ class TextSpan extends InlineSpan implements HitTestTarget, MouseTrackerAnnotati
     text,
     recognizer,
     semanticsLabel,
+    semanticsIdentifier,
     onEnter,
     onExit,
     mouseCursor,
@@ -569,6 +582,10 @@ class TextSpan extends InlineSpan implements HitTestTarget, MouseTrackerAnnotati
 
     if (semanticsLabel != null) {
       properties.add(StringProperty('semanticsLabel', semanticsLabel));
+    }
+
+    if (semanticsIdentifier != null) {
+      properties.add(StringProperty('semanticsIdentifier', semanticsIdentifier));
     }
   }
 

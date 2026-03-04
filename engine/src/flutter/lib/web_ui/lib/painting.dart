@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-// For documentation see https://github.com/flutter/engine/blob/main/lib/ui/painting.dart
+// For documentation see https://github.com/flutter/flutter/blob/main/engine/src/flutter/lib/ui/painting.dart
 part of ui;
 
 void _validateColorStops(List<Color> colors, List<double>? colorStops) {
@@ -282,7 +282,7 @@ abstract class Paint {
   factory Paint() => engine.renderer.createPaint();
 
   factory Paint.from(Paint other) {
-    final Paint paint = Paint();
+    final paint = Paint();
     paint
       ..blendMode = other.blendMode
       ..color = other.color
@@ -443,6 +443,10 @@ class ColorFilter implements ImageFilter {
   const factory ColorFilter.matrix(List<double> matrix) = engine.EngineColorFilter.matrix;
   const factory ColorFilter.linearToSrgbGamma() = engine.EngineColorFilter.linearToSrgbGamma;
   const factory ColorFilter.srgbToLinearGamma() = engine.EngineColorFilter.srgbToLinearGamma;
+  factory ColorFilter.saturation(double saturation) = engine.EngineColorFilter.saturation;
+
+  @override
+  String get debugShortDescription => toString();
 }
 
 // These enum values must be kept in sync with SkBlurStyle.
@@ -517,7 +521,7 @@ class _MatrixColorTransform implements _ColorTransform {
 }
 
 _ColorTransform _getColorTransform(ColorSpace source, ColorSpace destination) {
-  const _MatrixColorTransform srgbToP3 = _MatrixColorTransform(<double>[
+  const srgbToP3 = _MatrixColorTransform(<double>[
     0.808052267214446, 0.220292047628890, -0.139648846160100,
     0.145738111193222, //
     0.096480880462996, 0.916386732581291, -0.086093928394828,
@@ -531,43 +535,40 @@ _ColorTransform _getColorTransform(ColorSpace source, ColorSpace destination) {
     -0.109450321455370, //
     0.214813187718391, 0.054268702864647, 1.406898424029350, -0.364892765879631,
   ]);
-  switch (source) {
-    case ColorSpace.sRGB:
-      switch (destination) {
-        case ColorSpace.sRGB:
-          return const _IdentityColorTransform();
-        case ColorSpace.extendedSRGB:
-          return const _IdentityColorTransform();
-        case ColorSpace.displayP3:
-          return srgbToP3;
-      }
-    case ColorSpace.extendedSRGB:
-      switch (destination) {
-        case ColorSpace.sRGB:
-          return const _ClampTransform(_IdentityColorTransform());
-        case ColorSpace.extendedSRGB:
-          return const _IdentityColorTransform();
-        case ColorSpace.displayP3:
-          return const _ClampTransform(srgbToP3);
-      }
-    case ColorSpace.displayP3:
-      switch (destination) {
-        case ColorSpace.sRGB:
-          return const _ClampTransform(p3ToSrgb);
-        case ColorSpace.extendedSRGB:
-          return p3ToSrgb;
-        case ColorSpace.displayP3:
-          return const _IdentityColorTransform();
-      }
-  }
+  return switch (source) {
+    ColorSpace.sRGB => switch (destination) {
+      ColorSpace.sRGB => const _IdentityColorTransform(),
+      ColorSpace.extendedSRGB => const _IdentityColorTransform(),
+      ColorSpace.displayP3 => srgbToP3,
+    },
+    ColorSpace.extendedSRGB => switch (destination) {
+      ColorSpace.sRGB => const _ClampTransform(_IdentityColorTransform()),
+      ColorSpace.extendedSRGB => const _IdentityColorTransform(),
+      ColorSpace.displayP3 => const _ClampTransform(srgbToP3),
+    },
+    ColorSpace.displayP3 => switch (destination) {
+      ColorSpace.sRGB => const _ClampTransform(p3ToSrgb),
+      ColorSpace.extendedSRGB => p3ToSrgb,
+      ColorSpace.displayP3 => const _IdentityColorTransform(),
+    },
+  };
 }
 
 // This needs to be kept in sync with the "_FilterQuality" enum in skwasm's canvas.cpp
 enum FilterQuality { none, low, medium, high }
 
 class ImageFilter {
-  factory ImageFilter.blur({double sigmaX = 0.0, double sigmaY = 0.0, TileMode? tileMode}) =>
-      engine.renderer.createBlurImageFilter(sigmaX: sigmaX, sigmaY: sigmaY, tileMode: tileMode);
+  factory ImageFilter.blur({
+    double sigmaX = 0.0,
+    double sigmaY = 0.0,
+    TileMode? tileMode,
+    Rect? bounds,
+  }) => engine.renderer.createBlurImageFilter(
+    sigmaX: sigmaX,
+    sigmaY: sigmaY,
+    tileMode: tileMode,
+    bounds: bounds,
+  );
 
   factory ImageFilter.dilate({double radiusX = 0.0, double radiusY = 0.0}) =>
       engine.renderer.createDilateImageFilter(radiusX: radiusX, radiusY: radiusY);
@@ -594,6 +595,8 @@ class ImageFilter {
   }
 
   static bool get isShaderFilterSupported => false;
+
+  String get debugShortDescription => toString();
 }
 
 enum ColorSpace { sRGB, extendedSRGB, displayP3 }
@@ -604,24 +607,19 @@ enum ImageByteFormat { rawRgba, rawStraightRgba, rawUnmodified, png }
 // This must be kept in sync with the `PixelFormat` enum in Skwasm's image.cpp.
 enum PixelFormat { rgba8888, bgra8888, rgbaFloat32 }
 
+enum TargetPixelFormat { dontCare, rgbaFloat32 }
+
 typedef ImageDecoderCallback = void Function(Image result);
 
 abstract class FrameInfo {
-  FrameInfo._();
-  Duration get duration => Duration(milliseconds: _durationMillis);
-  int get _durationMillis => 0;
+  Duration get duration;
   Image get image;
 }
 
-class Codec {
-  Codec._();
-  int get frameCount => 0;
-  int get repetitionCount => 0;
-  Future<FrameInfo> getNextFrame() {
-    return engine.futurize<FrameInfo>(_getNextFrame);
-  }
-
-  String? _getNextFrame(engine.Callback<FrameInfo> callback) => null;
+abstract class Codec {
+  int get frameCount;
+  int get repetitionCount;
+  Future<FrameInfo> getNextFrame();
   void dispose() {}
 }
 
@@ -642,39 +640,45 @@ Future<Codec> instantiateImageCodecFromBuffer(
   int? targetWidth,
   int? targetHeight,
   bool allowUpscaling = true,
-}) => engine.renderer.instantiateImageCodec(
-  buffer._list!,
-  targetWidth: targetWidth,
-  targetHeight: targetHeight,
-  allowUpscaling: allowUpscaling,
-);
+}) {
+  try {
+    return engine.renderer.instantiateImageCodec(
+      buffer._list!,
+      targetWidth: targetWidth,
+      targetHeight: targetHeight,
+      allowUpscaling: allowUpscaling,
+    );
+  } finally {
+    buffer.dispose();
+  }
+}
 
 Future<Codec> instantiateImageCodecWithSize(
   ImmutableBuffer buffer, {
   TargetImageSizeCallback? getTargetSize,
 }) async {
-  if (getTargetSize == null) {
-    return engine.renderer.instantiateImageCodec(buffer._list!);
-  } else {
-    final Codec codec = await engine.renderer.instantiateImageCodec(buffer._list!);
-    try {
-      final FrameInfo info = await codec.getNextFrame();
-      try {
-        final int width = info.image.width;
-        final int height = info.image.height;
-        final TargetImageSize targetSize = getTargetSize(width, height);
-        return engine.renderer.instantiateImageCodec(
-          buffer._list!,
-          targetWidth: targetSize.width,
-          targetHeight: targetSize.height,
-          allowUpscaling: false,
-        );
-      } finally {
-        info.image.dispose();
-      }
-    } finally {
-      codec.dispose();
+  Codec? codec;
+  FrameInfo? info;
+  try {
+    if (getTargetSize == null) {
+      return engine.renderer.instantiateImageCodec(buffer._list!);
+    } else {
+      codec = await engine.renderer.instantiateImageCodec(buffer._list!);
+      info = await codec.getNextFrame();
+      final int width = info.image.width;
+      final int height = info.image.height;
+      final TargetImageSize targetSize = getTargetSize(width, height);
+      return engine.renderer.instantiateImageCodec(
+        buffer._list!,
+        targetWidth: targetSize.width,
+        targetHeight: targetSize.height,
+        allowUpscaling: false,
+      );
     }
+  } finally {
+    info?.image.dispose();
+    codec?.dispose();
+    buffer.dispose();
   }
 }
 
@@ -689,30 +693,18 @@ class TargetImageSize {
   final int? height;
 }
 
-// TODO(mdebbar): Deprecate this and remove it.
-// https://github.com/flutter/flutter/issues/127395
-Future<Codec> webOnlyInstantiateImageCodecFromUrl(
-  Uri uri, {
-  ui_web.ImageCodecChunkCallback? chunkCallback,
-}) {
-  assert(() {
-    engine.printWarning(
-      'The webOnlyInstantiateImageCodecFromUrl API is deprecated and will be '
-      'removed in a future release. Please use `createImageCodecFromUrl` from '
-      '`dart:ui_web` instead.',
-    );
-    return true;
-  }());
-  return ui_web.createImageCodecFromUrl(uri, chunkCallback: chunkCallback);
-}
-
 void decodeImageFromList(Uint8List list, ImageDecoderCallback callback) {
   _decodeImageFromListAsync(list, callback);
 }
 
 Future<void> _decodeImageFromListAsync(Uint8List list, ImageDecoderCallback callback) async {
   final Codec codec = await instantiateImageCodec(list);
-  final FrameInfo frameInfo = await codec.getNextFrame();
+  final FrameInfo frameInfo;
+  try {
+    frameInfo = await codec.getNextFrame();
+  } finally {
+    codec.dispose();
+  }
   callback(frameInfo.image);
 }
 
@@ -722,24 +714,22 @@ Future<void> _decodeImageFromListAsync(Uint8List list, ImageDecoderCallback call
 // to right, then from top to down. The order of the 4 bytes of pixels is
 // decided by `format`.
 Future<Codec> createBmp(Uint8List pixels, int width, int height, int rowBytes, PixelFormat format) {
-  late bool swapRedBlue;
-  switch (format) {
-    case PixelFormat.bgra8888:
-      swapRedBlue = true;
-    case PixelFormat.rgba8888:
-      swapRedBlue = false;
-    case PixelFormat.rgbaFloat32:
-      throw UnimplementedError('RGB conversion from rgbaFloat32 data is not implemented');
-  }
+  final bool swapRedBlue = switch (format) {
+    PixelFormat.bgra8888 => true,
+    PixelFormat.rgba8888 => false,
+    PixelFormat.rgbaFloat32 => throw UnimplementedError(
+      'RGB conversion from rgbaFloat32 data is not implemented',
+    ),
+  };
 
   // See https://en.wikipedia.org/wiki/BMP_file_format for format examples.
   // The header is in the 108-byte BITMAPV4HEADER format, or as called by
   // Chromium, WindowsV4. Do not use the 56-byte or 52-byte Adobe formats, since
   // they're not supported.
-  const int dibSize = 0x6C /* 108: BITMAPV4HEADER */;
+  const dibSize = 0x6C /* 108: BITMAPV4HEADER */;
   const int headerSize = dibSize + 0x0E;
   final int bufferSize = headerSize + (width * height * 4);
-  final ByteData bmpData = ByteData(bufferSize);
+  final bmpData = ByteData(bufferSize);
   // 'BM' header
   bmpData.setUint16(0x00, 0x424D);
   // Size of data
@@ -777,12 +767,12 @@ Future<Codec> createBmp(Uint8List pixels, int width, int height, int rowBytes, P
   // Bitmask A
   bmpData.setUint32(0x42, 0xFF000000, Endian.little);
 
-  int destinationByte = headerSize;
-  final Uint32List combinedPixels = Uint32List.sublistView(pixels);
+  var destinationByte = headerSize;
+  final combinedPixels = Uint32List.sublistView(pixels);
   // BMP is scanlined from bottom to top. Rearrange here.
   for (int rowCount = height - 1; rowCount >= 0; rowCount -= 1) {
     int sourcePixel = rowCount * rowBytes;
-    for (int colCount = 0; colCount < width; colCount += 1) {
+    for (var colCount = 0; colCount < width; colCount += 1) {
       bmpData.setUint32(destinationByte, combinedPixels[sourcePixel], Endian.little);
       destinationByte += 4;
       sourcePixel += 1;
@@ -802,6 +792,7 @@ void decodeImageFromPixels(
   int? targetWidth,
   int? targetHeight,
   bool allowUpscaling = true,
+  TargetPixelFormat targetFormat = TargetPixelFormat.dontCare,
 }) => engine.renderer.decodeImageFromPixels(
   pixels,
   width,
@@ -813,6 +804,9 @@ void decodeImageFromPixels(
   targetHeight: targetHeight,
   allowUpscaling: allowUpscaling,
 );
+
+Image decodeImageFromPixelsSync(Uint8List pixels, int width, int height, PixelFormat format) =>
+    throw UnimplementedError('`decodeImageFromPixelsSync` is not implemented for web targets.');
 
 class Shadow {
   const Shadow({
@@ -868,15 +862,15 @@ class Shadow {
     }
     a ??= <Shadow>[];
     b ??= <Shadow>[];
-    final List<Shadow> result = <Shadow>[];
+    final result = <Shadow>[];
     final int commonLength = math.min(a.length, b.length);
-    for (int i = 0; i < commonLength; i += 1) {
+    for (var i = 0; i < commonLength; i += 1) {
       result.add(Shadow.lerp(a[i], b[i], t)!);
     }
-    for (int i = commonLength; i < a.length; i += 1) {
+    for (var i = commonLength; i < a.length; i += 1) {
       result.add(a[i].scale(1.0 - t));
     }
-    for (int i = commonLength; i < b.length; i += 1) {
+    for (var i = commonLength; i < b.length; i += 1) {
       result.add(b[i].scale(t));
     }
     return result;
@@ -919,7 +913,7 @@ abstract class ImageShader implements Shader {
 class ImmutableBuffer {
   ImmutableBuffer._(this._length);
   static Future<ImmutableBuffer> fromUint8List(Uint8List list) async {
-    final ImmutableBuffer instance = ImmutableBuffer._(list.length);
+    final instance = ImmutableBuffer._(list.length);
     instance._list = list;
     return instance;
   }
@@ -967,7 +961,7 @@ class ImageDescriptor {
   ImageDescriptor._() : _width = null, _height = null, _rowBytes = null, _format = null;
 
   static Future<ImageDescriptor> encoded(ImmutableBuffer buffer) async {
-    final ImageDescriptor descriptor = ImageDescriptor._();
+    final descriptor = ImageDescriptor._();
     descriptor._data = buffer._list;
     return descriptor;
   }
@@ -987,7 +981,11 @@ class ImageDescriptor {
   int get bytesPerPixel =>
       throw UnsupportedError('ImageDescriptor.bytesPerPixel is not supported on web.');
   void dispose() => _data = null;
-  Future<Codec> instantiateCodec({int? targetWidth, int? targetHeight}) async {
+  Future<Codec> instantiateCodec({
+    int? targetWidth,
+    int? targetHeight,
+    TargetPixelFormat targetFormat = TargetPixelFormat.dontCare,
+  }) async {
     if (_data == null) {
       throw StateError('Object is disposed');
     }
@@ -1012,14 +1010,54 @@ abstract class FragmentProgram {
   FragmentShader fragmentShader();
 }
 
+abstract class UniformFloatSlot {
+  UniformFloatSlot(this.name, this.index);
+
+  void set(double val);
+
+  int get shaderIndex;
+
+  final String name;
+
+  final int index;
+}
+
+abstract class UniformVec2Slot {
+  void set(double x, double y);
+}
+
+abstract class UniformVec3Slot {
+  void set(double x, double y, double z);
+}
+
+abstract class UniformVec4Slot {
+  void set(double x, double y, double z, double w);
+}
+
+abstract class ImageSamplerSlot {
+  void set(Image val);
+  int get shaderIndex;
+  String get name;
+}
+
 abstract class FragmentShader implements Shader {
   void setFloat(int index, double value);
 
-  void setImageSampler(int index, Image image);
+  void setImageSampler(int index, Image image, {FilterQuality filterQuality = FilterQuality.none});
 
   @override
   void dispose();
 
   @override
   bool get debugDisposed;
+
+  UniformFloatSlot getUniformFloat(String name, [int? index]);
+
+  UniformVec2Slot getUniformVec2(String name);
+
+  UniformVec3Slot getUniformVec3(String name);
+
+  UniformVec4Slot getUniformVec4(String name);
+
+  ImageSamplerSlot getImageSampler(String name);
 }

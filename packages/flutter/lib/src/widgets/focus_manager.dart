@@ -13,6 +13,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/painting.dart';
 import 'package:flutter/scheduler.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter/services.dart';
 
 import 'binding.dart';
@@ -51,7 +52,7 @@ bool _focusDebug(String Function() messageFunc, [Iterable<Object> Function()? de
   debugPrint('FOCUS: ${messageFunc()}');
   final Iterable<Object> details = detailsFunc?.call() ?? const <Object>[];
   if (details.isNotEmpty) {
-    for (final Object detail in details) {
+    for (final detail in details) {
       debugPrint('    $detail');
     }
   }
@@ -87,8 +88,8 @@ enum KeyEventResult {
 /// handlers without preventing the platform to handle; otherwise the node is
 /// ignored.
 KeyEventResult combineKeyEventResults(Iterable<KeyEventResult> results) {
-  bool hasSkipRemainingHandlers = false;
-  for (final KeyEventResult result in results) {
+  var hasSkipRemainingHandlers = false;
+  for (final result in results) {
     switch (result) {
       case KeyEventResult.handled:
         return KeyEventResult.handled;
@@ -705,7 +706,7 @@ class FocusNode with DiagnosticableTreeMixin, ChangeNotifier {
   /// depth-first order.
   Iterable<FocusNode> get descendants {
     if (_descendants == null) {
-      final List<FocusNode> result = <FocusNode>[];
+      final result = <FocusNode>[];
       for (final FocusNode child in _children) {
         result.addAll(child.descendants);
         result.add(child);
@@ -731,7 +732,7 @@ class FocusNode with DiagnosticableTreeMixin, ChangeNotifier {
   /// [FocusScopeNode] ([FocusManager.rootScope]).
   Iterable<FocusNode> get ancestors {
     if (_ancestors == null) {
-      final List<FocusNode> result = <FocusNode>[];
+      final result = <FocusNode>[];
       FocusNode? parent = _parent;
       while (parent != null) {
         result.add(parent);
@@ -1213,7 +1214,7 @@ class FocusNode with DiagnosticableTreeMixin, ChangeNotifier {
   /// track of previously focused children in that scope, so that if the focused
   /// child in that scope is removed, the previous focus returns.
   void _setAsFocusedChildForScope() {
-    FocusNode scopeFocus = this;
+    var scopeFocus = this;
     for (final FocusScopeNode ancestor in ancestors.whereType<FocusScopeNode>()) {
       assert(scopeFocus != ancestor, 'Somehow made a loop by setting focusedChild to its scope.');
       assert(
@@ -1298,7 +1299,7 @@ class FocusNode with DiagnosticableTreeMixin, ChangeNotifier {
 
   @override
   List<DiagnosticsNode> debugDescribeChildren() {
-    int count = 1;
+    var count = 1;
     return _children.map<DiagnosticsNode>((FocusNode child) {
       return child.toDiagnosticsNode(name: 'Child ${count++}');
     }).toList();
@@ -1307,7 +1308,7 @@ class FocusNode with DiagnosticableTreeMixin, ChangeNotifier {
   @override
   String toStringShort() {
     final bool hasDebugLabel = debugLabel != null && debugLabel!.isNotEmpty;
-    final String extraData =
+    final extraData =
         '${hasDebugLabel ? debugLabel : ''}'
         '${hasFocus && hasDebugLabel ? ' ' : ''}'
         '${hasFocus && !hasPrimaryFocus ? '[IN FOCUS PATH]' : ''}'
@@ -1357,6 +1358,7 @@ class FocusScopeNode extends FocusNode {
     super.skipTraversal,
     super.canRequestFocus,
     this.traversalEdgeBehavior = TraversalEdgeBehavior.closedLoop,
+    this.directionalTraversalEdgeBehavior = TraversalEdgeBehavior.stop,
   }) : super(descendantsAreFocusable: true);
 
   @override
@@ -1372,6 +1374,13 @@ class FocusScopeNode extends FocusNode {
   /// focus traversal takes place [FocusTraversalPolicy] will read this value
   /// and apply the new behavior.
   TraversalEdgeBehavior traversalEdgeBehavior;
+
+  /// Controls the directional transfer of focus when the focus is on the first or last item.
+  ///
+  /// Changing this field value has no immediate effect on the UI. Instead, next time
+  /// focus traversal takes place [FocusTraversalPolicy] will read this value
+  /// and apply the new behavior.
+  TraversalEdgeBehavior directionalTraversalEdgeBehavior;
 
   /// Returns true if this scope is the focused child of its parent scope.
   bool get isFirstFocus => enclosingScope!.focusedChild == this;
@@ -1512,10 +1521,9 @@ class FocusScopeNode extends FocusNode {
     if (_focusedChildren.isEmpty) {
       return;
     }
-    final List<String> childList =
-        _focusedChildren.reversed.map<String>((FocusNode child) {
-          return child.toStringShort();
-        }).toList();
+    final List<String> childList = _focusedChildren.reversed.map<String>((FocusNode child) {
+      return child.toStringShort();
+    }).toList();
     properties.add(
       IterableProperty<String>(
         'focusedChildren',
@@ -2037,7 +2045,7 @@ class FocusManager with DiagnosticableTreeMixin, ChangeNotifier {
     properties.add(
       DiagnosticsProperty<FocusNode>('nextFocus', _markedForFocus, defaultValue: null),
     );
-    final Element? element = primaryFocus?.context as Element?;
+    final element = primaryFocus?.context as Element?;
     if (element != null) {
       properties.add(
         DiagnosticsProperty<String>('primaryFocusCreator', element.debugGetCreatorChain(20)),
@@ -2053,20 +2061,12 @@ class FocusManager with DiagnosticableTreeMixin, ChangeNotifier {
 // value, and ChangeNotifier requires using VoidCallback.
 class _HighlightModeManager {
   _HighlightModeManager() {
-    // TODO(polina-c): stop duplicating code across disposables
-    // https://github.com/flutter/flutter/issues/137435
-    if (kFlutterMemoryAllocationsEnabled) {
-      FlutterMemoryAllocations.instance.dispatchObjectCreated(
-        library: 'package:flutter/widgets.dart',
-        className: '$_HighlightModeManager',
-        object: this,
-      );
-    }
+    assert(debugMaybeDispatchCreated('widgets', '_HighlightModeManager', this));
   }
 
-  // If set, indicates if the last interaction detected was touch or not. If
-  // null, no interactions have occurred yet.
-  bool? _lastInteractionWasTouch;
+  // If null, no interactions have occurred yet and the default highlight mode for the current
+  // platform applies.
+  bool? _lastInteractionRequiresTraditionalHighlights;
 
   FocusHighlightMode get highlightMode => _highlightMode ?? _defaultModeForPlatform;
   FocusHighlightMode? _highlightMode;
@@ -2122,16 +2122,16 @@ class _HighlightModeManager {
     // HardwareKeyboard.
     ServicesBinding.instance.keyEventManager.keyMessageHandler = handleKeyMessage;
     GestureBinding.instance.pointerRouter.addGlobalRoute(handlePointerEvent);
+    SemanticsBinding.instance.addSemanticsActionListener(handleSemanticsAction);
   }
 
   @mustCallSuper
   void dispose() {
-    if (kFlutterMemoryAllocationsEnabled) {
-      FlutterMemoryAllocations.instance.dispatchObjectDisposed(object: this);
-    }
+    assert(debugMaybeDispatchDisposed(this));
     if (ServicesBinding.instance.keyEventManager.keyMessageHandler == handleKeyMessage) {
       GestureBinding.instance.pointerRouter.removeGlobalRoute(handlePointerEvent);
       ServicesBinding.instance.keyEventManager.keyMessageHandler = null;
+      SemanticsBinding.instance.removeSemanticsActionListener(handleSemanticsAction);
     }
     _listeners = HashedObserverList<ValueChanged<FocusHighlightMode>>();
   }
@@ -2141,9 +2141,8 @@ class _HighlightModeManager {
     if (_listeners.isEmpty) {
       return;
     }
-    final List<ValueChanged<FocusHighlightMode>> localListeners =
-        List<ValueChanged<FocusHighlightMode>>.of(_listeners);
-    for (final ValueChanged<FocusHighlightMode> listener in localListeners) {
+    final localListeners = List<ValueChanged<FocusHighlightMode>>.of(_listeners);
+    for (final listener in localListeners) {
       try {
         if (_listeners.contains(listener)) {
           listener(highlightMode);
@@ -2151,14 +2150,13 @@ class _HighlightModeManager {
       } catch (exception, stack) {
         InformationCollector? collector;
         assert(() {
-          collector =
-              () => <DiagnosticsNode>[
-                DiagnosticsProperty<_HighlightModeManager>(
-                  'The $runtimeType sending notification was',
-                  this,
-                  style: DiagnosticsTreeStyle.errorProperty,
-                ),
-              ];
+          collector = () => <DiagnosticsNode>[
+            DiagnosticsProperty<_HighlightModeManager>(
+              'The $runtimeType sending notification was',
+              this,
+              style: DiagnosticsTreeStyle.errorProperty,
+            ),
+          ];
           return true;
         }());
         FlutterError.reportError(
@@ -2175,29 +2173,28 @@ class _HighlightModeManager {
   }
 
   void handlePointerEvent(PointerEvent event) {
-    final FocusHighlightMode expectedMode;
     switch (event.kind) {
       case PointerDeviceKind.touch:
       case PointerDeviceKind.stylus:
       case PointerDeviceKind.invertedStylus:
-        _lastInteractionWasTouch = true;
-        expectedMode = FocusHighlightMode.touch;
+        if (_lastInteractionRequiresTraditionalHighlights != true) {
+          _lastInteractionRequiresTraditionalHighlights = true;
+          updateMode();
+        }
       case PointerDeviceKind.mouse:
       case PointerDeviceKind.trackpad:
       case PointerDeviceKind.unknown:
-        _lastInteractionWasTouch = false;
-        expectedMode = FocusHighlightMode.traditional;
-    }
-    if (expectedMode != highlightMode) {
-      updateMode();
     }
   }
 
   bool handleKeyMessage(KeyMessage message) {
-    // Update highlightMode first, since things responding to the keys might
-    // look at the highlight mode, and it should be accurate.
-    _lastInteractionWasTouch = false;
-    updateMode();
+    // ignore: use_if_null_to_convert_nulls_to_bools
+    if (_lastInteractionRequiresTraditionalHighlights != false) {
+      // Update highlightMode first, since things responding to the keys might
+      // look at the highlight mode, and it should be accurate.
+      _lastInteractionRequiresTraditionalHighlights = false;
+      updateMode();
+    }
 
     assert(_focusDebug(() => 'Received key event $message'));
     if (FocusManager.instance.primaryFocus == null) {
@@ -2205,11 +2202,11 @@ class _HighlightModeManager {
       return false;
     }
 
-    bool handled = false;
+    var handled = false;
     // Check to see if any of the early handlers handle the key. If so, then
     // return early.
     if (_earlyKeyEventHandlers.isNotEmpty) {
-      final List<KeyEventResult> results = <KeyEventResult>[
+      final results = <KeyEventResult>[
         // Make a copy to prevent problems if the list is modified during iteration.
         for (final OnKeyEventCallback callback in _earlyKeyEventHandlers.toList())
           for (final KeyEvent event in message.events) callback(event),
@@ -2237,11 +2234,11 @@ class _HighlightModeManager {
     // Walk the current focus from the leaf to the root, calling each node's
     // onKeyEvent on the way up, and if one responds that they handled it or
     // want to stop propagation, stop.
-    for (final FocusNode node in <FocusNode>[
+    for (final node in <FocusNode>[
       FocusManager.instance.primaryFocus!,
       ...FocusManager.instance.primaryFocus!.ancestors,
     ]) {
-      final List<KeyEventResult> results = <KeyEventResult>[
+      final results = <KeyEventResult>[
         if (node.onKeyEvent != null)
           for (final KeyEvent event in message.events) node.onKeyEvent!(node, event),
         if (node.onKey != null && message.rawEvent != null) node.onKey!(node, message.rawEvent!),
@@ -2265,7 +2262,7 @@ class _HighlightModeManager {
 
     // Check to see if any late key event handlers want to handle the event.
     if (!handled && _lateKeyEventHandlers.isNotEmpty) {
-      final List<KeyEventResult> results = <KeyEventResult>[
+      final results = <KeyEventResult>[
         // Make a copy to prevent problems if the list is modified during iteration.
         for (final OnKeyEventCallback callback in _lateKeyEventHandlers.toList())
           for (final KeyEvent event in message.events) callback(event),
@@ -2290,20 +2287,29 @@ class _HighlightModeManager {
     return handled;
   }
 
+  void handleSemanticsAction(SemanticsActionEvent semanticsActionEvent) {
+    if (kIsWeb &&
+        semanticsActionEvent.type == SemanticsAction.focus &&
+        _lastInteractionRequiresTraditionalHighlights != true) {
+      _lastInteractionRequiresTraditionalHighlights = true;
+      updateMode();
+    }
+  }
+
   // Update function to be called whenever the state relating to highlightMode
   // changes.
   void updateMode() {
     final FocusHighlightMode newMode;
     switch (strategy) {
       case FocusHighlightStrategy.automatic:
-        if (_lastInteractionWasTouch == null) {
+        if (_lastInteractionRequiresTraditionalHighlights == null) {
           // If we don't have any information about the last interaction yet,
           // then just rely on the default value for the platform, which will be
           // determined based on the target platform if _highlightMode is not
           // set.
           return;
         }
-        if (_lastInteractionWasTouch!) {
+        if (_lastInteractionRequiresTraditionalHighlights!) {
           newMode = FocusHighlightMode.touch;
         } else {
           newMode = FocusHighlightMode.traditional;

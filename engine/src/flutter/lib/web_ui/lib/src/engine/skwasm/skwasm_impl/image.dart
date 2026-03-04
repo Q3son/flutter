@@ -24,7 +24,7 @@ class SkwasmImage extends SkwasmObjectWrapper<RawImage> implements ui.Image {
   }) {
     final SkDataHandle dataHandle = skDataCreate(pixels.length);
     final Pointer<Uint8> dataPointer = skDataGetPointer(dataHandle).cast<Uint8>();
-    for (int i = 0; i < pixels.length; i++) {
+    for (var i = 0; i < pixels.length; i++) {
       dataPointer[i] = pixels[i];
     }
     final ImageHandle imageHandle = imageCreateFromPixels(
@@ -39,7 +39,7 @@ class SkwasmImage extends SkwasmObjectWrapper<RawImage> implements ui.Image {
   }
 
   static final SkwasmFinalizationRegistry<RawImage> _registry =
-      SkwasmFinalizationRegistry<RawImage>(imageDispose);
+      SkwasmFinalizationRegistry<RawImage>((ImageHandle handle) => imageDispose(handle));
 
   @override
   void dispose() {
@@ -56,29 +56,31 @@ class SkwasmImage extends SkwasmObjectWrapper<RawImage> implements ui.Image {
   @override
   Future<ByteData?> toByteData({ui.ImageByteFormat format = ui.ImageByteFormat.rawRgba}) async {
     if (format == ui.ImageByteFormat.png) {
-      final ui.PictureRecorder recorder = ui.PictureRecorder();
-      final ui.Canvas canvas = ui.Canvas(recorder);
+      final recorder = ui.PictureRecorder();
+      final canvas = ui.Canvas(recorder);
       canvas.drawImage(this, ui.Offset.zero, ui.Paint());
-      final DomImageBitmap bitmap =
-          (await (renderer as SkwasmRenderer).surface.renderPictures(<SkwasmPicture>[
-            recorder.endRecording() as SkwasmPicture,
-          ])).imageBitmaps.single;
+      final picture = recorder.endRecording() as SkwasmPicture;
+      final surface = renderer.pictureToImageSurface as SkwasmSurface;
+      await surface.setSize(BitmapSize(width, height));
+      final DomImageBitmap bitmap = (await surface.rasterizeToImageBitmaps(<SkwasmPicture>[
+        picture,
+      ])).single;
       final DomOffscreenCanvas offscreenCanvas = createDomOffscreenCanvas(
-        bitmap.width.toDartInt,
-        bitmap.height.toDartInt,
+        bitmap.width,
+        bitmap.height,
       );
-      final DomCanvasRenderingContextBitmapRenderer context =
-          offscreenCanvas.getContext('bitmaprenderer')! as DomCanvasRenderingContextBitmapRenderer;
+      final context =
+          offscreenCanvas.getContext('bitmaprenderer')! as DomImageBitmapRenderingContext;
       context.transferFromImageBitmap(bitmap);
       final DomBlob blob = await offscreenCanvas.convertToBlob();
-      final JSArrayBuffer arrayBuffer = (await blob.arrayBuffer().toDart)! as JSArrayBuffer;
+      final arrayBuffer = (await blob.arrayBuffer().toDart)! as JSArrayBuffer;
 
       // Zero out the contents of the canvas so that resources can be reclaimed
       // by the browser.
       context.transferFromImageBitmap(null);
       return ByteData.view(arrayBuffer.toDart);
     } else {
-      return (renderer as SkwasmRenderer).surface.rasterizeImage(this, format);
+      return renderer.pictureToImageSurface.rasterizeImage(this, format);
     }
   }
 

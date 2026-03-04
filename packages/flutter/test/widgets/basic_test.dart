@@ -11,6 +11,7 @@ import 'dart:math' as math;
 import 'dart:ui' as ui;
 import 'dart:ui';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -25,7 +26,10 @@ void main() {
       addTearDown(image1.dispose);
 
       await tester.pumpWidget(
-        Directionality(textDirection: TextDirection.ltr, child: RawImage(image: image1)),
+        Directionality(
+          textDirection: TextDirection.ltr,
+          child: RawImage(image: image1),
+        ),
       );
       final RenderImage renderObject = tester.firstRenderObject<RenderImage>(find.byType(RawImage));
 
@@ -47,24 +51,25 @@ void main() {
       expect(renderObject.filterQuality, FilterQuality.medium);
       expect(renderObject.isAntiAlias, false);
 
-      final ui.Image image2 =
-          (await tester.runAsync<ui.Image>(() => createTestImage(width: 2, height: 2)))!;
+      final ui.Image image2 = (await tester.runAsync<ui.Image>(
+        () => createTestImage(width: 2, height: 2),
+      ))!;
       addTearDown(image2.dispose);
-      const String debugImageLabel = 'debugImageLabel';
+      const debugImageLabel = 'debugImageLabel';
       const double width = 1;
       const double height = 1;
-      const double scale = 2.0;
+      const scale = 2.0;
       const Color color = Colors.black;
       const Animation<double> opacity = AlwaysStoppedAnimation<double>(0.0);
       const BlendMode colorBlendMode = BlendMode.difference;
       const BoxFit fit = BoxFit.contain;
       const AlignmentGeometry alignment = Alignment.topCenter;
       const ImageRepeat repeat = ImageRepeat.repeat;
-      const Rect centerSlice = Rect.fromLTWH(0, 0, width, height);
-      const bool matchTextDirection = true;
-      const bool invertColors = true;
+      const centerSlice = Rect.fromLTWH(0, 0, width, height);
+      const matchTextDirection = true;
+      const invertColors = true;
       const FilterQuality filterQuality = FilterQuality.high;
-      const bool isAntiAlias = true;
+      const isAntiAlias = true;
 
       await tester.pumpWidget(
         Directionality(
@@ -158,7 +163,7 @@ void main() {
   group('FractionalTranslation', () {
     testWidgets('hit test - entirely inside the bounding box', (WidgetTester tester) async {
       final GlobalKey key1 = GlobalKey();
-      bool pointerDown = false;
+      var pointerDown = false;
 
       await tester.pumpWidget(
         Center(
@@ -185,7 +190,7 @@ void main() {
 
     testWidgets('hit test - partially inside the bounding box', (WidgetTester tester) async {
       final GlobalKey key1 = GlobalKey();
-      bool pointerDown = false;
+      var pointerDown = false;
 
       await tester.pumpWidget(
         Center(
@@ -212,7 +217,7 @@ void main() {
 
     testWidgets('hit test - completely outside the bounding box', (WidgetTester tester) async {
       final GlobalKey key1 = GlobalKey();
-      bool pointerDown = false;
+      var pointerDown = false;
 
       await tester.pumpWidget(
         Center(
@@ -240,7 +245,7 @@ void main() {
     testWidgets('semantics bounds are updated', (WidgetTester tester) async {
       final GlobalKey fractionalTranslationKey = GlobalKey();
       final GlobalKey textKey = GlobalKey();
-      Offset offset = const Offset(0.4, 0.4);
+      var offset = const Offset(0.4, 0.4);
 
       await tester.pumpWidget(
         StatefulBuilder(
@@ -326,7 +331,7 @@ void main() {
 
   group('Semantics', () {
     testWidgets('Semantics can set attributed Text', (WidgetTester tester) async {
-      final UniqueKey key = UniqueKey();
+      final key = UniqueKey();
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
@@ -368,8 +373,7 @@ void main() {
       expect(attributedValue.string, 'value');
       expect(attributedValue.attributes.length, 1);
       expect(attributedValue.attributes[0] is LocaleStringAttribute, isTrue);
-      final LocaleStringAttribute valueLocale =
-          attributedValue.attributes[0] as LocaleStringAttribute;
+      final valueLocale = attributedValue.attributes[0] as LocaleStringAttribute;
       expect(valueLocale.range, const TextRange(start: 0, end: 5));
       expect(valueLocale.locale, const Locale('en', 'MX'));
 
@@ -380,8 +384,296 @@ void main() {
       expect(attributedHint.attributes[0].range, const TextRange(start: 1, end: 2));
     });
 
+    testWidgets('Semantics does not merge role', (WidgetTester tester) async {
+      final key1 = UniqueKey();
+      final key2 = UniqueKey();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Semantics(
+              key: key1,
+              role: SemanticsRole.dialog,
+              child: Semantics(
+                key: key2,
+                role: SemanticsRole.alertDialog,
+                child: const Placeholder(),
+              ),
+            ),
+          ),
+        ),
+      );
+      final SemanticsNode node1 = tester.getSemantics(find.byKey(key1));
+      final SemanticsNode node2 = tester.getSemantics(find.byKey(key2));
+      expect(node1 != node2, isTrue);
+      expect(node1.role, SemanticsRole.dialog);
+      expect(node2.role, SemanticsRole.alertDialog);
+    });
+
+    testWidgets('Semantics does not merge role - text field', (WidgetTester tester) async {
+      final key1 = UniqueKey();
+      final key2 = UniqueKey();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Semantics(
+              key: key1,
+              role: SemanticsRole.dialog,
+              child: Semantics(key: key2, textField: true, child: const Placeholder()),
+            ),
+          ),
+        ),
+      );
+      final SemanticsNode node1 = tester.getSemantics(find.byKey(key1));
+      final SemanticsNode node2 = tester.getSemantics(find.byKey(key2));
+      expect(node1 != node2, isTrue);
+      expect(node1.role, SemanticsRole.dialog);
+      expect(node2.flagsCollection.isTextField, isTrue);
+    });
+
+    testWidgets('Semantics does not merge role - link', (WidgetTester tester) async {
+      final key1 = UniqueKey();
+      final key2 = UniqueKey();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Semantics(
+              key: key1,
+              role: SemanticsRole.dialog,
+              child: Semantics(key: key2, link: true, child: const Placeholder()),
+            ),
+          ),
+        ),
+      );
+      final SemanticsNode node1 = tester.getSemantics(find.byKey(key1));
+      final SemanticsNode node2 = tester.getSemantics(find.byKey(key2));
+      expect(node1 != node2, isTrue);
+      expect(node1.role, SemanticsRole.dialog);
+      expect(node2.flagsCollection.isLink, isTrue);
+    });
+
+    testWidgets('Semantics does not merge role - scopes route', (WidgetTester tester) async {
+      final key1 = UniqueKey();
+      final key2 = UniqueKey();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Semantics(
+              key: key1,
+              role: SemanticsRole.dialog,
+              child: Semantics(
+                key: key2,
+                scopesRoute: true,
+                explicitChildNodes: true,
+                child: const Placeholder(),
+              ),
+            ),
+          ),
+        ),
+      );
+      final SemanticsNode node1 = tester.getSemantics(find.byKey(key1));
+      final SemanticsNode node2 = tester.getSemantics(find.byKey(key2));
+      expect(node1 != node2, isTrue);
+      expect(node1.role, SemanticsRole.dialog);
+      expect(node2.flagsCollection.scopesRoute, isTrue);
+    });
+
+    testWidgets('Semantics does not merge role - header on web', (WidgetTester tester) async {
+      final key1 = UniqueKey();
+      final key2 = UniqueKey();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Semantics(
+              key: key1,
+              role: SemanticsRole.dialog,
+              child: Semantics(key: key2, header: true, child: const Placeholder()),
+            ),
+          ),
+        ),
+      );
+      final SemanticsNode node1 = tester.getSemantics(find.byKey(key1));
+      final SemanticsNode node2 = tester.getSemantics(find.byKey(key2));
+      if (kIsWeb) {
+        expect(node1 != node2, isTrue);
+        expect(node1.role, SemanticsRole.dialog);
+        expect(node2.flagsCollection.isHeader, isTrue);
+      } else {
+        expect(node1 == node2, isTrue);
+      }
+    });
+
+    testWidgets('Semantics does not merge role - image', (WidgetTester tester) async {
+      final key1 = UniqueKey();
+      final key2 = UniqueKey();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Semantics(
+              key: key1,
+              role: SemanticsRole.dialog,
+              child: Semantics(key: key2, image: true, child: const Placeholder()),
+            ),
+          ),
+        ),
+      );
+      final SemanticsNode node1 = tester.getSemantics(find.byKey(key1));
+      final SemanticsNode node2 = tester.getSemantics(find.byKey(key2));
+      expect(node1 != node2, isTrue);
+      expect(node1.role, SemanticsRole.dialog);
+      expect(node2.flagsCollection.isImage, isTrue);
+    });
+
+    testWidgets('Semantics does not merge role - slider', (WidgetTester tester) async {
+      final key1 = UniqueKey();
+      final key2 = UniqueKey();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Semantics(
+              key: key1,
+              role: SemanticsRole.dialog,
+              child: Semantics(key: key2, slider: true, child: const Placeholder()),
+            ),
+          ),
+        ),
+      );
+      final SemanticsNode node1 = tester.getSemantics(find.byKey(key1));
+      final SemanticsNode node2 = tester.getSemantics(find.byKey(key2));
+      expect(node1 != node2, isTrue);
+      expect(node1.role, SemanticsRole.dialog);
+      expect(node2.flagsCollection.isSlider, isTrue);
+    });
+
+    testWidgets('Semantics does not merge role - keyboard key', (WidgetTester tester) async {
+      final key1 = UniqueKey();
+      final key2 = UniqueKey();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Semantics(
+              key: key1,
+              role: SemanticsRole.dialog,
+              child: Semantics(key: key2, keyboardKey: true, child: const Placeholder()),
+            ),
+          ),
+        ),
+      );
+      final SemanticsNode node1 = tester.getSemantics(find.byKey(key1));
+      final SemanticsNode node2 = tester.getSemantics(find.byKey(key2));
+      expect(node1 != node2, isTrue);
+      expect(node1.role, SemanticsRole.dialog);
+      expect(node2.flagsCollection.isKeyboardKey, isTrue);
+    });
+
+    testWidgets('Semantics does not merge role - scopes route', (WidgetTester tester) async {
+      final key1 = UniqueKey();
+      final key2 = UniqueKey();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Semantics(
+              key: key1,
+              role: SemanticsRole.dialog,
+              child: Semantics(key: key2, slider: true, child: const Placeholder()),
+            ),
+          ),
+        ),
+      );
+      final SemanticsNode node1 = tester.getSemantics(find.byKey(key1));
+      final SemanticsNode node2 = tester.getSemantics(find.byKey(key2));
+      expect(node1 != node2, isTrue);
+      expect(node1.role, SemanticsRole.dialog);
+      expect(node2.flagsCollection.isSlider, isTrue);
+    });
+
+    testWidgets('Semantics can set controls visibility of nodes', (WidgetTester tester) async {
+      final key = UniqueKey();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Semantics(
+              key: key,
+              controlsNodes: const <String>{'abc'},
+              child: const Placeholder(),
+            ),
+          ),
+        ),
+      );
+      final SemanticsNode node = tester.getSemantics(find.byKey(key));
+      final SemanticsData data = node.getSemanticsData();
+      expect(data.controlsNodes!.length, 1);
+      expect(data.controlsNodes!.first, 'abc');
+    });
+
+    testWidgets('Semantics can set controls visibility of nodes', (WidgetTester tester) async {
+      final key = UniqueKey();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Semantics(
+              key: key,
+              controlsNodes: const <String>{'abc', 'ghi'},
+              child: Semantics(
+                controlsNodes: const <String>{'abc', 'def'},
+                child: const Placeholder(),
+              ),
+            ),
+          ),
+        ),
+      );
+      final SemanticsNode node = tester.getSemantics(find.byKey(key));
+      final SemanticsData data = node.getSemanticsData();
+      expect(data.controlsNodes!.length, 3);
+      expect(data.controlsNodes, <String>{'abc', 'ghi', 'def'});
+    });
+
+    testWidgets('Semantics can set semantics input type', (WidgetTester tester) async {
+      final key1 = UniqueKey();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Semantics(
+              key: key1,
+              inputType: SemanticsInputType.phone,
+              child: const SizedBox(width: 10, height: 10),
+            ),
+          ),
+        ),
+      );
+      final SemanticsNode node1 = tester.getSemantics(find.byKey(key1));
+      expect(node1.inputType, SemanticsInputType.phone);
+    });
+
+    testWidgets('Semantics can set alert rule', (WidgetTester tester) async {
+      final key = UniqueKey();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Semantics(key: key, role: SemanticsRole.alert, child: const Placeholder()),
+          ),
+        ),
+      );
+      final SemanticsNode node = tester.getSemantics(find.byKey(key));
+      final SemanticsData data = node.getSemanticsData();
+      expect(data.role, SemanticsRole.alert);
+    });
+
+    testWidgets('Semantics can set status rule', (WidgetTester tester) async {
+      final key = UniqueKey();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Semantics(key: key, role: SemanticsRole.status, child: const Placeholder()),
+          ),
+        ),
+      );
+      final SemanticsNode node = tester.getSemantics(find.byKey(key));
+      final SemanticsData data = node.getSemanticsData();
+      expect(data.role, SemanticsRole.status);
+    });
+
     testWidgets('Semantics can merge attributed strings', (WidgetTester tester) async {
-      final UniqueKey key = UniqueKey();
+      final key = UniqueKey();
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
@@ -435,10 +727,51 @@ void main() {
       expect(attributedHint.attributes[1].range, const TextRange(start: 6, end: 7));
     });
 
+    testWidgets('Semantics can use list and list item', (WidgetTester tester) async {
+      final key1 = UniqueKey();
+      final key2 = UniqueKey();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Semantics(
+              key: key1,
+              role: SemanticsRole.list,
+              container: true,
+              child: Semantics(
+                key: key2,
+                role: SemanticsRole.listItem,
+                container: true,
+                child: const Placeholder(),
+              ),
+            ),
+          ),
+        ),
+      );
+      final SemanticsNode listNode = tester.getSemantics(find.byKey(key1));
+      final SemanticsNode listItemNode = tester.getSemantics(find.byKey(key2));
+
+      expect(listNode.role, SemanticsRole.list);
+      expect(listItemNode.role, SemanticsRole.listItem);
+    });
+
+    testWidgets('Semantics can use form', (WidgetTester tester) async {
+      final key1 = UniqueKey();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Semantics(key: key1, role: SemanticsRole.form, container: true),
+          ),
+        ),
+      );
+      final SemanticsNode formNode = tester.getSemantics(find.byKey(key1));
+
+      expect(formNode.role, SemanticsRole.form);
+    });
+
     testWidgets('Semantics can merge attributed strings with non attributed string', (
       WidgetTester tester,
     ) async {
-      final UniqueKey key = UniqueKey();
+      final key = UniqueKey();
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
@@ -474,12 +807,96 @@ void main() {
       expect(attributedLabel.attributes[1] is SpellOutStringAttribute, isTrue);
       expect(attributedLabel.attributes[1].range, const TextRange(start: 15, end: 17));
     });
+
+    testWidgets(
+      'Semantics with attributedValue should be recognized as containing text and not fail',
+      (WidgetTester tester) async {
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Semantics(
+              attributedValue: AttributedString('test value'),
+              child: const Placeholder(),
+            ),
+          ),
+        );
+        expect(tester.takeException(), isNull);
+      },
+    );
+
+    testWidgets(
+      'Semantics with attributedDecreasedValue should be recognized as containing text and not fail',
+      (WidgetTester tester) async {
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Semantics(
+              attributedDecreasedValue: AttributedString('test value'),
+              child: const Placeholder(),
+            ),
+          ),
+        );
+        expect(tester.takeException(), isNull);
+      },
+    );
+
+    testWidgets(
+      'Semantics with attributedIncreasedValue should be recognized as containing text and not fail',
+      (WidgetTester tester) async {
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Semantics(
+              attributedIncreasedValue: AttributedString('test value'),
+              child: const Placeholder(),
+            ),
+          ),
+        );
+        expect(tester.takeException(), isNull);
+      },
+    );
+
+    testWidgets(
+      'Semantics with decreasedValue should be recognized as containing text and not fail',
+      (WidgetTester tester) async {
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Semantics(decreasedValue: 'test value', child: const Placeholder()),
+          ),
+        );
+        expect(tester.takeException(), isNull);
+      },
+    );
+
+    testWidgets(
+      'Semantics with increasedValue should be recognized as containing text and not fail',
+      (WidgetTester tester) async {
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Semantics(increasedValue: 'test value', child: const Placeholder()),
+          ),
+        );
+        expect(tester.takeException(), isNull);
+      },
+    );
+
+    testWidgets(
+      'Semantics with attributedHint should be recognized as containing text and not fail',
+      (WidgetTester tester) async {
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Semantics(
+              attributedHint: AttributedString('test value'),
+              child: const Placeholder(),
+            ),
+          ),
+        );
+        expect(tester.takeException(), isNull);
+      },
+    );
   });
 
   group('Row', () {
     testWidgets('multiple baseline aligned children', (WidgetTester tester) async {
-      final UniqueKey key1 = UniqueKey();
-      final UniqueKey key2 = UniqueKey();
+      final key1 = UniqueKey();
+      final key2 = UniqueKey();
       // The point size of the font must be a multiple of 4 until
       // https://github.com/flutter/flutter/issues/122066 is resolved.
       const double fontSize1 = 52;
@@ -527,7 +944,7 @@ void main() {
       // lines, but being aligned by the first line's baseline, they hang far
       // below the baseline. The size of the parent row is just enough to
       // contain both of them.
-      const double ascentRatio = 0.75;
+      const ascentRatio = 0.75;
       const double aboveBaseline1 = fontSize1 * ascentRatio;
       const double belowBaseline1 = fontSize1 * (1 - ascentRatio);
       const double aboveBaseline2 = fontSize2 * ascentRatio;
@@ -545,8 +962,8 @@ void main() {
       WidgetTester tester,
     ) async {
       // Regression test for https://github.com/flutter/flutter/issues/58898
-      final UniqueKey key1 = UniqueKey();
-      final UniqueKey key2 = UniqueKey();
+      final key1 = UniqueKey();
+      final key2 = UniqueKey();
       // The point size of the font must be a multiple of 4 until
       // https://github.com/flutter/flutter/issues/122066 is resolved.
       const double fontSize1 = 52;
@@ -595,7 +1012,7 @@ void main() {
       // lines, but being aligned by the first line's baseline, they hang far
       // below the baseline. The FlutterLogo extends further than both Texts,
       // so the size of the parent row should contain the FlutterLogo as well.
-      const double ascentRatio = 0.75;
+      const ascentRatio = 0.75;
       const double aboveBaseline1 = fontSize1 * ascentRatio;
       const double aboveBaseline2 = fontSize2 * ascentRatio;
       expect(rowBox.size.height, greaterThan(textBox1.size.height));
@@ -626,8 +1043,9 @@ void main() {
 
   testWidgets('UnconstrainedBox can set and update clipBehavior', (WidgetTester tester) async {
     await tester.pumpWidget(const UnconstrainedBox());
-    final RenderConstraintsTransformBox renderObject =
-        tester.allRenderObjects.whereType<RenderConstraintsTransformBox>().first;
+    final RenderConstraintsTransformBox renderObject = tester.allRenderObjects
+        .whereType<RenderConstraintsTransformBox>()
+        .first;
     expect(renderObject.clipBehavior, equals(Clip.none));
 
     await tester.pumpWidget(const UnconstrainedBox(clipBehavior: Clip.antiAlias));
@@ -637,7 +1055,7 @@ void main() {
   testWidgets('UnconstrainedBox warns only when clipBehavior is Clip.none', (
     WidgetTester tester,
   ) async {
-    for (final Clip? clip in <Clip?>[null, ...Clip.values]) {
+    for (final clip in <Clip?>[null, ...Clip.values]) {
       // Clear any render objects that were there before so that we can see more
       // than one error. Otherwise, it just throws the first one and skips the
       // rest, since the render objects haven't changed.
@@ -646,19 +1064,19 @@ void main() {
         Center(
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxHeight: 200, maxWidth: 200),
-            child:
-                clip == null
-                    ? const UnconstrainedBox(child: SizedBox(width: 400, height: 400))
-                    : UnconstrainedBox(
-                      clipBehavior: clip,
-                      child: const SizedBox(width: 400, height: 400),
-                    ),
+            child: clip == null
+                ? const UnconstrainedBox(child: SizedBox(width: 400, height: 400))
+                : UnconstrainedBox(
+                    clipBehavior: clip,
+                    child: const SizedBox(width: 400, height: 400),
+                  ),
           ),
         ),
       );
 
-      final RenderConstraintsTransformBox renderObject =
-          tester.allRenderObjects.whereType<RenderConstraintsTransformBox>().first;
+      final RenderConstraintsTransformBox renderObject = tester.allRenderObjects
+          .whereType<RenderConstraintsTransformBox>()
+          .first;
 
       // Defaults to Clip.none
       expect(renderObject.clipBehavior, equals(clip ?? Clip.none), reason: 'for clip = $clip');
@@ -713,7 +1131,7 @@ void main() {
   group('ColoredBox', () {
     late _MockCanvas mockCanvas;
     late _MockPaintingContext mockContext;
-    const Color colorToPaint = Color(0xFFABCDEF);
+    const colorToPaint = Color(0xFFABCDEF);
 
     setUp(() {
       mockContext = _MockPaintingContext();
@@ -740,13 +1158,17 @@ void main() {
     });
 
     testWidgets('ColoredBox - no size, child', (WidgetTester tester) async {
-      const ValueKey<int> key = ValueKey<int>(0);
+      const key = ValueKey<int>(0);
       const Widget child = SizedBox.expand(key: key);
       await tester.pumpWidget(
         const Flex(
           direction: Axis.horizontal,
           textDirection: TextDirection.ltr,
-          children: <Widget>[SizedBox.shrink(child: ColoredBox(color: colorToPaint, child: child))],
+          children: <Widget>[
+            SizedBox.shrink(
+              child: ColoredBox(color: colorToPaint, child: child),
+            ),
+          ],
         ),
       );
       expect(find.byType(ColoredBox), findsOneWidget);
@@ -775,7 +1197,7 @@ void main() {
     });
 
     testWidgets('ColoredBox - size, child', (WidgetTester tester) async {
-      const ValueKey<int> key = ValueKey<int>(0);
+      const key = ValueKey<int>(0);
       const Widget child = SizedBox.expand(key: key);
       await tester.pumpWidget(const ColoredBox(color: colorToPaint, child: child));
       expect(find.byType(ColoredBox), findsOneWidget);
@@ -791,18 +1213,226 @@ void main() {
     });
 
     testWidgets('ColoredBox - debugFillProperties', (WidgetTester tester) async {
-      const ColoredBox box = ColoredBox(color: colorToPaint);
-      final DiagnosticPropertiesBuilder properties = DiagnosticPropertiesBuilder();
+      const box = ColoredBox(color: colorToPaint);
+      final properties = DiagnosticPropertiesBuilder();
       box.debugFillProperties(properties);
 
       expect(properties.properties.first.value, colorToPaint);
+    });
+
+    testWidgets('ColoredBox - default isAntiAlias', (WidgetTester tester) async {
+      await tester.pumpWidget(const ColoredBox(color: colorToPaint));
+      expect(find.byType(ColoredBox), findsOneWidget);
+      final RenderObject renderColoredBox = tester.renderObject(find.byType(ColoredBox));
+
+      renderColoredBox.paint(mockContext, Offset.zero);
+      expect(mockCanvas.paints.single.isAntiAlias, isTrue);
+    });
+
+    testWidgets('ColoredBox - passing isAntiAlias = false', (WidgetTester tester) async {
+      await tester.pumpWidget(const ColoredBox(color: colorToPaint, isAntiAlias: false));
+      expect(find.byType(ColoredBox), findsOneWidget);
+      final RenderObject renderColoredBox = tester.renderObject(find.byType(ColoredBox));
+
+      renderColoredBox.paint(mockContext, Offset.zero);
+      expect(mockCanvas.paints.single.isAntiAlias, isFalse);
+    });
+
+    // This test verifies how `ColoredBox.isAntiAlias` affects rendering.
+    // The first row uses `isAntiAlias: true`, showing gaps between the white backgrounds.
+    // The second row uses `isAntiAlias: false`, demonstrating no gaps between the white backgrounds.
+    // The third row contains three tilted boxes with `isAntiAlias` set to true, false, and false, respectively.
+    testWidgets('ColoredBox golden test - anti-aliasing and rotation variations', (
+      WidgetTester tester,
+    ) async {
+      await tester.pumpWidget(
+        Center(
+          child: Directionality(
+            textDirection: TextDirection.ltr,
+            child: RepaintBoundary(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  spacing: 8,
+                  children: <Widget>[
+                    // Intentionally 4% larger than the original size to test anti-aliasing
+                    Transform.scale(
+                      scale: 1.04,
+                      child: const ColoredBox(
+                        color: Colors.orange,
+                        child: Padding(
+                          padding: EdgeInsets.all(2),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: <Widget>[
+                              ColoredBox(
+                                color: Colors.white,
+                                child: Padding(
+                                  padding: EdgeInsets.all(4.0),
+                                  child: Text(
+                                    'Short',
+                                    style: TextStyle(fontSize: 16, color: Colors.black),
+                                  ),
+                                ),
+                              ),
+                              ColoredBox(
+                                color: Colors.white,
+                                child: Padding(
+                                  padding: EdgeInsets.all(4.0),
+                                  child: Text(
+                                    'Just text ',
+                                    style: TextStyle(fontSize: 14, color: Colors.black),
+                                  ),
+                                ),
+                              ),
+                              ColoredBox(
+                                color: Colors.white,
+                                child: Padding(
+                                  padding: EdgeInsets.all(4.0),
+                                  child: Text(
+                                    ' Tall text ',
+                                    style: TextStyle(fontSize: 18, color: Colors.black),
+                                  ),
+                                ),
+                              ),
+                              ColoredBox(
+                                color: Colors.white,
+                                child: Padding(
+                                  padding: EdgeInsets.all(4.0),
+                                  child: Text(
+                                    'Medium',
+                                    style: TextStyle(fontSize: 32, color: Colors.black),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    Transform.scale(
+                      scale: 1.04,
+                      child: const ColoredBox(
+                        color: Colors.orange,
+                        isAntiAlias: false,
+                        child: Padding(
+                          padding: EdgeInsets.all(2),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: <Widget>[
+                              ColoredBox(
+                                color: Colors.white,
+                                isAntiAlias: false,
+                                child: Padding(
+                                  padding: EdgeInsets.all(4.0),
+                                  child: Text(
+                                    'Short',
+                                    style: TextStyle(fontSize: 16, color: Colors.black),
+                                  ),
+                                ),
+                              ),
+                              ColoredBox(
+                                color: Colors.white,
+                                isAntiAlias: false,
+                                child: Padding(
+                                  padding: EdgeInsets.all(4.0),
+                                  child: Text(
+                                    'Just text ',
+                                    style: TextStyle(fontSize: 14, color: Colors.black),
+                                  ),
+                                ),
+                              ),
+                              ColoredBox(
+                                color: Colors.white,
+                                isAntiAlias: false,
+                                child: Padding(
+                                  padding: EdgeInsets.all(4.0),
+                                  child: Text(
+                                    ' Tall text ',
+                                    style: TextStyle(fontSize: 18, color: Colors.black),
+                                  ),
+                                ),
+                              ),
+                              ColoredBox(
+                                color: Colors.white,
+                                isAntiAlias: false,
+                                child: Padding(
+                                  padding: EdgeInsets.all(4.0),
+                                  child: Text(
+                                    'Medium',
+                                    style: TextStyle(fontSize: 32, color: Colors.black),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: <Widget>[
+                        SizedBox.square(
+                          dimension: 80,
+                          child: Center(
+                            child: SizedBox.square(
+                              dimension: 50,
+                              child: Transform.rotate(
+                                angle: math.pi / 5,
+                                child: const ColoredBox(color: Colors.blue),
+                              ),
+                            ),
+                          ),
+                        ),
+                        SizedBox.square(
+                          dimension: 80,
+                          child: Center(
+                            child: SizedBox.square(
+                              dimension: 50,
+                              child: Transform.rotate(
+                                angle: math.pi / 5,
+                                child: const ColoredBox(color: Colors.amber, isAntiAlias: false),
+                              ),
+                            ),
+                          ),
+                        ),
+                        SizedBox.square(
+                          dimension: 80,
+                          child: Center(
+                            child: SizedBox.square(
+                              dimension: 50,
+                              child: Transform.rotate(
+                                angle: math.pi / 5,
+                                child: Transform.scale(
+                                  scale: 1.2,
+                                  child: const ColoredBox(color: Colors.teal, isAntiAlias: false),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+      await expectLater(find.byType(RepaintBoundary), matchesGoldenFile('basic.ColoredBox.0.png'));
     });
   });
 
   testWidgets('Inconsequential golden test', (WidgetTester tester) async {
     // The test validates the Flutter Gold integration. Any changes to the
     // golden file can be approved at any time.
-    await tester.pumpWidget(RepaintBoundary(child: Container(color: const Color(0xAAA61145))));
+    await tester.pumpWidget(RepaintBoundary(child: Container(color: const Color(0xAFF61145))));
 
     await tester.pumpAndSettle();
     await expectLater(
@@ -812,7 +1442,7 @@ void main() {
   });
 
   testWidgets('IgnorePointer ignores pointers', (WidgetTester tester) async {
-    final List<String> logs = <String>[];
+    final logs = <String>[];
     Widget target({required bool ignoring}) => Align(
       alignment: Alignment.topLeft,
       child: Directionality(
@@ -911,7 +1541,7 @@ void main() {
 
   group('IgnorePointer semantics', () {
     testWidgets('does not change semantics when not ignoring', (WidgetTester tester) async {
-      final UniqueKey key = UniqueKey();
+      final key = UniqueKey();
       await tester.pumpWidget(
         MaterialApp(
           home: IgnorePointer(
@@ -935,9 +1565,9 @@ void main() {
     });
 
     testWidgets('can toggle the ignoring.', (WidgetTester tester) async {
-      final UniqueKey key1 = UniqueKey();
-      final UniqueKey key2 = UniqueKey();
-      final UniqueKey key3 = UniqueKey();
+      final key1 = UniqueKey();
+      final key2 = UniqueKey();
+      final key3 = UniqueKey();
       await tester.pumpWidget(
         MaterialApp(
           home: TestIgnorePointer(
@@ -1008,8 +1638,8 @@ void main() {
     });
 
     testWidgets('drops semantics when its ignoringSemantics is true', (WidgetTester tester) async {
-      final SemanticsTester semantics = SemanticsTester(tester);
-      final UniqueKey key = UniqueKey();
+      final semantics = SemanticsTester(tester);
+      final key = UniqueKey();
       await tester.pumpWidget(
         MaterialApp(
           home: IgnorePointer(
@@ -1023,7 +1653,7 @@ void main() {
     });
 
     testWidgets('ignores user interactions', (WidgetTester tester) async {
-      final UniqueKey key = UniqueKey();
+      final key = UniqueKey();
       await tester.pumpWidget(
         MaterialApp(
           home: IgnorePointer(
@@ -1046,7 +1676,7 @@ void main() {
   });
 
   testWidgets('AbsorbPointer absorbs pointers', (WidgetTester tester) async {
-    final List<String> logs = <String>[];
+    final logs = <String>[];
     Widget target({required bool absorbing}) => Align(
       alignment: Alignment.topLeft,
       child: Directionality(
@@ -1144,7 +1774,7 @@ void main() {
   });
 
   testWidgets('Wrap implements debugFillProperties', (WidgetTester tester) async {
-    final DiagnosticPropertiesBuilder builder = DiagnosticPropertiesBuilder();
+    final builder = DiagnosticPropertiesBuilder();
     const Wrap(
       spacing: 8.0, // gap between adjacent Text widget
       runSpacing: 4.0, // gap between lines
@@ -1153,11 +1783,10 @@ void main() {
       children: <Widget>[Text('Hamilton'), Text('Lafayette'), Text('Mulligan')],
     ).debugFillProperties(builder);
 
-    final List<String> description =
-        builder.properties
-            .where((DiagnosticsNode node) => !node.isFiltered(DiagnosticLevel.info))
-            .map((DiagnosticsNode node) => node.toString())
-            .toList();
+    final List<String> description = builder.properties
+        .where((DiagnosticsNode node) => !node.isFiltered(DiagnosticLevel.info))
+        .map((DiagnosticsNode node) => node.toString())
+        .toList();
 
     expect(
       description,
@@ -1253,7 +1882,7 @@ class HitsRenderBox extends Matcher {
 
   @override
   bool matches(dynamic item, Map<dynamic, dynamic> matchState) {
-    final HitTestResult hitTestResult = item as HitTestResult;
+    final hitTestResult = item as HitTestResult;
     return hitTestResult.path.where((HitTestEntry entry) => entry.target == renderBox).isNotEmpty;
   }
 }
@@ -1271,7 +1900,7 @@ class DoesNotHitRenderBox extends Matcher {
 
   @override
   bool matches(dynamic item, Map<dynamic, dynamic> matchState) {
-    final HitTestResult hitTestResult = item as HitTestResult;
+    final hitTestResult = item as HitTestResult;
     return hitTestResult.path.where((HitTestEntry entry) => entry.target == renderBox).isEmpty;
   }
 }

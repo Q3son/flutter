@@ -2,9 +2,15 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "flutter/shell/platform/linux/fl_view_accessible.h"
+// Workaround missing C code compatibility in ATK header.
+// Fixed in https://gitlab.gnome.org/GNOME/at-spi2-core/-/merge_requests/219
+extern "C" {
+#include <atk/atk.h>
+}
+
 #include "flutter/shell/platform/linux/fl_accessible_node.h"
 #include "flutter/shell/platform/linux/fl_accessible_text_field.h"
+#include "flutter/shell/platform/linux/fl_view_accessible.h"
 #include "flutter/shell/platform/linux/public/flutter_linux/fl_value.h"
 #include "flutter/shell/platform/linux/public/flutter_linux/fl_view.h"
 
@@ -15,6 +21,8 @@ struct _FlViewAccessible {
 
   GWeakRef engine;
 
+  FlutterViewId view_id;
+
   // Semantics nodes keyed by ID
   GHashTable* semantics_nodes_by_id;
 
@@ -24,6 +32,14 @@ struct _FlViewAccessible {
 
 G_DEFINE_TYPE(FlViewAccessible, fl_view_accessible, ATK_TYPE_PLUG)
 
+// Enum copied from ATK 2.50, as the version we are building against doesn't
+// have this.
+typedef enum {
+  FL_ATK_LIVE_NONE,
+  FL_ATK_LIVE_POLITE,
+  FL_ATK_LIVE_ASSERTIVE
+} FlAtkLive;
+
 static FlAccessibleNode* create_node(FlViewAccessible* self,
                                      FlutterSemanticsNode2* semantics) {
   g_autoptr(FlEngine) engine = FL_ENGINE(g_weak_ref_get(&self->engine));
@@ -31,11 +47,11 @@ static FlAccessibleNode* create_node(FlViewAccessible* self,
     return nullptr;
   }
 
-  if (semantics->flags & kFlutterSemanticsFlagIsTextField) {
-    return fl_accessible_text_field_new(engine, semantics->id);
+  if (semantics->flags2->is_text_field) {
+    return fl_accessible_text_field_new(engine, self->view_id, semantics->id);
   }
 
-  return fl_accessible_node_new(engine, semantics->id);
+  return fl_accessible_node_new(engine, self->view_id, semantics->id);
 }
 
 static FlAccessibleNode* lookup_node(FlViewAccessible* self, int32_t id) {
@@ -129,16 +145,20 @@ static void fl_view_accessible_init(FlViewAccessible* self) {
       g_direct_hash, g_direct_equal, nullptr, g_object_unref);
 }
 
-FlViewAccessible* fl_view_accessible_new(FlEngine* engine) {
+FlViewAccessible* fl_view_accessible_new(FlEngine* engine,
+                                         FlutterViewId view_id) {
   FlViewAccessible* self =
       FL_VIEW_ACCESSIBLE(g_object_new(fl_view_accessible_get_type(), nullptr));
   g_weak_ref_init(&self->engine, engine);
+  self->view_id = view_id;
   return self;
 }
 
 void fl_view_accessible_handle_update_semantics(
     FlViewAccessible* self,
     const FlutterSemanticsUpdate2* update) {
+  g_return_if_fail(FL_IS_VIEW_ACCESSIBLE(self));
+
   g_autoptr(GHashTable) pending_children =
       g_hash_table_new_full(g_direct_hash, g_direct_equal, nullptr,
                             reinterpret_cast<GDestroyNotify>(fl_value_unref));
@@ -146,7 +166,7 @@ void fl_view_accessible_handle_update_semantics(
     FlutterSemanticsNode2* node = update->nodes[i];
     FlAccessibleNode* atk_node = get_node(self, node);
 
-    fl_accessible_node_set_flags(atk_node, node->flags);
+    fl_accessible_node_set_flags(atk_node, node->flags2);
     fl_accessible_node_set_actions(atk_node, node->actions);
     fl_accessible_node_set_name(atk_node, node->label);
     fl_accessible_node_set_extents(
@@ -178,7 +198,9 @@ void fl_view_accessible_handle_update_semantics(
         for (size_t i = 0; i < child_count; i++) {
           FlAccessibleNode* child =
               lookup_node(self, children_in_traversal_order[i]);
-          g_assert(child != nullptr);
+          if (child == nullptr) {
+            continue;
+          }
           fl_accessible_node_set_parent(child, ATK_OBJECT(parent), i);
           g_ptr_array_add(children, child);
         }
@@ -187,4 +209,17 @@ void fl_view_accessible_handle_update_semantics(
         return TRUE;
       },
       self);
+}
+
+void fl_view_accessible_send_announcement(FlViewAccessible* self,
+                                          const char* message,
+                                          gboolean assertive) {
+  g_return_if_fail(FL_IS_VIEW_ACCESSIBLE(self));
+  if (atk_get_major_version() == 2 && atk_get_minor_version() >= 50) {
+    g_signal_emit_by_name(
+        self, "notification", message,
+        assertive ? FL_ATK_LIVE_ASSERTIVE : FL_ATK_LIVE_POLITE);
+  } else if (atk_get_major_version() == 2 && atk_get_minor_version() >= 46) {
+    g_signal_emit_by_name(self, "announcement", message);
+  }
 }

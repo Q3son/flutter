@@ -9,6 +9,7 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:leak_tracker_flutter_testing/leak_tracker_flutter_testing.dart';
 import '../widgets/multi_view_testing.dart';
@@ -56,7 +57,7 @@ class PaintRecorder extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     log.add(size);
-    final Paint paint = Paint()..color = const Color(0xFF0000FF);
+    final paint = Paint()..color = const Color(0xFF0000FF);
     canvas.drawRect(Offset.zero & size, paint);
   }
 
@@ -86,20 +87,19 @@ void main() {
   });
 
   testWidgets('default Material debugFillProperties', (WidgetTester tester) async {
-    final DiagnosticPropertiesBuilder builder = DiagnosticPropertiesBuilder();
+    final builder = DiagnosticPropertiesBuilder();
     const Material().debugFillProperties(builder);
 
-    final List<String> description =
-        builder.properties
-            .where((DiagnosticsNode node) => !node.isFiltered(DiagnosticLevel.info))
-            .map((DiagnosticsNode node) => node.toString())
-            .toList();
+    final List<String> description = builder.properties
+        .where((DiagnosticsNode node) => !node.isFiltered(DiagnosticLevel.info))
+        .map((DiagnosticsNode node) => node.toString())
+        .toList();
 
     expect(description, <String>['type: canvas']);
   });
 
   testWidgets('Material implements debugFillProperties', (WidgetTester tester) async {
-    final DiagnosticPropertiesBuilder builder = DiagnosticPropertiesBuilder();
+    final builder = DiagnosticPropertiesBuilder();
     const Material(
       color: Color(0xFFFFFFFF),
       shadowColor: Color(0xffff0000),
@@ -108,11 +108,10 @@ void main() {
       borderRadius: BorderRadiusDirectional.all(Radius.circular(10)),
     ).debugFillProperties(builder);
 
-    final List<String> description =
-        builder.properties
-            .where((DiagnosticsNode node) => !node.isFiltered(DiagnosticLevel.info))
-            .map((DiagnosticsNode node) => node.toString())
-            .toList();
+    final List<String> description = builder.properties
+        .where((DiagnosticsNode node) => !node.isFiltered(DiagnosticLevel.info))
+        .map((DiagnosticsNode node) => node.toString())
+        .toList();
 
     expect(description, <String>[
       'type: canvas',
@@ -130,7 +129,7 @@ void main() {
   });
 
   testWidgets('ListView scroll does not repaint', (WidgetTester tester) async {
-    final List<Size> log = <Size>[];
+    final log = <Size>[];
 
     await tester.pumpWidget(
       Directionality(
@@ -193,16 +192,12 @@ void main() {
     expect(getModel(tester).shadowColor, ThemeData().shadowColor);
 
     // Default M3 shadow color
-    await tester.pumpWidget(
-      Theme(data: ThemeData(useMaterial3: true), child: buildWithShadow(null)),
-    );
+    await tester.pumpWidget(Theme(data: ThemeData(), child: buildWithShadow(null)));
     await tester.pumpAndSettle();
     expect(getModel(tester).shadowColor, ThemeData().colorScheme.shadow);
 
     // Drop shadow can be turned off with a transparent color.
-    await tester.pumpWidget(
-      Theme(data: ThemeData(useMaterial3: true), child: buildWithShadow(Colors.transparent)),
-    );
+    await tester.pumpWidget(Theme(data: ThemeData(), child: buildWithShadow(Colors.transparent)));
     await tester.pumpAndSettle();
     expect(getModel(tester).shadowColor, Colors.transparent);
   });
@@ -259,7 +254,7 @@ void main() {
 
   testWidgets('Transparent material widget does not absorb hit test', (WidgetTester tester) async {
     // This is a regression test for https://github.com/flutter/flutter/issues/58665.
-    bool pressed = false;
+    var pressed = false;
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
@@ -284,15 +279,44 @@ void main() {
     expect(pressed, isTrue);
   });
 
+  testWidgets('Material uses the dark SystemUIOverlayStyle when the background is light', (
+    WidgetTester tester,
+  ) async {
+    final lightTheme = ThemeData();
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: lightTheme,
+        home: const Scaffold(body: Center(child: Text('test'))),
+      ),
+    );
+
+    expect(lightTheme.colorScheme.brightness, Brightness.light);
+    expect(SystemChrome.latestStyle, SystemUiOverlayStyle.dark);
+  });
+
+  testWidgets('Material uses the light SystemUIOverlayStyle when the background is dark', (
+    WidgetTester tester,
+  ) async {
+    final darkTheme = ThemeData.dark();
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: darkTheme,
+        home: const Scaffold(body: Center(child: Text('test'))),
+      ),
+    );
+
+    expect(darkTheme.colorScheme.brightness, Brightness.dark);
+    expect(SystemChrome.latestStyle, SystemUiOverlayStyle.light);
+  });
+
   group('Surface Tint Overlay', () {
     testWidgets(
       'applyElevationOverlayColor does not effect anything with useMaterial3 set to true',
       (WidgetTester tester) async {
-        const Color surfaceColor = Color(0xFF121212);
+        const surfaceColor = Color(0xFF121212);
         await tester.pumpWidget(
           Theme(
             data: ThemeData(
-              useMaterial3: true,
               applyElevationOverlayColor: true,
               colorScheme: const ColorScheme.dark().copyWith(surface: surfaceColor),
             ),
@@ -307,13 +331,13 @@ void main() {
     testWidgets('surfaceTintColor is used to as an overlay to indicate elevation', (
       WidgetTester tester,
     ) async {
-      const Color baseColor = Color(0xFF121212);
-      const Color surfaceTintColor = Color(0xff44CCFF);
+      const baseColor = Color(0xFF121212);
+      const surfaceTintColor = Color(0xff44CCFF);
 
       // With no surfaceTintColor specified, it should not apply an overlay
       await tester.pumpWidget(
         Theme(
-          data: ThemeData(useMaterial3: true),
+          data: ThemeData(),
           child: buildMaterial(color: baseColor, elevation: 12.0),
         ),
       );
@@ -324,7 +348,7 @@ void main() {
       // With transparent surfaceTintColor, it should not apply an overlay
       await tester.pumpWidget(
         Theme(
-          data: ThemeData(useMaterial3: true),
+          data: ThemeData(),
           child: buildMaterial(
             color: baseColor,
             surfaceTintColor: Colors.transparent,
@@ -340,7 +364,7 @@ void main() {
       // on the elevation.
       await tester.pumpWidget(
         Theme(
-          data: ThemeData(useMaterial3: true),
+          data: ThemeData(),
           child: buildMaterial(
             color: baseColor,
             surfaceTintColor: surfaceTintColor,
@@ -362,7 +386,7 @@ void main() {
     testWidgets('applyElevationOverlayColor set to false does not change surface color', (
       WidgetTester tester,
     ) async {
-      const Color surfaceColor = Color(0xFF121212);
+      const surfaceColor = Color(0xFF121212);
       await tester.pumpWidget(
         Theme(
           data: ThemeData(
@@ -380,12 +404,12 @@ void main() {
     testWidgets(
       'applyElevationOverlayColor set to true applies a semi-transparent onSurface color to the surface color',
       (WidgetTester tester) async {
-        const Color surfaceColor = Color(0xFF121212);
+        const surfaceColor = Color(0xFF121212);
         const Color onSurfaceColor = Colors.greenAccent;
 
         // The colors we should get with a base surface color of 0xFF121212 for
         // and a given elevation
-        const List<ElevationColor> elevationColors = <ElevationColor>[
+        const elevationColors = <ElevationColor>[
           ElevationColor(0.0, Color(0xFF121212)),
           ElevationColor(1.0, Color(0xFF161D19)),
           ElevationColor(2.0, Color(0xFF18211D)),
@@ -398,7 +422,7 @@ void main() {
           ElevationColor(24.0, Color(0xFF20362B)),
         ];
 
-        for (final ElevationColor test in elevationColors) {
+        for (final test in elevationColors) {
           await tester.pumpWidget(
             Theme(
               data: ThemeData(
@@ -458,8 +482,8 @@ void main() {
     testWidgets('overlay will apply to materials with a non-opaque surface color', (
       WidgetTester tester,
     ) async {
-      const Color surfaceColor = Color(0xFF121212);
-      const Color surfaceColorWithOverlay = Color(0xC6353535);
+      const surfaceColor = Color(0xFF121212);
+      const surfaceColorWithOverlay = Color(0xC6353535);
 
       await tester.pumpWidget(
         Theme(
@@ -480,9 +504,9 @@ void main() {
     testWidgets('Expected overlay color can be computed using colorWithOverlay', (
       WidgetTester tester,
     ) async {
-      const Color surfaceColor = Color(0xFF123456);
-      const Color onSurfaceColor = Color(0xFF654321);
-      const double elevation = 8.0;
+      const surfaceColor = Color(0xFF123456);
+      const onSurfaceColor = Color(0xFF654321);
+      const elevation = 8.0;
 
       final Color surfaceColorWithOverlay = ElevationOverlay.colorWithOverlay(
         surfaceColor,
@@ -574,7 +598,7 @@ void main() {
     });
 
     testWidgets('supports directional clips', (WidgetTester tester) async {
-      final List<String> logs = <String>[];
+      final logs = <String>[];
       final ShapeBorder shape = TestBorder((String message) {
         logs.add(message);
       });
@@ -916,7 +940,6 @@ void main() {
 
       await tester.pumpWidget(
         MaterialApp(
-          theme: ThemeData(useMaterial3: true),
           home: Scaffold(
             body: RepaintBoundary(
               key: painterKey,
@@ -989,7 +1012,6 @@ void main() {
 
       await tester.pumpWidget(
         MaterialApp(
-          theme: ThemeData(useMaterial3: true),
           home: Scaffold(
             body: RepaintBoundary(
               key: painterKey,
@@ -1031,14 +1053,14 @@ void main() {
     );
     final MaterialInkController controller = Material.of(sizedBoxKey.currentContext!);
 
-    final TrackPaintInkFeature tracker = TrackPaintInkFeature(
+    final tracker = TrackPaintInkFeature(
       controller: controller,
       referenceBox: sizedBoxKey.currentContext!.findRenderObject()! as RenderBox,
     );
     controller.addInkFeature(tracker);
     expect(tracker.paintCount, 0);
 
-    final ContainerLayer layer1 = ContainerLayer();
+    final layer1 = ContainerLayer();
     addTearDown(layer1.dispose);
 
     // Force a repaint. Since it's offstage, the ink feature should not get painted.
@@ -1058,7 +1080,7 @@ void main() {
     // now onstage.
     expect(tracker.paintCount, 1);
 
-    final ContainerLayer layer2 = ContainerLayer();
+    final layer2 = ContainerLayer();
     addTearDown(layer2.dispose);
 
     // Force a repaint again. This time, it gets repainted because it is onstage.
@@ -1076,7 +1098,7 @@ void main() {
 
     final Element element = tester.element(find.byType(SizedBox));
     final MaterialInkController controller = Material.of(element);
-    final RenderBox referenceBox = element.findRenderObject()! as RenderBox;
+    final referenceBox = element.findRenderObject()! as RenderBox;
 
     await expectLater(
       await memoryEvents(
@@ -1122,7 +1144,7 @@ void main() {
       );
       final Object? exception = tester.takeException();
       expect(exception, isFlutterError);
-      final FlutterError error = exception! as FlutterError;
+      final error = exception! as FlutterError;
 
       expect(
         error.toStringDeep(),
@@ -1154,7 +1176,7 @@ void main() {
       );
       final Object? exception = tester.takeException();
       expect(exception, isFlutterError);
-      final FlutterError error = exception! as FlutterError;
+      final error = exception! as FlutterError;
 
       expect(
         error.toStringDeep(),
@@ -1218,6 +1240,15 @@ void main() {
     expect(outsideViewAnchor, isNotNull);
     expect(outsideView, isNull);
     expect(insideView, isNull);
+  });
+
+  testWidgets('Material does not crash at zero area', (WidgetTester tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Center(child: SizedBox(child: Material())),
+      ),
+    );
+    expect(tester.getSize(find.byType(Material)), Size.zero);
   });
 }
 

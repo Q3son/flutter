@@ -8,7 +8,11 @@ import 'project.dart';
 // https://github.com/flutter/flutter/issues/161466#issuecomment-2743309718.
 class HotRestartWithPausedChildIsolateProject extends Project {
   @override
+<<<<<<< HEAD
   final String pubspec = '''
+=======
+  final pubspec = '''
+>>>>>>> 48c32af0345e9ad5747f78ddce828c7f795f7159
   name: test
   environment:
     sdk: ^3.7.0-0
@@ -19,7 +23,11 @@ class HotRestartWithPausedChildIsolateProject extends Project {
   ''';
 
   @override
+<<<<<<< HEAD
   final String main = r'''
+=======
+  final main = r'''
+>>>>>>> 48c32af0345e9ad5747f78ddce828c7f795f7159
   import 'dart:async';
   import 'dart:developer';
   import 'dart:isolate';

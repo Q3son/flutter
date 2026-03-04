@@ -6,7 +6,10 @@ import 'dart:typed_data';
 
 import 'package:test/bootstrap/browser.dart';
 import 'package:test/test.dart';
+<<<<<<< HEAD
 import 'package:ui/src/engine.dart';
+=======
+>>>>>>> 48c32af0345e9ad5747f78ddce828c7f795f7159
 import 'package:ui/src/engine/browser_detection.dart';
 import 'package:ui/ui.dart';
 
@@ -21,8 +24,13 @@ Future<void> testMain() async {
     setUpUnitTests();
 
     Future<Image> createTestImageByColor(Color color) async {
+<<<<<<< HEAD
       final PictureRecorder recorder = PictureRecorder();
       final Canvas canvas = Canvas(recorder, const Rect.fromLTRB(0, 0, 2, 2));
+=======
+      final recorder = PictureRecorder();
+      final canvas = Canvas(recorder, const Rect.fromLTRB(0, 0, 2, 2));
+>>>>>>> 48c32af0345e9ad5747f78ddce828c7f795f7159
       canvas.drawColor(color, BlendMode.srcOver);
       final Picture testPicture = recorder.endRecording();
       final Image testImage = await testPicture.toImage(2, 2);
@@ -39,7 +47,11 @@ Future<void> testMain() async {
 
       // PNG-encoding is browser-specific, but the header is standard. We only
       // test the header.
+<<<<<<< HEAD
       final List<int> pngHeader = <int>[137, 80, 78, 71, 13, 10, 26, 10];
+=======
+      final pngHeader = <int>[137, 80, 78, 71, 13, 10, 26, 10];
+>>>>>>> 48c32af0345e9ad5747f78ddce828c7f795f7159
       expect(pngBytes.buffer.asUint8List().sublist(0, pngHeader.length), pngHeader);
     });
 

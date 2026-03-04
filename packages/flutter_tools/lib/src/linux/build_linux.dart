@@ -27,7 +27,7 @@ import '../migrations/cmake_native_assets_migration.dart';
 // - <file path>:<line>:<column>: warning: <warning...>
 // - clang: error: <link error...>
 // - Error: <tool error...>
-final RegExp errorMatcher = RegExp(
+final errorMatcher = RegExp(
   r'(?:(?:.*:\d+:\d+|clang):\s)?(fatal\s)?(?:error|warning):\s.*',
   caseSensitive: false,
 );
@@ -42,6 +42,7 @@ Future<void> buildLinux(
   required TargetPlatform targetPlatform,
   String targetSysroot = '/',
   required Logger logger,
+  bool configOnly = false,
 }) async {
   target ??= 'lib/main.dart';
   if (!linuxProject.cmakeFile.existsSync()) {
@@ -52,12 +53,12 @@ Future<void> buildLinux(
     );
   }
 
-  final List<ProjectMigrator> migrators = <ProjectMigrator>[
+  final migrators = <ProjectMigrator>[
     CmakeCustomCommandMigration(linuxProject, logger),
     CmakeNativeAssetsMigration(linuxProject, 'linux', logger),
   ];
 
-  final ProjectMigration migration = ProjectMigration(migrators);
+  final migration = ProjectMigration(migrators);
   await migration.run();
 
   // Build the environment that needs to be set for the re-entrant flutter build
@@ -80,9 +81,9 @@ Future<void> buildLinux(
 
   final Status status = logger.startProgress('Building Linux application...');
   final String buildModeName = buildInfo.mode.cliName;
-  final Directory platformBuildDirectory = globals.fs.directory(
-    getLinuxBuildDirectory(targetPlatform),
-  );
+  final Directory platformBuildDirectory = globals.fs
+      .directory(linuxProject.parent.directory.path)
+      .childDirectory(getLinuxBuildDirectory(targetPlatform));
   final Directory buildDirectory = platformBuildDirectory.childDirectory(buildModeName);
   try {
     await _runCmake(
@@ -93,6 +94,9 @@ Future<void> buildLinux(
       targetPlatform,
       targetSysroot,
     );
+    if (configOnly) {
+      return;
+    }
     await _runBuild(buildDirectory);
   } finally {
     status.cancel();
@@ -152,7 +156,7 @@ Future<void> _runCmake(
   TargetPlatform targetPlatform,
   String targetSysroot,
 ) async {
-  final Stopwatch sw = Stopwatch()..start();
+  final sw = Stopwatch()..start();
 
   await buildDir.create(recursive: true);
 
@@ -185,7 +189,6 @@ Future<void> _runCmake(
     throwToolExit('Unable to generate build files');
   }
   final Duration elapsedDuration = sw.elapsed;
-  globals.flutterUsage.sendTiming('build', 'cmake-linux', elapsedDuration);
   globals.analytics.send(
     Event.timing(
       workflow: 'build',
@@ -196,7 +199,7 @@ Future<void> _runCmake(
 }
 
 Future<void> _runBuild(Directory buildDir) async {
-  final Stopwatch sw = Stopwatch()..start();
+  final sw = Stopwatch()..start();
 
   int result;
   try {
@@ -216,7 +219,6 @@ Future<void> _runBuild(Directory buildDir) async {
     throwToolExit('Build process failed');
   }
   final Duration elapsedDuration = sw.elapsed;
-  globals.flutterUsage.sendTiming('build', 'linux-ninja', elapsedDuration);
   globals.analytics.send(
     Event.timing(
       workflow: 'build',

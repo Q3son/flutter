@@ -15,6 +15,7 @@
 /// @docImport 'raw_keyboard_android.dart';
 /// @docImport 'raw_keyboard_fuchsia.dart';
 /// @docImport 'scribe.dart';
+/// @docImport 'sensitive_content.dart';
 /// @docImport 'system_chrome.dart';
 /// @docImport 'system_navigator.dart';
 /// @docImport 'system_sound.dart';
@@ -179,6 +180,26 @@ abstract final class SystemChannels {
   /// (so it is safe to call methods when the relevant plugin might be missing).
   static const MethodChannel platform = OptionalMethodChannel(
     'flutter/platform',
+    JSONMethodCodec(),
+  );
+
+  /// An unidirectional JSON [MethodChannel] for receiving status bar related
+  /// events from iOS.
+  ///
+  /// The only method this channel receives is `handleScrollToTop` which
+  /// is called on iOS when the user taps the status bar to scroll a scroll view
+  /// to the top.
+  ///
+  /// Typically you should not subscribe to this channel directly. The events are
+  /// dispatched to registered [WidgetsBindingObserver]s via the
+  /// [WidgetsBindingObserver.handleStatusBarTap] callback.
+  ///
+  /// See also:
+  ///
+  ///  * [WidgetsBindingObserver.handleStatusBarTap], the widgets library callback
+  ///    for dispatching the status bar tap event to the widget tree.
+  static const OptionalMethodChannel statusBar = OptionalMethodChannel(
+    'flutter/status_bar',
     JSONMethodCodec(),
   );
 
@@ -401,6 +422,13 @@ abstract final class SystemChannels {
   ///  * [PlatformViewsService] for the available operations on this channel.
   static const MethodChannel platform_views = MethodChannel('flutter/platform_views');
 
+  /// A [MethodChannel] for controlling platform views.
+  ///
+  /// See also:
+  ///
+  ///  * [PlatformViewsService] for the available operations on this channel.
+  static const MethodChannel platform_views_2 = MethodChannel('flutter/platform_views_2');
+
   /// A [MethodChannel] for configuring the Skia graphics library.
   ///
   /// The following outgoing methods are defined for this channel (invoked using
@@ -569,4 +597,21 @@ abstract final class SystemChannels {
   ///  * [HardwareKeyboard.syncKeyboardState], which uses this channel to synchronize
   ///    the `HardwareKeyboard` pressed state.
   static const MethodChannel keyboard = OptionalMethodChannel('flutter/keyboard');
+
+  /// A [MethodChannel] for setting and getting the content sensitivity of a Flutter Android View.
+  ///
+  /// The following outgoing methods are defined for this channel (invoked using
+  /// [OptionalMethodChannel.invokeMethod]):
+  ///
+  ///  * `setContentSensitivity`: Sets the content sensitivity level of the Flutter Android View
+  ///     containing the widget tree to one of the [ContentSensitivity] levels. The second
+  ///     argument is the index of the `ContentSensitivity` level that the channel
+  ///     should set for the relevant Flutter view.
+  ///
+  ///  * `getContentSensitivity`: Gets the content sensitivity level of the Flutter Android View
+  ///     containing the widget tree, which will be the index of one of the [ContentSensitivity] levels.
+  ///
+  ///  * `isSupported`: Returns whether or not setting content sensitivity levels is supported on the
+  ///     device.
+  static const MethodChannel sensitiveContent = OptionalMethodChannel('flutter/sensitivecontent');
 }

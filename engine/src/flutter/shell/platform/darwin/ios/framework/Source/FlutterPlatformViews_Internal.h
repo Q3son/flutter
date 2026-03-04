@@ -19,7 +19,6 @@
 #import "flutter/shell/platform/darwin/ios/framework/Source/FlutterPlatformViewsController.h"
 #import "flutter/shell/platform/darwin/ios/framework/Source/FlutterViewResponder.h"
 #include "flutter/shell/platform/darwin/ios/ios_context.h"
-#include "third_party/skia/include/core/SkRect.h"
 
 // A UIView that acts as a clipping mask for the |ChildClippingView|.
 //
@@ -38,17 +37,17 @@
 // Adds a clip rect operation to the queue.
 //
 // The `clipSkRect` is transformed with the `matrix` before adding to the queue.
-- (void)clipRect:(const SkRect&)clipSkRect matrix:(const SkMatrix&)matrix;
+- (void)clipRect:(const flutter::DlRect&)clipDlRect matrix:(const flutter::DlMatrix&)matrix;
 
 // Adds a clip rrect operation to the queue.
 //
 // The `clipSkRRect` is transformed with the `matrix` before adding to the queue.
-- (void)clipRRect:(const SkRRect&)clipSkRRect matrix:(const SkMatrix&)matrix;
+- (void)clipRRect:(const flutter::DlRoundRect&)clipDlRRect matrix:(const flutter::DlMatrix&)matrix;
 
 // Adds a clip path operation to the queue.
 //
 // The `path` is transformed with the `matrix` before adding to the queue.
-- (void)clipPath:(const SkPath&)path matrix:(const SkMatrix&)matrix;
+- (void)clipPath:(const flutter::DlPath&)path matrix:(const flutter::DlMatrix&)matrix;
 
 @end
 
@@ -95,6 +94,9 @@
 // The inputRadius can be customized and it doesn't add any color saturation to the blurred view.
 @property(nonatomic, readonly) UIVisualEffectView* backdropFilterView;
 
+// Determines the corner radius of the backdrop filter view.
+@property(nonatomic, readonly) CGFloat cornerRadius;
+
 // For testing only.
 + (void)resetPreparation;
 
@@ -112,6 +114,7 @@
 // implementation in `PlatformViewFilter`, this method will return nil.
 - (instancetype)initWithFrame:(CGRect)frame
                    blurRadius:(CGFloat)blurRadius
+                 cornerRadius:(CGFloat)cornerRadius
              visualEffectView:(UIVisualEffectView*)visualEffectView NS_DESIGNATED_INITIALIZER;
 
 @end
@@ -193,6 +196,14 @@
 - (instancetype)initWithTarget:(id)target
        platformViewsController:(FlutterPlatformViewsController*)platformViewsController;
 - (ForwardingGestureRecognizer*)recreateRecognizerWithTarget:(id)target;
+@end
+
+@interface PendingRRectClip : NSObject
+@property(nonatomic) flutter::DlRect rect;
+@property(nonatomic) CGFloat topLeftRadius;
+@property(nonatomic) CGFloat topRightRadius;
+@property(nonatomic) CGFloat bottomRightRadius;
+@property(nonatomic) CGFloat bottomLeftRadius;
 @end
 
 #endif  // FLUTTER_SHELL_PLATFORM_DARWIN_IOS_FRAMEWORK_SOURCE_FLUTTERPLATFORMVIEWS_INTERNAL_H_

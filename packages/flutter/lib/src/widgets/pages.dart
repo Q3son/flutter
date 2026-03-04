@@ -25,6 +25,8 @@ abstract class PageRoute<T> extends ModalRoute<T> {
   PageRoute({
     super.settings,
     super.requestFocus,
+    super.traversalEdgeBehavior,
+    super.directionalTraversalEdgeBehavior,
     this.fullscreenDialog = false,
     this.allowSnapshotting = true,
     bool barrierDismissible = false,
@@ -38,6 +40,7 @@ abstract class PageRoute<T> extends ModalRoute<T> {
   /// iOS, dialogs transitions animate differently and are also not closeable
   /// with the back swipe gesture.
   /// {@endtemplate}
+  @override
   final bool fullscreenDialog;
 
   @override
@@ -102,7 +105,7 @@ class PageRouteBuilder<T> extends PageRoute<T> {
   });
 
   /// {@template flutter.widgets.pageRouteBuilder.pageBuilder}
-  /// Used build the route's primary contents.
+  /// Used to build the route's primary contents.
   ///
   /// See [ModalRoute.buildPage] for complete definition of the parameters.
   /// {@endtemplate}

@@ -6,6 +6,7 @@
 #define FLUTTER_IMPELLER_ENTITY_RENDER_TARGET_CACHE_H_
 
 #include <string_view>
+
 #include "impeller/renderer/render_target.h"
 
 namespace impeller {
@@ -27,6 +28,12 @@ class RenderTargetCache : public RenderTargetAllocator {
   // |RenderTargetAllocator|
   void End() override;
 
+  // |RenderTargetAllocator|
+  void DisableCache() override;
+
+  // |RenderTargetAllocator|
+  void EnableCache() override;
+
   RenderTarget CreateOffscreen(
       const Context& context,
       ISize size,
@@ -37,8 +44,8 @@ class RenderTargetCache : public RenderTargetAllocator {
       std::optional<RenderTarget::AttachmentConfig> stencil_attachment_config =
           RenderTarget::kDefaultStencilAttachmentConfig,
       const std::shared_ptr<Texture>& existing_color_texture = nullptr,
-      const std::shared_ptr<Texture>& existing_depth_stencil_texture =
-          nullptr) override;
+      const std::shared_ptr<Texture>& existing_depth_stencil_texture = nullptr,
+      std::optional<PixelFormat> target_pixel_format = std::nullopt) override;
 
   RenderTarget CreateOffscreenMSAA(
       const Context& context,
@@ -51,8 +58,8 @@ class RenderTargetCache : public RenderTargetAllocator {
           RenderTarget::kDefaultStencilAttachmentConfig,
       const std::shared_ptr<Texture>& existing_color_msaa_texture = nullptr,
       const std::shared_ptr<Texture>& existing_color_resolve_texture = nullptr,
-      const std::shared_ptr<Texture>& existing_depth_stencil_texture =
-          nullptr) override;
+      const std::shared_ptr<Texture>& existing_depth_stencil_texture = nullptr,
+      std::optional<PixelFormat> target_pixel_format = std::nullopt) override;
 
   // visible for testing.
   size_t CachedTextureCount() const;
@@ -65,8 +72,11 @@ class RenderTargetCache : public RenderTargetAllocator {
     RenderTarget render_target;
   };
 
+  bool CacheEnabled() const;
+
   std::vector<RenderTargetData> render_target_data_;
   uint32_t keep_alive_frame_count_;
+  uint32_t cache_disabled_count_ = 0;
 
   RenderTargetCache(const RenderTargetCache&) = delete;
 

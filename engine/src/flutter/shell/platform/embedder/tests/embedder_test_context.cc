@@ -12,7 +12,7 @@
 #include "flutter/shell/platform/embedder/tests/embedder_assertions.h"
 #include "flutter/testing/testing.h"
 #include "third_party/dart/runtime/bin/elf_loader.h"
-#include "third_party/skia/include/core/SkSurface.h"
+#include "third_party/skia/include/core/SkImage.h"
 
 namespace flutter {
 namespace testing {
@@ -92,7 +92,7 @@ FlutterEngineAOTData EmbedderTestContext::GetAOTData() const {
   return aot_data_.get();
 }
 
-void EmbedderTestContext::SetRootSurfaceTransformation(SkMatrix matrix) {
+void EmbedderTestContext::SetRootSurfaceTransformation(DlMatrix matrix) {
   root_surface_transformation_ = matrix;
 }
 
@@ -154,6 +154,11 @@ void EmbedderTestContext::SetPlatformMessageCallback(
 void EmbedderTestContext::SetChannelUpdateCallback(
     const ChannelUpdateCallback& callback) {
   channel_update_callback_ = callback;
+}
+
+void EmbedderTestContext::SetViewFocusChangeRequestCallback(
+    const ViewFocusChangeRequestCallback& callback) {
+  view_focus_change_request_callback_ = callback;
 }
 
 void EmbedderTestContext::PlatformMessageCallback(
@@ -255,6 +260,16 @@ EmbedderTestContext::GetChannelUpdateCallbackHook() {
   };
 }
 
+FlutterViewFocusChangeRequestCallback
+EmbedderTestContext::GetViewFocusChangeRequestCallbackHook() {
+  return [](const FlutterViewFocusChangeRequest* request, void* user_data) {
+    auto context = reinterpret_cast<EmbedderTestContext*>(user_data);
+    if (context->view_focus_change_request_callback_) {
+      context->view_focus_change_request_callback_(request);
+    }
+  };
+}
+
 FlutterTransformation EmbedderTestContext::GetRootSurfaceTransformation() {
   return FlutterTransformationMake(root_surface_transformation_);
 }
@@ -278,8 +293,8 @@ void EmbedderTestContext::SetNextSceneCallback(
 std::future<sk_sp<SkImage>> EmbedderTestContext::GetNextSceneImage() {
   std::promise<sk_sp<SkImage>> promise;
   auto future = promise.get_future();
-  SetNextSceneCallback(
-      fml::MakeCopyable([promise = std::move(promise)](auto image) mutable {
+  SetNextSceneCallback(fml::MakeCopyable(
+      [promise = std::move(promise)](const auto& image) mutable {
         promise.set_value(image);
       }));
   return future;

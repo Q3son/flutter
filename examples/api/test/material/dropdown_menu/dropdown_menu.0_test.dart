@@ -3,7 +3,8 @@
 // found in the LICENSE file.
 
 import 'package:flutter/material.dart';
-import 'package:flutter_api_samples/material/dropdown_menu/dropdown_menu.0.dart' as example;
+import 'package:flutter_api_samples/material/dropdown_menu/dropdown_menu.0.dart'
+    as example;
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -51,7 +52,9 @@ void main() {
     expect(find.text('You selected a Blue Smile'), findsOneWidget);
   });
 
-  testWidgets('DropdownMenu has focus when tapping on the text field', (WidgetTester tester) async {
+  testWidgets('DropdownMenu has focus when tapping on the text field', (
+    WidgetTester tester,
+  ) async {
     await tester.pumpWidget(const example.DropdownMenuExample());
 
     // Make sure the dropdown menus are there.
@@ -69,5 +72,42 @@ void main() {
     await tester.tap(iconMenu);
     await tester.pumpAndSettle();
     expect(FocusScope.of(tester.element(iconMenu)).hasFocus, isTrue);
+  });
+
+  testWidgets('DropdownMenu on small screen', (WidgetTester tester) async {
+    await tester.pumpWidget(const example.DropdownMenuExample());
+
+    final Finder colorMenu = find.byType(DropdownMenu<example.ColorLabel>);
+    final Finder iconMenu = find.byType(DropdownMenu<example.IconLabel>);
+    expect(colorMenu, findsOneWidget);
+    expect(iconMenu, findsOneWidget);
+
+    Finder findMenuItem(String label) {
+      return find.widgetWithText(MenuItemButton, label).last;
+    }
+
+    await tester.tap(colorMenu);
+    await tester.pumpAndSettle();
+    final Finder menuBlue = findMenuItem('Blue');
+    await tester.ensureVisible(menuBlue);
+    await tester.tap(menuBlue);
+    await tester.pumpAndSettle();
+
+    await tester.tap(iconMenu);
+    await tester.pumpAndSettle();
+    final Finder menuSmile = findMenuItem('Smile');
+    await tester.ensureVisible(menuSmile);
+    await tester.tap(menuSmile);
+    await tester.pumpAndSettle();
+
+    expect(find.text('You selected a Blue Smile'), findsOneWidget);
+
+    // Resize the screen to small screen and make sure no overflowed error appears.
+    tester.view.physicalSize = const Size(200, 160);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    await tester.pump();
+
+    expect(tester.takeException(), isNull);
   });
 }

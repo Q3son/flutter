@@ -16,7 +16,6 @@ class ListTileApp extends StatelessWidget {
     return MaterialApp(
       theme: ThemeData(
         listTileTheme: const ListTileThemeData(textColor: Colors.white),
-        useMaterial3: true,
       ),
       home: const ListTileExample(),
     );
@@ -30,7 +29,8 @@ class ListTileExample extends StatefulWidget {
   State<ListTileExample> createState() => _ListTileExampleState();
 }
 
-class _ListTileExampleState extends State<ListTileExample> with TickerProviderStateMixin {
+class _ListTileExampleState extends State<ListTileExample>
+    with TickerProviderStateMixin {
   late final AnimationController _fadeController;
   late final AnimationController _sizeController;
   late final Animation<double> _fadeAnimation;
@@ -39,15 +39,25 @@ class _ListTileExampleState extends State<ListTileExample> with TickerProviderSt
   @override
   void initState() {
     super.initState();
-    _fadeController = AnimationController(duration: const Duration(seconds: 1), vsync: this)
-      ..repeat(reverse: true);
+    _fadeController = AnimationController(
+      duration: const Duration(seconds: 1),
+      vsync: this,
+    )..repeat(reverse: true);
 
-    _sizeController = AnimationController(duration: const Duration(milliseconds: 850), vsync: this)
-      ..repeat(reverse: true);
+    _sizeController = AnimationController(
+      duration: const Duration(milliseconds: 850),
+      vsync: this,
+    )..repeat(reverse: true);
 
-    _fadeAnimation = CurvedAnimation(parent: _fadeController, curve: Curves.easeInOut);
+    _fadeAnimation = CurvedAnimation(
+      parent: _fadeController,
+      curve: Curves.easeInOut,
+    );
 
-    _sizeAnimation = CurvedAnimation(parent: _sizeController, curve: Curves.easeOut);
+    _sizeAnimation = CurvedAnimation(
+      parent: _sizeController,
+      curve: Curves.easeOut,
+    );
   }
 
   @override

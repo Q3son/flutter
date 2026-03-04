@@ -7,6 +7,7 @@
 #include "flutter/common/constants.h"
 #include "flutter/fml/synchronization/waitable_event.h"
 #include "flutter/fml/trace_event.h"
+#include "fml/make_copyable.h"
 
 namespace flutter {
 
@@ -19,7 +20,8 @@ AndroidExternalViewEmbedder::AndroidExternalViewEmbedder(
       android_context_(android_context),
       jni_facade_(std::move(jni_facade)),
       surface_factory_(std::move(surface_factory)),
-      surface_pool_(std::make_unique<SurfacePool>()),
+      surface_pool_(
+          std::make_unique<SurfacePool>(/*use_new_surface_methods=*/false)),
       task_runners_(task_runners) {}
 
 // |ExternalViewEmbedder|
@@ -29,7 +31,7 @@ void AndroidExternalViewEmbedder::PrerollCompositeEmbeddedView(
   TRACE_EVENT0("flutter",
                "AndroidExternalViewEmbedder::PrerollCompositeEmbeddedView");
 
-  SkRect view_bounds = SkRect::Make(frame_size_);
+  DlRect view_bounds = DlRect::MakeSize(frame_size_);
   std::unique_ptr<EmbedderViewSlice> view;
   view = std::make_unique<DisplayListEmbedderViewSlice>(view_bounds);
   slices_.insert_or_assign(view_id, std::move(view));
@@ -51,16 +53,12 @@ DlCanvas* AndroidExternalViewEmbedder::CompositeEmbeddedView(int64_t view_id) {
   return nullptr;
 }
 
-SkRect AndroidExternalViewEmbedder::GetViewRect(int64_t view_id) const {
+DlRect AndroidExternalViewEmbedder::GetViewRect(int64_t view_id) const {
   const EmbeddedViewParams& params = view_params_.at(view_id);
   // TODO(egarciad): The rect should be computed from the mutator stack.
   // (Clipping is missing)
   // https://github.com/flutter/flutter/issues/59821
-  return SkRect::MakeXYWH(params.finalBoundingRect().x(),      //
-                          params.finalBoundingRect().y(),      //
-                          params.finalBoundingRect().width(),  //
-                          params.finalBoundingRect().height()  //
-  );
+  return params.finalBoundingRect();
 }
 
 // |ExternalViewEmbedder|
@@ -79,12 +77,12 @@ void AndroidExternalViewEmbedder::SubmitFlutterView(
     return;
   }
 
-  std::unordered_map<int64_t, SkRect> view_rects;
+  std::unordered_map<int64_t, DlRect> view_rects;
   for (auto platform_id : composition_order_) {
     view_rects[platform_id] = GetViewRect(platform_id);
   }
 
-  std::unordered_map<int64_t, SkRect> overlay_layers =
+  std::unordered_map<int64_t, DlRect> overlay_layers =
       SliceViews(frame->Canvas(),     //
                  composition_order_,  //
                  slices_,             //
@@ -102,21 +100,21 @@ void AndroidExternalViewEmbedder::SubmitFlutterView(
   }
 
   for (int64_t view_id : composition_order_) {
-    SkRect view_rect = GetViewRect(view_id);
+    DlRect view_rect = GetViewRect(view_id);
     const EmbeddedViewParams& params = view_params_.at(view_id);
     // Display the platform view. If it's already displayed, then it's
     // just positioned and sized.
     jni_facade_->FlutterViewOnDisplayPlatformView(
-        view_id,             //
-        view_rect.x(),       //
-        view_rect.y(),       //
-        view_rect.width(),   //
-        view_rect.height(),  //
-        params.sizePoints().width() * device_pixel_ratio_,
-        params.sizePoints().height() * device_pixel_ratio_,
+        view_id,                //
+        view_rect.GetX(),       //
+        view_rect.GetY(),       //
+        view_rect.GetWidth(),   //
+        view_rect.GetHeight(),  //
+        params.sizePoints().width * device_pixel_ratio_,
+        params.sizePoints().height * device_pixel_ratio_,
         params.mutatorsStack()  //
     );
-    std::unordered_map<int64_t, SkRect>::const_iterator overlay =
+    std::unordered_map<int64_t, DlRect>::const_iterator overlay =
         overlay_layers.find(view_id);
     if (overlay == overlay_layers.end()) {
       continue;
@@ -138,7 +136,7 @@ std::unique_ptr<SurfaceFrame>
 AndroidExternalViewEmbedder::CreateSurfaceIfNeeded(GrDirectContext* context,
                                                    int64_t view_id,
                                                    EmbedderViewSlice* slice,
-                                                   const SkRect& rect) {
+                                                   const DlRect& rect) {
   std::shared_ptr<OverlayLayer> layer = surface_pool_->GetLayer(
       context, android_context_, jni_facade_, surface_factory_);
 
@@ -146,17 +144,17 @@ AndroidExternalViewEmbedder::CreateSurfaceIfNeeded(GrDirectContext* context,
       layer->surface->AcquireFrame(frame_size_);
   // Display the overlay surface. If it's already displayed, then it's
   // just positioned and sized.
-  jni_facade_->FlutterViewDisplayOverlaySurface(layer->id,     //
-                                                rect.x(),      //
-                                                rect.y(),      //
-                                                rect.width(),  //
-                                                rect.height()  //
+  jni_facade_->FlutterViewDisplayOverlaySurface(layer->id,        //
+                                                rect.GetX(),      //
+                                                rect.GetY(),      //
+                                                rect.GetWidth(),  //
+                                                rect.GetHeight()  //
   );
   DlCanvas* overlay_canvas = frame->Canvas();
   overlay_canvas->Clear(DlColor::kTransparent());
   // Offset the picture since its absolute position on the scene is determined
   // by the position of the overlay view.
-  overlay_canvas->Translate(-rect.x(), -rect.y());
+  overlay_canvas->Translate(-rect.GetX(), -rect.GetY());
   slice->render_into(overlay_canvas);
   return frame;
 }
@@ -218,7 +216,7 @@ void AndroidExternalViewEmbedder::BeginFrame(
 
 // |ExternalViewEmbedder|
 void AndroidExternalViewEmbedder::PrepareFlutterView(
-    SkISize frame_size,
+    DlISize frame_size,
     double device_pixel_ratio) {
   Reset();
 
@@ -228,6 +226,11 @@ void AndroidExternalViewEmbedder::PrepareFlutterView(
     DestroySurfaces();
   }
   surface_pool_->SetFrameSize(frame_size);
+
+  task_runners_.GetPlatformTaskRunner()->PostTask(
+      fml::MakeCopyable([jni_facade = jni_facade_, frame_size = frame_size]() {
+        jni_facade->MaybeResizeSurfaceView(frame_size.width, frame_size.height);
+      }));
 
   frame_size_ = frame_size;
   device_pixel_ratio_ = device_pixel_ratio;

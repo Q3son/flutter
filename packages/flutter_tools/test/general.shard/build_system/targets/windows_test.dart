@@ -11,7 +11,6 @@ import 'package:flutter_tools/src/build_info.dart';
 import 'package:flutter_tools/src/build_system/build_system.dart';
 import 'package:flutter_tools/src/build_system/targets/common.dart';
 import 'package:flutter_tools/src/build_system/targets/windows.dart';
-import 'package:flutter_tools/src/convert.dart';
 
 import '../../../src/common.dart';
 import '../../../src/context.dart';
@@ -20,9 +19,9 @@ void main() {
   testWithoutContext(
     'UnpackWindows copies files to the correct windows/ cache directory',
     () async {
-      final Artifacts artifacts = Artifacts.test();
+      final artifacts = Artifacts.test();
       final FileSystem fileSystem = MemoryFileSystem.test(style: FileSystemStyle.windows);
-      final Environment environment = Environment.test(
+      final environment = Environment.test(
         fileSystem.currentDirectory,
         artifacts: artifacts,
         processManager: FakeProcessManager.any(),
@@ -46,7 +45,7 @@ void main() {
         Artifact.icuData,
         platform: TargetPlatform.windows_x64,
       );
-      final List<String> requiredFiles = <String>[
+      final requiredFiles = <String>[
         '$windowsDesktopPath\\flutter_export.h',
         '$windowsDesktopPath\\flutter_messenger.h',
         '$windowsDesktopPath\\flutter_windows.dll',
@@ -61,7 +60,7 @@ void main() {
         r'C:\packages\flutter_tools\lib\src\build_system\targets\windows.dart',
       ];
 
-      for (final String path in requiredFiles) {
+      for (final path in requiredFiles) {
         fileSystem.file(path).createSync(recursive: true);
       }
       fileSystem.directory('windows').createSync();
@@ -91,18 +90,16 @@ void main() {
       // Depfile is created correctly.
       expect(outputDepfile, exists);
 
-      final List<String> inputPaths =
-          environment.depFileService
-              .parse(outputDepfile)
-              .inputs
-              .map((File file) => file.path)
-              .toList();
-      final List<String> outputPaths =
-          environment.depFileService
-              .parse(outputDepfile)
-              .outputs
-              .map((File file) => file.path)
-              .toList();
+      final List<String> inputPaths = environment.depFileService
+          .parse(outputDepfile)
+          .inputs
+          .map((File file) => file.path)
+          .toList();
+      final List<String> outputPaths = environment.depFileService
+          .parse(outputDepfile)
+          .outputs
+          .map((File file) => file.path)
+          .toList();
 
       // Depfile has expected sources.
       expect(
@@ -150,41 +147,24 @@ void main() {
   testUsingContext(
     'DebugBundleWindowsAssets creates correct bundle structure',
     () async {
-      final Environment environment = Environment.test(
+      final environment = Environment.test(
         fileSystem.currentDirectory,
         artifacts: Artifacts.test(),
         processManager: FakeProcessManager.any(),
         fileSystem: fileSystem,
         logger: BufferLogger.test(),
         defines: <String, String>{kBuildMode: 'debug'},
-        inputs: <String, String>{kBundleSkSLPath: 'bundle.sksl'},
         engineVersion: '2',
       );
 
       environment.buildDir.childFile('app.dill').createSync(recursive: true);
       environment.buildDir.childFile('native_assets.json').createSync(recursive: true);
-      // sksl bundle
-      fileSystem
-          .file('bundle.sksl')
-          .writeAsStringSync(
-            json.encode(<String, Object>{
-              'engineRevision': '2',
-              'platform': 'ios',
-              'data': <String, Object>{'A': 'B'},
-            }),
-          );
 
       await const DebugBundleWindowsAssets(TargetPlatform.windows_x64).build(environment);
 
       // Depfile is created and dill is copied.
       expect(environment.buildDir.childFile('flutter_assets.d'), exists);
       expect(fileSystem.file(r'C:\flutter_assets\kernel_blob.bin'), exists);
-      expect(fileSystem.file(r'C:\flutter_assets\AssetManifest.json'), exists);
-      expect(fileSystem.file(r'C:\flutter_assets\io.flutter.shaders.json'), exists);
-      expect(
-        fileSystem.file(r'C:\flutter_assets\io.flutter.shaders.json').readAsStringSync(),
-        '{"data":{"A":"B"}}',
-      );
     },
     overrides: <Type, Generator>{
       FileSystem: () => fileSystem,
@@ -195,7 +175,7 @@ void main() {
   testUsingContext(
     'ProfileBundleWindowsAssets creates correct bundle structure',
     () async {
-      final Environment environment = Environment.test(
+      final environment = Environment.test(
         fileSystem.currentDirectory,
         artifacts: Artifacts.test(),
         processManager: FakeProcessManager.any(),
@@ -214,7 +194,6 @@ void main() {
       expect(environment.buildDir.childFile('flutter_assets.d'), exists);
       expect(fileSystem.file(r'C:\windows\app.so'), exists);
       expect(fileSystem.file(r'C:\flutter_assets\kernel_blob.bin').existsSync(), false);
-      expect(fileSystem.file(r'C:\flutter_assets\AssetManifest.json'), exists);
     },
     overrides: <Type, Generator>{
       FileSystem: () => fileSystem,
@@ -225,7 +204,7 @@ void main() {
   testUsingContext(
     'ReleaseBundleWindowsAssets creates correct bundle structure',
     () async {
-      final Environment environment = Environment.test(
+      final environment = Environment.test(
         fileSystem.currentDirectory,
         artifacts: Artifacts.test(),
         processManager: FakeProcessManager.any(),
@@ -244,7 +223,6 @@ void main() {
       expect(environment.buildDir.childFile('flutter_assets.d'), exists);
       expect(fileSystem.file(r'C:\windows\app.so'), exists);
       expect(fileSystem.file(r'C:\flutter_assets\kernel_blob.bin').existsSync(), false);
-      expect(fileSystem.file(r'C:\flutter_assets\AssetManifest.json'), exists);
     },
     overrides: <Type, Generator>{
       FileSystem: () => fileSystem,

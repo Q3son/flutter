@@ -15,7 +15,11 @@ import 'webdriver_browser.dart';
 /// Provides an environment for the desktop variant of Safari running on macOS.
 class SafariMacOsEnvironment extends BrowserEnvironment {
   static const Duration _waitBetweenRetries = Duration(seconds: 1);
+<<<<<<< HEAD
   static const int _maxRetryCount = 5;
+=======
+  static const int _maxRetryCount = 10;
+>>>>>>> 48c32af0345e9ad5747f78ddce828c7f795f7159
 
   late int _portNumber;
   late Process _driverProcess;
@@ -33,7 +37,11 @@ class SafariMacOsEnvironment extends BrowserEnvironment {
 
   @override
   Future<void> prepare() async {
+<<<<<<< HEAD
     int retryCount = 0;
+=======
+    var retryCount = 0;
+>>>>>>> 48c32af0345e9ad5747f78ddce828c7f795f7159
 
     while (true) {
       try {
@@ -88,6 +96,7 @@ $stackTrace
 
       await _waitForSafariDriverServerReady();
 
+<<<<<<< HEAD
       // Smoke-test the web driver process by connecting to it and asking for a
       // list of windows. It doesn't matter how many windows there are.
       webDriver = await createDriver(
@@ -100,6 +109,13 @@ $stackTrace
       print('safaridriver failed to start.');
 
       final badDriver = webDriver;
+=======
+      webDriver = await _createDriverSessionWithRetry();
+    } catch (_) {
+      print('safaridriver failed to reach a healthy state.');
+
+      final WebDriver? badDriver = webDriver;
+>>>>>>> 48c32af0345e9ad5747f78ddce828c7f795f7159
       webDriver = null; // let's not keep faulty driver around
 
       if (badDriver != null) {
@@ -141,6 +157,51 @@ $stackTrace
     }
   }
 
+<<<<<<< HEAD
+=======
+  /// Creates a WebDriver session with a rety mechanism.
+  ///
+  /// The retry mechanism is used to combat intermittent errors of the form:
+  ///
+  /// > Could not create a session: The session timed out while connecting to a Safari instance.
+  ///
+  /// See also: https://github.com/flutter/flutter/issues/163790
+  Future<WebDriver> _createDriverSessionWithRetry() async {
+    const kSessionRetryCount = 10;
+    var retryCount = 0;
+    while (true) {
+      // Give Safari a chance to launch.
+      //
+      // 100ms seems enough in most cases, but feel free to revisit this.
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+
+      retryCount += 1;
+      try {
+        final WebDriver candidateDriver = await createDriver(
+          uri: _driverUri,
+          desired: <String, dynamic>{'browserName': packageTestRuntime.identifier},
+        );
+
+        // Smoke-test the web driver process by asking for a list of windows. It
+        // doesn't matter how many windows there are, only that the driver is
+        // capable of answering the question.
+        await candidateDriver.windows.toList();
+
+        return candidateDriver;
+      } catch (_) {
+        if (retryCount < kSessionRetryCount) {
+          print('Failed to create a WebDriver session with Safari. Retrying...');
+        } else {
+          print(
+            'Failed to create a WebDriver session with Safari after $kSessionRetryCount retries. Giving up.',
+          );
+          rethrow;
+        }
+      }
+    }
+  }
+
+>>>>>>> 48c32af0345e9ad5747f78ddce828c7f795f7159
   /// The Safari Driver process cannot instantly spawn a server, so this function
   /// attempts to connect to the server in a loop until it succeeds.
   ///
@@ -155,14 +216,24 @@ $stackTrace
     // 100ms seems enough in most cases, but feel free to revisit this.
     await Future<void>.delayed(const Duration(milliseconds: 100));
 
+<<<<<<< HEAD
     int retryCount = 0;
+=======
+    var retryCount = 0;
+>>>>>>> 48c32af0345e9ad5747f78ddce828c7f795f7159
     while (true) {
       retryCount += 1;
       final httpClient = HttpClient();
       try {
+<<<<<<< HEAD
         final request = await httpClient.get('localhost', _portNumber, '/status');
         final response = await request.close();
         final stringData = await response.transform(utf8.decoder).join();
+=======
+        final HttpClientRequest request = await httpClient.get('localhost', _portNumber, '/status');
+        final HttpClientResponse response = await request.close();
+        final String stringData = await response.transform(utf8.decoder).join();
+>>>>>>> 48c32af0345e9ad5747f78ddce828c7f795f7159
         final jsonResponse = json.decode(stringData) as Map<String, Object?>;
         final value = jsonResponse['value']! as Map<String, Object?>;
         final ready = value['ready']! as bool;

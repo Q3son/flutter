@@ -9,13 +9,13 @@
 #include "flutter/display_list/dl_tile_mode.h"
 #include "flutter/display_list/effects/dl_color_filters.h"
 #include "flutter/display_list/effects/dl_image_filters.h"
+#include "flutter/display_list/geometry/dl_geometry_conversions.h"
 #include "flutter/display_list/testing/dl_test_equality.h"
 #include "flutter/display_list/utils/dl_comparable.h"
 #include "flutter/testing/display_list_testing.h"
 #include "gtest/gtest.h"
 
 #include "include/core/SkMatrix.h"
-#include "include/core/SkRect.h"
 #include "third_party/skia/include/core/SkBlendMode.h"
 #include "third_party/skia/include/core/SkColorFilter.h"
 #include "third_party/skia/include/core/SkSamplingOptions.h"
@@ -24,13 +24,13 @@
 namespace flutter {
 namespace testing {
 
-// SkRect::contains treats the rect as a half-open interval which is
+// DlRect::Contains treats the rect as a half-open interval which is
 // appropriate for so many operations. Unfortunately, we are using
 // it here to test containment of the corners of a transformed quad
 // so the corners of the quad that are measured against the right
 // and bottom edges are contained even if they are on the right or
 // bottom edge. This method does the "all sides inclusive" version
-// of SkRect::contains.
+// of DlRect::Contains.
 static bool containsInclusive(const DlRect rect, const DlPoint p) {
   // Test with a slight offset of 1E-9 to "forgive" IEEE bit-rounding
   // Ending up with bounds that are off by 1E-9 (these numbers are all
@@ -206,6 +206,13 @@ TEST(DisplayListImageFilter, BlurEquals) {
   DlBlurImageFilter filter2(5.0, 6.0, DlTileMode::kMirror);
 
   TestEquals(filter1, filter2);
+
+  DlBlurImageFilter filter3(5.0, 6.0, DlTileMode::kMirror,
+                            DlRect::MakeLTRB(1, 2, 3, 4));
+  DlBlurImageFilter filter4(5.0, 6.0, DlTileMode::kMirror,
+                            DlRect::MakeLTRB(1, 2, 3, 4));
+
+  TestEquals(filter3, filter4);
 }
 
 TEST(DisplayListImageFilter, BlurWithLocalMatrixEquals) {
@@ -222,10 +229,16 @@ TEST(DisplayListImageFilter, BlurNotEquals) {
   DlBlurImageFilter filter2(7.0, 6.0, DlTileMode::kMirror);
   DlBlurImageFilter filter3(5.0, 8.0, DlTileMode::kMirror);
   DlBlurImageFilter filter4(5.0, 6.0, DlTileMode::kRepeat);
+  DlBlurImageFilter filter5(5.0, 6.0, DlTileMode::kRepeat,
+                            DlRect::MakeLTRB(1, 2, 3, 4));
+  DlBlurImageFilter filter6(5.0, 6.0, DlTileMode::kRepeat,
+                            DlRect::MakeLTRB(4, 2, 3, 4));
 
   TestNotEquals(filter1, filter2, "Sigma X differs");
   TestNotEquals(filter1, filter3, "Sigma Y differs");
   TestNotEquals(filter1, filter4, "Tile Mode differs");
+  TestNotEquals(filter4, filter5, "Bounds differs");
+  TestNotEquals(filter5, filter6, "Bounds differs");
 }
 
 TEST(DisplayListImageFilter, BlurBounds) {

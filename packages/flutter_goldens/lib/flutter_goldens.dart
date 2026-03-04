@@ -65,7 +65,7 @@ Future<void> testExecutable(FutureOr<void> Function() testMain, {String? namePre
   const Platform platform = LocalPlatform();
   const FileSystem fs = LocalFileSystem();
   const ProcessManager process = LocalProcessManager();
-  final io.HttpClient httpClient = io.HttpClient();
+  final httpClient = io.HttpClient();
   if (FlutterPostSubmitFileComparator.isForEnvironment(platform)) {
     goldenFileComparator = await FlutterPostSubmitFileComparator.fromLocalFileComparator(
       localFileComparator: goldenFileComparator as LocalFileComparator,
@@ -234,7 +234,7 @@ abstract class FlutterGoldenFileComparator extends GoldenFileComparator {
     );
     return Uri.parse(
       <String>[
-        if (namePrefix != null) namePrefix!,
+        ?namePrefix,
         basedir.pathSegments[basedir.pathSegments.length - 2],
         golden.toString(),
       ].join('.'),
@@ -320,7 +320,17 @@ class FlutterPostSubmitFileComparator extends FlutterGoldenFileComparator {
     golden = _addPrefix(golden);
     await update(golden, imageBytes);
     final File goldenFile = getGoldenFile(golden);
-    return skiaClient.imgtestAdd(golden.path, goldenFile);
+    try {
+      return await skiaClient.imgtestAdd(golden.path, goldenFile);
+    } on SkiaException catch (e) {
+      // Convert SkiaException -> TestFailure so that this class implements the
+      // contract of GoldenFileComparator, and matchesGoldenFile() converts the
+      // TestFailure into a standard reported test error (with a better stack
+      // trace, for example).
+      //
+      // https://github.com/flutter/flutter/issues/162621
+      throw TestFailure('$e');
+    }
   }
 
   /// Decides based on the current environment if goldens tests should be
@@ -489,7 +499,7 @@ class FlutterSkippingFileComparator extends FlutterGoldenFileComparator {
     required io.HttpClient httpClient,
   }) {
     final Uri basedir = localFileComparator.basedir;
-    final SkiaGoldClient skiaClient = SkiaGoldClient(
+    final skiaClient = SkiaGoldClient(
       fs.directory(basedir),
       platform: platform,
       log: log,

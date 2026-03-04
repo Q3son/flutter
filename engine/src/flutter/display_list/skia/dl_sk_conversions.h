@@ -18,7 +18,18 @@ inline SkBlendMode ToSk(DlBlendMode mode) {
   return static_cast<SkBlendMode>(mode);
 }
 
-inline SkColor ToSk(DlColor color) {
+// Returns an SkColor4f representing this color in the sRGB color space.
+inline SkColor4f ToSkColor4f(DlColor color) {
+  if (color.getColorSpace() == DlColorSpace::kSRGB ||
+      color.getColorSpace() == DlColorSpace::kExtendedSRGB) {
+    return SkColor4f{color.getRedF(), color.getGreenF(), color.getBlueF(),
+                     color.getAlphaF()};
+  } else {
+    return ToSkColor4f(color.withColorSpace(DlColorSpace::kExtendedSRGB));
+  }
+}
+
+inline SkColor ToSkColor(DlColor color) {
   return color.argb();
 }
 
@@ -63,16 +74,15 @@ inline SkSamplingOptions ToSk(DlImageSampling sampling) {
   }
 }
 
-inline SkCanvas::SrcRectConstraint ToSk(
-    DlCanvas::SrcRectConstraint constraint) {
+inline SkCanvas::SrcRectConstraint ToSk(DlSrcRectConstraint constraint) {
   return static_cast<SkCanvas::SrcRectConstraint>(constraint);
 }
 
-inline SkClipOp ToSk(DlCanvas::ClipOp op) {
+inline SkClipOp ToSk(DlClipOp op) {
   return static_cast<SkClipOp>(op);
 }
 
-inline SkCanvas::PointMode ToSk(DlCanvas::PointMode mode) {
+inline SkCanvas::PointMode ToSk(DlPointMode mode) {
   return static_cast<SkCanvas::PointMode>(mode);
 }
 

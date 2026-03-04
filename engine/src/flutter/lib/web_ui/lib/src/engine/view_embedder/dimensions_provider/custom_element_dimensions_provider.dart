@@ -38,7 +38,7 @@ class CustomElementDimensionsProvider extends DimensionsProvider {
       List<DomResizeObserverEntry> entries,
       DomResizeObserver _,
     ) {
-      for (final DomResizeObserverEntry _ in entries) {
+      for (final _ in entries) {
         _broadcastSize(null);
       }
     });
@@ -74,9 +74,7 @@ class CustomElementDimensionsProvider extends DimensionsProvider {
   void close() {
     super.close();
     _hostElementResizeObserver?.disconnect();
-    // ignore:unawaited_futures
     _dprChangeStreamSubscription?.cancel();
-    // ignore:unawaited_futures
     _onResizeStreamController.close();
   }
 

@@ -2,7 +2,6 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -11,7 +10,7 @@ void main() {
   final TextSelectionDelegate delegate = _FakeEditableTextState();
 
   test('editable intrinsics', () {
-    final RenderEditable editable = RenderEditable(
+    final editable = RenderEditable(
       text: const TextSpan(style: TextStyle(height: 1.0, fontSize: 10.0), text: '12345'),
       startHandleLayerLink: LayerLink(),
       endHandleLayerLink: LayerLink(),
@@ -53,7 +52,7 @@ void main() {
   });
 
   test('textScaler affects intrinsics', () {
-    final RenderEditable editable = RenderEditable(
+    final editable = RenderEditable(
       text: const TextSpan(style: TextStyle(fontSize: 10), text: 'Hello World'),
       textDirection: TextDirection.ltr,
       startHandleLayerLink: LayerLink(),
@@ -69,7 +68,7 @@ void main() {
   });
 
   test('maxLines affects intrinsics', () {
-    final RenderEditable editable = RenderEditable(
+    final editable = RenderEditable(
       text: TextSpan(
         style: const TextStyle(fontSize: 10),
         text: List<String>.filled(5, 'A').join('\n'),
@@ -88,26 +87,21 @@ void main() {
     expect(editable.getMaxIntrinsicHeight(double.infinity), 10);
   });
 
-  test(
-    'strutStyle affects intrinsics',
-    () {
-      final RenderEditable editable = RenderEditable(
-        text: const TextSpan(style: TextStyle(fontSize: 10), text: 'Hello World'),
-        textDirection: TextDirection.ltr,
-        startHandleLayerLink: LayerLink(),
-        endHandleLayerLink: LayerLink(),
-        offset: ViewportOffset.zero(),
-        textSelectionDelegate: delegate,
-      );
+  test('strutStyle affects intrinsics', () {
+    final editable = RenderEditable(
+      text: const TextSpan(style: TextStyle(fontSize: 10), text: 'Hello World'),
+      textDirection: TextDirection.ltr,
+      startHandleLayerLink: LayerLink(),
+      endHandleLayerLink: LayerLink(),
+      offset: ViewportOffset.zero(),
+      textSelectionDelegate: delegate,
+    );
 
-      expect(editable.getMaxIntrinsicHeight(double.infinity), 10);
+    expect(editable.getMaxIntrinsicHeight(double.infinity), 10);
 
-      editable.strutStyle = const StrutStyle(fontSize: 100, forceStrutHeight: true);
-      expect(editable.getMaxIntrinsicHeight(double.infinity), 100);
-    },
-    // [intended] strut support for HTML renderer https://github.com/flutter/flutter/issues/32243.
-    skip: kIsWeb && !isSkiaWeb,
-  );
+    editable.strutStyle = const StrutStyle(fontSize: 100, forceStrutHeight: true);
+    expect(editable.getMaxIntrinsicHeight(double.infinity), 100);
+  });
 }
 
 class _FakeEditableTextState with TextSelectionDelegate {

@@ -200,7 +200,7 @@ bool ReactorGLES::RegisterCleanupCallback(const HandleGLES& handle,
   return false;
 }
 
-HandleGLES ReactorGLES::CreateUntrackedHandle(HandleType type) {
+HandleGLES ReactorGLES::CreateUntrackedHandle(HandleType type) const {
   FML_DCHECK(CanReactOnCurrentThread());
   auto new_handle = HandleGLES::Create(type);
   std::optional<ReactorGLES::GLStorage> gl_handle =
@@ -233,6 +233,9 @@ HandleGLES ReactorGLES::CreateHandle(HandleType type, GLuint external_handle) {
 }
 
 void ReactorGLES::CollectHandle(HandleGLES handle) {
+  if (handle.IsDead()) {
+    return;
+  }
   if (handle.untracked_id_.has_value()) {
     LiveHandle live_handle(GLStorage{.integer = handle.untracked_id_.value()});
     live_handle.pending_collection = true;
@@ -293,6 +296,7 @@ bool ReactorGLES::ReactOnce() {
 bool ReactorGLES::ConsolidateHandles() {
   TRACE_EVENT0("impeller", __FUNCTION__);
   const auto& gl = GetProcTable();
+  std::thread::id current_thread = std::this_thread::get_id();
   std::vector<std::tuple<HandleGLES, std::optional<GLStorage>>>
       handles_to_delete;
   std::vector<std::tuple<DebugResourceType, GLint, std::string>>
@@ -304,6 +308,13 @@ bool ReactorGLES::ConsolidateHandles() {
     for (auto& handle : handles_) {
       // Collect dead handles.
       if (handle.second.pending_collection) {
+        // Some objects can only be deleted on a specific thread.  Collection
+        // of these objects will be deferred until the owner thead executes
+        // a reaction and triggers collection of handles.
+        const auto& owner_thread = handle.first.owner_thread_;
+        if (owner_thread.has_value() && *owner_thread != current_thread) {
+          continue;
+        }
         handles_to_delete.emplace_back(
             std::make_tuple(handle.first, handle.second.name));
         continue;
@@ -374,7 +385,7 @@ bool ReactorGLES::FlushOps() {
 
 void ReactorGLES::SetupDebugGroups() {
   // Setup of a default active debug group: Filter everything in.
-  if (proc_table_->DebugMessageControlKHR.IsAvailable()) {
+  if (can_set_debug_labels_) {
     proc_table_->DebugMessageControlKHR(GL_DONT_CARE,  // source
                                         GL_DONT_CARE,  // type
                                         GL_DONT_CARE,  // severity

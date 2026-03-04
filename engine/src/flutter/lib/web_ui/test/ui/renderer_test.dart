@@ -9,7 +9,6 @@ import 'package:ui/ui.dart' as ui;
 import 'package:web_engine_tester/golden_tester.dart';
 
 import '../common/test_initialization.dart';
-import 'utils.dart';
 
 const ui.Color black = ui.Color(0xFF000000);
 const ui.Color red = ui.Color(0xFFFF0000);
@@ -28,17 +27,17 @@ Future<void> testMain() async {
   });
 
   test('can render into multiple views', () async {
-    const ui.Rect rect = ui.Rect.fromLTRB(0, 0, 180, 120);
+    const rect = ui.Rect.fromLTRB(0, 0, 180, 120);
 
-    final host1 = createHostElement(rect);
+    final DomElement host1 = createHostElement(rect);
     final view1 = EngineFlutterView(EnginePlatformDispatcher.instance, host1);
     EnginePlatformDispatcher.instance.viewManager.registerView(view1);
 
-    final host2 = createHostElement(rect);
+    final DomElement host2 = createHostElement(rect);
     final view2 = EngineFlutterView(EnginePlatformDispatcher.instance, host2);
     EnginePlatformDispatcher.instance.viewManager.registerView(view2);
 
-    final host3 = createHostElement(rect);
+    final DomElement host3 = createHostElement(rect);
     final view3 = EngineFlutterView(EnginePlatformDispatcher.instance, host3);
     EnginePlatformDispatcher.instance.viewManager.registerView(view3);
 
@@ -57,11 +56,11 @@ Future<void> testMain() async {
     host1.remove();
     host2.remove();
     host3.remove();
-  }, skip: isHtml); // HTML renderer doesn't support multi-view.
+  });
 }
 
 DomElement createHostElement(ui.Rect rect) {
-  final host = createDomElement('div');
+  final DomElement host = createDomElement('div');
   host.style
     ..width = '${rect.width}px'
     ..height = '${rect.height}px';
@@ -93,7 +92,7 @@ ui.Scene paintRect(ui.Rect rect, ui.Color color) {
       ..style = ui.PaintingStyle.fill,
   );
 
-  final picture = recorder.endRecording();
+  final ui.Picture picture = recorder.endRecording();
   final sb = ui.SceneBuilder();
   sb.pushOffset(0, 0);
   sb.addPicture(ui.Offset.zero, picture);

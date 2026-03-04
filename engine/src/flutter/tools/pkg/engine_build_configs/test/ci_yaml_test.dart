@@ -29,7 +29,7 @@ void main() {
 
   test('Can load the real .ci.yaml file', () {
     final y.YamlNode yamlNode = y.loadYamlNode(realCiYaml, sourceUrl: Uri.file(ciYamlPath));
-    final CiConfig config = CiConfig.fromYaml(yamlNode);
+    final config = CiConfig.fromYaml(yamlNode);
     if (!config.valid) {
       io.stderr.writeln(config.error);
     }
@@ -37,15 +37,16 @@ void main() {
   });
 
   test('Parses all supported fields', () {
-    const String yamlData = '''
+    const yamlData = '''
 targets:
   - name: Linux linux_build
     recipe: engine_v2/engine_v2
     properties:
       config_name: linux_build
+      release_build: "true"
 ''';
     final y.YamlNode yamlNode = y.loadYamlNode(yamlData, sourceUrl: Uri.file(ciYamlPath));
-    final CiConfig config = CiConfig.fromYaml(yamlNode);
+    final config = CiConfig.fromYaml(yamlNode);
     if (!config.valid) {
       io.stderr.writeln(config.error);
     }
@@ -57,20 +58,21 @@ targets:
     expect(config.ciTargets['Linux linux_build']!.recipe, equals('engine_v2/engine_v2'));
     expect(config.ciTargets['Linux linux_build']!.properties.valid, isTrue);
     expect(config.ciTargets['Linux linux_build']!.properties.configName, equals('linux_build'));
+    expect(config.ciTargets['Linux linux_build']!.properties.isReleaseBuilder, isTrue);
   });
 
   test('Invalid when targets is malformed', () {
-    const String yamlData = '''
+    const yamlData = '''
 targets: 4
 ''';
     final y.YamlNode yamlNode = y.loadYamlNode(yamlData, sourceUrl: Uri.file(ciYamlPath));
-    final CiConfig config = CiConfig.fromYaml(yamlNode);
+    final config = CiConfig.fromYaml(yamlNode);
     expect(config.valid, isFalse);
     expect(config.error, contains('Expected "targets" to be a list.'));
   });
 
   test('Invalid when a target is malformed', () {
-    const String yamlData = '''
+    const yamlData = '''
 targets:
   - name: 4
     recipe: engine_v2/engine_v2
@@ -78,13 +80,13 @@ targets:
       config_name: linux_build
 ''';
     final y.YamlNode yamlNode = y.loadYamlNode(yamlData, sourceUrl: Uri.file(ciYamlPath));
-    final CiConfig config = CiConfig.fromYaml(yamlNode);
+    final config = CiConfig.fromYaml(yamlNode);
     expect(config.valid, isFalse);
     expect(config.error, contains('Expected map to contain a string value for key "name".'));
   });
 
   test('Invalid when a recipe is malformed', () {
-    const String yamlData = '''
+    const yamlData = '''
 targets:
   - name: Linux linux_build
     recipe: 4
@@ -92,26 +94,26 @@ targets:
       config_name: linux_build
 ''';
     final y.YamlNode yamlNode = y.loadYamlNode(yamlData, sourceUrl: Uri.file(ciYamlPath));
-    final CiConfig config = CiConfig.fromYaml(yamlNode);
+    final config = CiConfig.fromYaml(yamlNode);
     expect(config.valid, isFalse);
     expect(config.error, contains('Expected map to contain a string value for key "recipe".'));
   });
 
   test('Invalid when a properties list is malformed', () {
-    const String yamlData = '''
+    const yamlData = '''
 targets:
   - name: Linux linux_build
     recipe: engine_v2/engine_v2
     properties: 4
 ''';
     final y.YamlNode yamlNode = y.loadYamlNode(yamlData, sourceUrl: Uri.file(ciYamlPath));
-    final CiConfig config = CiConfig.fromYaml(yamlNode);
+    final config = CiConfig.fromYaml(yamlNode);
     expect(config.valid, isFalse);
     expect(config.error, contains('Expected "properties" to be a map.'));
   });
 
   test('Still valid when a config_name is not present', () {
-    const String yamlData = '''
+    const yamlData = '''
 targets:
   - name: Linux linux_build
     recipe: engine_v2/engine_v2
@@ -119,12 +121,12 @@ targets:
       field: value
 ''';
     final y.YamlNode yamlNode = y.loadYamlNode(yamlData, sourceUrl: Uri.file(ciYamlPath));
-    final CiConfig config = CiConfig.fromYaml(yamlNode);
+    final config = CiConfig.fromYaml(yamlNode);
     expect(config.valid, isTrue);
   });
 
   test('Invalid when any target is malformed', () {
-    const String yamlData = '''
+    const yamlData = '''
 targets:
   - name: Linux linux_build
     recipe: engine_v2/engine_v2
@@ -137,7 +139,7 @@ targets:
       config_name: linux_build
 ''';
     final y.YamlNode yamlNode = y.loadYamlNode(yamlData, sourceUrl: Uri.file(ciYamlPath));
-    final CiConfig config = CiConfig.fromYaml(yamlNode);
+    final config = CiConfig.fromYaml(yamlNode);
     expect(config.valid, isFalse);
     expect(config.error, contains('Expected map to contain a string value for key "name".'));
   });

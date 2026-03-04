@@ -47,5 +47,13 @@
   "menuDismissLabel": "إغلاق القائمة",
   "lookUpButtonLabel": "بحث عام",
   "searchWebButtonLabel": "البحث على الويب",
-  "shareButtonLabel": "مشاركة…"
+  "shareButtonLabel": "مشاركة…",
+  "cancelButtonLabel": "الإلغاء",
+  "backButtonLabel": "رجوع",
+  "expansionTileExpandedHint": "يُرجى النقر مرّتين للتصغير.",
+  "expansionTileCollapsedHint": "انقر مرّتين للتوسيع",
+  "expansionTileExpandedTapHint": "تصغير",
+  "expansionTileCollapsedTapHint": "وسِّع المربّع لعرض مزيد من التفاصيل.",
+  "expandedHint": "مصغَّر",
+  "collapsedHint": "موسَّع"
 }

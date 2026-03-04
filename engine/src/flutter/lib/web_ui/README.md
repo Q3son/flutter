@@ -8,8 +8,8 @@ If you are setting up a workspace for the first time, start by following the
 instructions at [Setting up the Engine development environment][1]. In addition,
 it is useful to add the following to your `PATH` environment variable:
 
-- `ENGINE_ROOT/src/flutter/lib/web_ui/dev`, so you can run the `felt` command
-  from anywhere.
+- `FLUTTER_ROOT/engine/src/flutter/lib/web_ui/dev`, so you can run the `felt`
+  command from anywhere.
 - `FLUTTER_ROOT/bin`, so you can run `dart` and `flutter` commands from
   anywhere.
 
@@ -27,7 +27,7 @@ The `build` subcommand builds web engine gn/ninja targets. Targets can be
 individually specified in the command line invocation, or if none are specified,
 all web engine targets are built. Common targets are as follows:
   * `sdk` - The flutter_web_sdk itself.
-  * `canvaskit` - Flutter's version of canvakit.
+  * `canvaskit` - Flutter's version of canvaskit.
   * `canvaskit_chromium` - A version of canvaskit optimized for use with
     chromium-based browsers.
   * `skwasm` - Builds experimental skia wasm module renderer.
@@ -77,7 +77,7 @@ Several other flags can be passed that filter which test suites should be run:
   * `--compiler` runs only the test suites that use a particular compiler. Valid
     values for this are `dart2js` or `dart2wasm`
   * `--renderer` runs only the test suites that use a particular renderer. Valid
-    values for this are `html`, `canvakit`, or `skwasm`
+    values for this are `html`, `canvaskit`, or `skwasm`
   * `--suite` runs a suite by name.
   * `--bundle` runs suites that target a particular test bundle.
 
@@ -135,7 +135,7 @@ tests locally. To make changes effective on LUCI follow instructions in
 
 ### Rolling browsers
 
-When running tests on LUCI using Chrome, LUCI uses the version of Chrome for 
+When running tests on LUCI using Chrome, LUCI uses the version of Chrome for
 Testing fetched from CIPD.
 
 Since the engine code and infra recipes do not live in the same repository
@@ -176,9 +176,9 @@ The available versions of Chrome for Testing available can be found [here](https
   the engine code, you probably do).
 - If not already authenticated with CIPD, run `cipd auth-login` and follow
   instructions (this step requires sufficient privileges; contact
-  #hackers-infra-🌡 on [Flutter's Discord server](https://github.com/flutter/flutter/wiki/Chat)).
+  #hackers-infra-🌡 on [Flutter's Discord server](https://github.com/flutter/flutter/blob/main/docs/contributing/Chat.md)).
 - Edit `dev/package_lock.yaml` and update the following values under `chrome`:
-  - Set `version` to the full four part version number of the build of Chrome 
+  - Set `version` to the full four part version number of the build of Chrome
     for Testing you want to roll (for example, `118.0.5993.70`)
 - Run `dart dev/package_roller.dart` and make sure it completes successfully.
   The script uploads the specified versions of Chromium (and Chromedriver) to the
@@ -194,20 +194,17 @@ If you have questions, contact the Flutter Web team on Flutter Discord on the
 
 We test with Firefox on LUCI in the Linux Web Engine builder. The process for
 rolling Firefox is even easier than Chromium. Simply update `package_lock.yaml`
-with the latest version of Firefox, and run `package_roller.dart`.
+with the latest version of Firefox, and run:
+```
+dart dev/package_roller.dart
+```
 
 #### .ci.yaml
 
-After rolling Chrome and/or Firefox, also update the CI dependencies in
-`.ci.yaml` to make use of the new versions. The lines look like
+After rolling Chrome and/or Firefox, also update the CI dependencies by running:
 
-```yaml
-      dependencies: >-
-        [
-          {"dependency": "chrome_and_driver", "version": "version:107.0"},
-          {"dependency": "firefox", "version": "version:83.0"},
-          {"dependency": "goldctl", "version": "git_revision:720a542f6fe4f92922c3b8f0fdcc4d2ac6bb83cd"}
-        ]
+```
+felt generate-builder-json
 ```
 
 ##### **package_roller.dart**
@@ -247,8 +244,37 @@ Resources:
 web. Versions are not automatically updated whenever a new release is available.
 Instead, we update this file manually once in a while.
 
-`canvaskit_lock.yaml` locks the version of CanvasKit for tests and production
-use.
+### Debugging the Web Engine
+
+Build the Flutter Web engine locally:
+
+```
+felt build
+```
+
+Run a Flutter app in debug mode using your locally built Web Engine artifacts:
+
+* **Option 1**: Launch a Chrome window from the command line.
+   ```
+   flutter run --local-web-sdk=wasm_release --debug -d chrome
+   ```
+   Exiting `flutter run` will close the app's Chrome window.
+* **Option 2**: Launch a web server on port `8080`:
+  ```
+  flutter run --local-web-sdk=wasm_release --debug -d web-server --web-port 8080
+  ```
+  To see your Flutter app, navigate your browser to http://localhost:8080.
+
+  This option is useful if you want to keep your browser window when you
+  you restart `flutter run`, or, if you need to debug using browsers that
+  aren't supported by `flutter run`, such as Firefox and Safari.
+
+You can use [Chrome DevTools][7] to debug the Flutter Web engine.
+To open Chrome DevTools, right click and press **Inspect** on the Chrome window.
+Navigate to the [**Sources** tab][8].
+The Flutter Web engine's sources are in `localhost:<port>` > `lib` > `_engine` >
+`engine`. You can set breakpoints in Dart source files and use the Chrome
+debugger to inspect variables' values.
 
 ## Building CanvasKit
 
@@ -303,13 +329,11 @@ Once you know the version for the Emscripten SDK, change the line in
 
 
 
-[1]: https://github.com/flutter/flutter/wiki/Setting-up-the-Engine-development-environment
-[2]: https://github.com/flutter/flutter/blob/main/lib/web_ui/test/README
-[3]: https://github.com/flutter/engine/blob/main/lib/web_ui/dev/package_lock.yaml
+[1]: https://github.com/flutter/flutter/blob/main/docs/engine/contributing/Setting-up-the-Engine-development-environment.md
+[2]: https://github.com/flutter/flutter/blob/main/engine/src/flutter/lib/web_ui/test/README.md
+[3]: https://github.com/flutter/flutter/blob/main/engine/src/flutter/lib/web_ui/dev/package_lock.yaml
 [4]: https://chrome-infra-packages.appspot.com/p/flutter_internal
 [5]: https://cs.opensource.google/flutter/recipes/+/master:recipes/engine/web_engine.py
 [6]: https://chromium.googlesource.com/chromium/src.git/+/main/docs/cipd_and_3pp.md#What-is-CIPD
-
-## Unicode properties
-
-We pull the unicode properties we need from `third_party/web_unicode`. See `third_party/web_unicode/README.md` for more details on how we generate Dart code from unicode properties.
+[7]: https://developer.chrome.com/docs/devtools
+[8]: https://developer.chrome.com/docs/devtools/sources

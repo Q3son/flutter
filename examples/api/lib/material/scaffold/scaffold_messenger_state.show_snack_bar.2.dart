@@ -19,11 +19,12 @@ class SnackBarApp extends StatelessWidget {
 
 enum AnimationStyles { defaultStyle, custom, none }
 
-const List<(AnimationStyles, String)> animationStyleSegments = <(AnimationStyles, String)>[
-  (AnimationStyles.defaultStyle, 'Default'),
-  (AnimationStyles.custom, 'Custom'),
-  (AnimationStyles.none, 'None'),
-];
+const List<(AnimationStyles, String)> animationStyleSegments =
+    <(AnimationStyles, String)>[
+      (AnimationStyles.defaultStyle, 'Default'),
+      (AnimationStyles.custom, 'Custom'),
+      (AnimationStyles.none, 'None'),
+    ];
 
 class SnackBarExample extends StatefulWidget {
   const SnackBarExample({super.key});
@@ -33,7 +34,9 @@ class SnackBarExample extends StatefulWidget {
 }
 
 class _SnackBarExampleState extends State<SnackBarExample> {
-  Set<AnimationStyles> _animationStyleSelection = <AnimationStyles>{AnimationStyles.defaultStyle};
+  Set<AnimationStyles> _animationStyleSelection = <AnimationStyles>{
+    AnimationStyles.defaultStyle,
+  };
   AnimationStyle? _animationStyle;
 
   @override
@@ -50,21 +53,25 @@ class _SnackBarExampleState extends State<SnackBarExample> {
                 setState(() {
                   _animationStyle = switch (styles.first) {
                     AnimationStyles.defaultStyle => null,
-                    AnimationStyles.custom => AnimationStyle(
-                      duration: const Duration(seconds: 3),
-                      reverseDuration: const Duration(seconds: 1),
+                    AnimationStyles.custom => const AnimationStyle(
+                      duration: Duration(seconds: 3),
+                      reverseDuration: Duration(seconds: 1),
                     ),
                     AnimationStyles.none => AnimationStyle.noAnimation,
                   };
                   _animationStyleSelection = styles;
                 });
               },
-              segments:
-                  animationStyleSegments.map<ButtonSegment<AnimationStyles>>((
+              segments: animationStyleSegments
+                  .map<ButtonSegment<AnimationStyles>>((
                     (AnimationStyles, String) shirt,
                   ) {
-                    return ButtonSegment<AnimationStyles>(value: shirt.$1, label: Text(shirt.$2));
-                  }).toList(),
+                    return ButtonSegment<AnimationStyles>(
+                      value: shirt.$1,
+                      label: Text(shirt.$2),
+                    );
+                  })
+                  .toList(),
             ),
             const SizedBox(height: 10),
             Builder(
@@ -72,7 +79,10 @@ class _SnackBarExampleState extends State<SnackBarExample> {
                 return ElevatedButton(
                   onPressed: () {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('I am a snack bar.'), showCloseIcon: true),
+                      const SnackBar(
+                        content: Text('I am a snack bar.'),
+                        showCloseIcon: true,
+                      ),
                       snackBarAnimationStyle: _animationStyle,
                     );
                   },

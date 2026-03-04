@@ -7,7 +7,6 @@
 #include <optional>
 #include <utility>
 #include "flutter/flow/layers/layer_tree.h"
-#include "third_party/skia/include/core/SkCanvas.h"
 
 namespace flutter {
 
@@ -74,7 +73,7 @@ std::unique_ptr<CompositorContext::ScopedFrame> CompositorContext::AcquireFrame(
     GrDirectContext* gr_context,
     DlCanvas* canvas,
     ExternalViewEmbedder* view_embedder,
-    const SkMatrix& root_surface_transformation,
+    const DlMatrix& root_surface_transformation,
     bool instrumentation_enabled,
     bool surface_supports_readback,
     fml::RefPtr<fml::RasterThreadMerger>
@@ -91,7 +90,7 @@ CompositorContext::ScopedFrame::ScopedFrame(
     GrDirectContext* gr_context,
     DlCanvas* canvas,
     ExternalViewEmbedder* view_embedder,
-    const SkMatrix& root_surface_transformation,
+    const DlMatrix& root_surface_transformation,
     bool instrumentation_enabled,
     bool surface_supports_readback,
     fml::RefPtr<fml::RasterThreadMerger> raster_thread_merger,
@@ -169,10 +168,10 @@ void CompositorContext::ScopedFrame::PaintLayerTreeSkia(
 
     if (needs_save_layer) {
       TRACE_EVENT0("flutter", "Canvas::saveLayer");
-      SkRect bounds = SkRect::Make(ToSkISize(layer_tree.frame_size()));
+      DlRect bounds = DlRect::MakeSize(layer_tree.frame_size());
       DlPaint paint;
       paint.setBlendMode(DlBlendMode::kSrc);
-      canvas()->SaveLayer(&bounds, &paint);
+      canvas()->SaveLayer(bounds, &paint);
     }
     canvas()->Clear(DlColor::kTransparent());
   }

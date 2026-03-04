@@ -39,15 +39,7 @@ abstract class MultiDragPointerState {
   /// Creates per-pointer state for a [MultiDragGestureRecognizer].
   MultiDragPointerState(this.initialPosition, this.kind, this.gestureSettings)
     : _velocityTracker = VelocityTracker.withKind(kind) {
-    // TODO(polina-c): stop duplicating code across disposables
-    // https://github.com/flutter/flutter/issues/137435
-    if (kFlutterMemoryAllocationsEnabled) {
-      FlutterMemoryAllocations.instance.dispatchObjectCreated(
-        library: 'package:flutter/gestures.dart',
-        className: '$MultiDragPointerState',
-        object: this,
-      );
-    }
+    assert(debugMaybeDispatchCreated('gestures', 'MultiDragPointerState', this));
   }
 
   /// Device specific gesture configuration that should be preferred over
@@ -149,7 +141,7 @@ abstract class MultiDragPointerState {
     assert(_client == null);
     assert(pendingDelta != null);
     _client = client;
-    final DragUpdateDetails details = DragUpdateDetails(
+    final details = DragUpdateDetails(
       sourceTimeStamp: _lastPendingEventTimestamp,
       delta: pendingDelta!,
       globalPosition: initialPosition,
@@ -164,7 +156,7 @@ abstract class MultiDragPointerState {
     assert(_arenaEntry != null);
     if (_client != null) {
       assert(pendingDelta == null);
-      final DragEndDetails details = DragEndDetails(velocity: _velocityTracker.getVelocity());
+      final details = DragEndDetails(velocity: _velocityTracker.getVelocity());
       final Drag client = _client!;
       _client = null;
       // Call client last to avoid reentrancy.
@@ -195,11 +187,7 @@ abstract class MultiDragPointerState {
   @protected
   @mustCallSuper
   void dispose() {
-    // TODO(polina-c): stop duplicating code across disposables
-    // https://github.com/flutter/flutter/issues/137435
-    if (kFlutterMemoryAllocationsEnabled) {
-      FlutterMemoryAllocations.instance.dispatchObjectDisposed(object: this);
-    }
+    assert(debugMaybeDispatchDisposed(this));
     _arenaEntry?.resolve(GestureDisposition.rejected);
     _arenaEntry = null;
     assert(() {

@@ -34,6 +34,31 @@ using DlRect = flutter::DlRect;
 using DlIRect = flutter::DlIRect;
 using DlPath = flutter::DlPath;
 
+void Paint::ConvertStops(const flutter::DlGradientColorSourceBase* gradient,
+                         std::vector<Color>& colors,
+                         std::vector<float>& stops) {
+  FML_DCHECK(gradient->stop_count() >= 2)
+      << "stop_count:" << gradient->stop_count();
+
+  auto* dl_colors = gradient->colors();
+  auto* dl_stops = gradient->stops();
+  if (dl_stops[0] != 0.0) {
+    colors.emplace_back(skia_conversions::ToColor(dl_colors[0]));
+    stops.emplace_back(0);
+  }
+  for (auto i = 0; i < gradient->stop_count(); i++) {
+    colors.emplace_back(skia_conversions::ToColor(dl_colors[i]));
+    stops.emplace_back(std::clamp(dl_stops[i], 0.0f, 1.0f));
+  }
+  if (dl_stops[gradient->stop_count() - 1] != 1.0) {
+    colors.emplace_back(colors.back());
+    stops.emplace_back(1.0);
+  }
+  for (auto i = 1; i < gradient->stop_count(); i++) {
+    stops[i] = std::clamp(stops[i], stops[i - 1], stops[i]);
+  }
+}
+
 std::shared_ptr<ColorSourceContents> Paint::CreateContents() const {
   if (color_source == nullptr) {
     auto contents = std::make_shared<SolidColorContents>();
@@ -50,7 +75,7 @@ std::shared_ptr<ColorSourceContents> Paint::CreateContents() const {
       auto end_point = linear->end_point();
       std::vector<Color> colors;
       std::vector<float> stops;
-      skia_conversions::ConvertStops(linear, colors, stops);
+      ConvertStops(linear, colors, stops);
 
       auto tile_mode = static_cast<Entity::TileMode>(linear->tile_mode());
       auto effect_transform = linear->matrix();
@@ -78,7 +103,7 @@ std::shared_ptr<ColorSourceContents> Paint::CreateContents() const {
       auto radius = radialGradient->radius();
       std::vector<Color> colors;
       std::vector<float> stops;
-      skia_conversions::ConvertStops(radialGradient, colors, stops);
+      ConvertStops(radialGradient, colors, stops);
 
       auto tile_mode =
           static_cast<Entity::TileMode>(radialGradient->tile_mode());
@@ -110,7 +135,7 @@ std::shared_ptr<ColorSourceContents> Paint::CreateContents() const {
       DlScalar focus_radius = conical_gradient->start_radius();
       std::vector<Color> colors;
       std::vector<float> stops;
-      skia_conversions::ConvertStops(conical_gradient, colors, stops);
+      ConvertStops(conical_gradient, colors, stops);
 
       auto tile_mode =
           static_cast<Entity::TileMode>(conical_gradient->tile_mode());
@@ -144,7 +169,7 @@ std::shared_ptr<ColorSourceContents> Paint::CreateContents() const {
       auto end_angle = Degrees(sweepGradient->end());
       std::vector<Color> colors;
       std::vector<float> stops;
-      skia_conversions::ConvertStops(sweepGradient, colors, stops);
+      ConvertStops(sweepGradient, colors, stops);
 
       auto tile_mode =
           static_cast<Entity::TileMode>(sweepGradient->tile_mode());
@@ -172,7 +197,8 @@ std::shared_ptr<ColorSourceContents> Paint::CreateContents() const {
           image_color_source->vertical_tile_mode());
       auto sampler_descriptor =
           skia_conversions::ToSamplerDescriptor(image_color_source->sampling());
-      auto effect_transform = image_color_source->matrix();
+      // See https://github.com/flutter/flutter/issues/165205
+      flutter::DlMatrix effect_transform = image_color_source->matrix().To3x3();
 
       auto contents = std::make_shared<TiledTextureContents>();
       contents->SetOpacityFactor(color.alpha);
@@ -218,11 +244,17 @@ std::shared_ptr<ColorSourceContents> Paint::CreateContents() const {
 
       for (auto& sampler : samplers) {
         if (sampler == nullptr) {
-          return nullptr;
+          VALIDATION_LOG << "Runtime effect sampler is null";
+          auto contents = std::make_shared<SolidColorContents>();
+          contents->SetColor(Color::BlackTransparent());
+          return contents;
         }
         auto* image = sampler->asImage();
         if (!sampler->asImage()) {
-          return nullptr;
+          VALIDATION_LOG << "Runtime effect sampler is not an image";
+          auto contents = std::make_shared<SolidColorContents>();
+          contents->SetColor(Color::BlackTransparent());
+          return contents;
         }
         FML_DCHECK(image->image()->impeller_texture());
         texture_inputs.push_back({
@@ -332,7 +364,7 @@ std::shared_ptr<Contents> Paint::WithColorFilter(
 
 std::shared_ptr<FilterContents> Paint::MaskBlurDescriptor::CreateMaskBlur(
     std::shared_ptr<TextureContents> texture_contents,
-    RectGeometry* rect_geom) const {
+    FillRectGeometry* rect_geom) const {
   Scalar expand_amount = GaussianBlurFilterContents::CalculateBlurRadius(
       GaussianBlurFilterContents::ScaleSigma(sigma.sigma));
   texture_contents->SetSourceRect(
@@ -344,19 +376,19 @@ std::shared_ptr<FilterContents> Paint::MaskBlurDescriptor::CreateMaskBlur(
   if (coverage) {
     texture_contents->SetDestinationRect(
         coverage.value().Expand(expand_amount, expand_amount));
-    *rect_geom = RectGeometry(coverage.value());
+    *rect_geom = FillRectGeometry(coverage.value());
     geometry = rect_geom;
   }
   mask->SetGeometry(geometry);
   auto descriptor = texture_contents->GetSamplerDescriptor();
   texture_contents->SetSamplerDescriptor(descriptor);
   std::shared_ptr<FilterContents> blurred_mask =
-      FilterContents::MakeGaussianBlur(FilterInput::Make(mask), sigma, sigma,
-                                       Entity::TileMode::kDecal, style,
-                                       geometry);
+      FilterContents::MakeGaussianBlur(
+          FilterInput::Make(mask), sigma, sigma, Entity::TileMode::kDecal,
+          /*bounds=*/std::nullopt, style, geometry);
 
   return ColorFilterContents::MakeBlend(
-      BlendMode::kSourceIn,
+      BlendMode::kSrcIn,
       {FilterInput::Make(blurred_mask), FilterInput::Make(texture_contents)});
 }
 
@@ -364,13 +396,14 @@ std::shared_ptr<FilterContents> Paint::MaskBlurDescriptor::CreateMaskBlur(
     std::shared_ptr<ColorSourceContents> color_source_contents,
     const flutter::DlColorFilter* color_filter,
     bool invert_colors,
-    RectGeometry* rect_geom) const {
+    FillRectGeometry* rect_geom) const {
   // If it's a solid color then we can just get  away with doing one Gaussian
   // blur. The color filter will always be applied on the CPU.
   if (color_source_contents->IsSolidColor()) {
     return FilterContents::MakeGaussianBlur(
         FilterInput::Make(color_source_contents), sigma, sigma,
-        Entity::TileMode::kDecal, style, color_source_contents->GetGeometry());
+        Entity::TileMode::kDecal, /*bounds=*/std::nullopt, style,
+        color_source_contents->GetGeometry());
   }
 
   /// 1. Create an opaque white mask of the original geometry.
@@ -382,8 +415,8 @@ std::shared_ptr<FilterContents> Paint::MaskBlurDescriptor::CreateMaskBlur(
   /// 2. Blur the mask.
 
   auto blurred_mask = FilterContents::MakeGaussianBlur(
-      FilterInput::Make(mask), sigma, sigma, Entity::TileMode::kDecal, style,
-      color_source_contents->GetGeometry());
+      FilterInput::Make(mask), sigma, sigma, Entity::TileMode::kDecal,
+      /*bounds=*/std::nullopt, style, color_source_contents->GetGeometry());
 
   /// 3. Replace the geometry of the original color source with a rectangle that
   ///    covers the full region of the blurred mask. Note that geometry is in
@@ -393,7 +426,7 @@ std::shared_ptr<FilterContents> Paint::MaskBlurDescriptor::CreateMaskBlur(
   if (!expanded_local_bounds.has_value()) {
     expanded_local_bounds = Rect();
   }
-  *rect_geom = RectGeometry(expanded_local_bounds.value());
+  *rect_geom = FillRectGeometry(expanded_local_bounds.value());
   color_source_contents->SetGeometry(rect_geom);
   std::shared_ptr<Contents> color_contents = color_source_contents;
 
@@ -412,7 +445,7 @@ std::shared_ptr<FilterContents> Paint::MaskBlurDescriptor::CreateMaskBlur(
   /// 5. Composite the color source with the blurred mask.
 
   return ColorFilterContents::MakeBlend(
-      BlendMode::kSourceIn,
+      BlendMode::kSrcIn,
       {FilterInput::Make(blurred_mask), FilterInput::Make(color_contents)});
 }
 
@@ -426,9 +459,9 @@ std::shared_ptr<FilterContents> Paint::MaskBlurDescriptor::CreateMaskBlur(
         Vector2(ctm.GetBasisX().GetLength(), ctm.GetBasisY().GetLength());
   }
   if (is_solid_color) {
-    return FilterContents::MakeGaussianBlur(input, Sigma(blur_sigma.x),
-                                            Sigma(blur_sigma.y),
-                                            Entity::TileMode::kDecal, style);
+    return FilterContents::MakeGaussianBlur(
+        input, Sigma(blur_sigma.x), Sigma(blur_sigma.y),
+        Entity::TileMode::kDecal, /*bounds=*/std::nullopt, style);
   }
   return FilterContents::MakeBorderMaskBlur(input, Sigma(blur_sigma.x),
                                             Sigma(blur_sigma.y), style);

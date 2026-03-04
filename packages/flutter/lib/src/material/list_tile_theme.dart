@@ -16,7 +16,6 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
 
 import 'list_tile.dart';
-import 'material_state.dart';
 import 'theme.dart';
 import 'theme_data.dart';
 
@@ -29,9 +28,8 @@ import 'theme_data.dart';
 /// [SwitchListTile].
 ///
 /// Descendant widgets obtain the current [ListTileThemeData] object
-/// using `ListTileTheme.of(context)`. Instances of
-/// [ListTileThemeData] can be customized with
-/// [ListTileThemeData.copyWith].
+/// using [ListTileTheme.of]. Instances of [ListTileThemeData] can be
+/// customized with [ListTileThemeData.copyWith].
 ///
 /// A [ListTileThemeData] is often specified as part of the
 /// overall [Theme] with [ThemeData.listTileTheme].
@@ -73,6 +71,7 @@ class ListTileThemeData with Diagnosticable {
     this.minTileHeight,
     this.titleAlignment,
     this.controlAffinity,
+    this.isThreeLine,
   });
 
   /// Overrides the default value of [ListTile.dense].
@@ -127,7 +126,7 @@ class ListTileThemeData with Diagnosticable {
   final bool? enableFeedback;
 
   /// If specified, overrides the default value of [ListTile.mouseCursor].
-  final MaterialStateProperty<MouseCursor?>? mouseCursor;
+  final WidgetStateProperty<MouseCursor?>? mouseCursor;
 
   /// If specified, overrides the default value of [ListTile.visualDensity].
   final VisualDensity? visualDensity;
@@ -138,6 +137,10 @@ class ListTileThemeData with Diagnosticable {
   /// If specified, overrides the default value of [CheckboxListTile.controlAffinity]
   /// or [ExpansionTile.controlAffinity] or [SwitchListTile.controlAffinity] or [RadioListTile.controlAffinity].
   final ListTileControlAffinity? controlAffinity;
+
+  /// If specified, overrides the default value of [ListTile.isThreeLine]
+  /// or [CheckboxListTile.isThreeLine] or [RadioListTile.isThreeLine] or [SwitchListTile.isThreeLine].
+  final bool? isThreeLine;
 
   /// Creates a copy of this object with the given fields replaced with the
   /// new values.
@@ -159,7 +162,7 @@ class ListTileThemeData with Diagnosticable {
     double? minLeadingWidth,
     double? minTileHeight,
     bool? enableFeedback,
-    MaterialStateProperty<MouseCursor?>? mouseCursor,
+    WidgetStateProperty<MouseCursor?>? mouseCursor,
     bool? isThreeLine,
     VisualDensity? visualDensity,
     ListTileTitleAlignment? titleAlignment,
@@ -187,6 +190,7 @@ class ListTileThemeData with Diagnosticable {
       visualDensity: visualDensity ?? this.visualDensity,
       titleAlignment: titleAlignment ?? this.titleAlignment,
       controlAffinity: controlAffinity ?? this.controlAffinity,
+      isThreeLine: isThreeLine ?? this.isThreeLine,
     );
   }
 
@@ -221,6 +225,7 @@ class ListTileThemeData with Diagnosticable {
       visualDensity: t < 0.5 ? a?.visualDensity : b?.visualDensity,
       titleAlignment: t < 0.5 ? a?.titleAlignment : b?.titleAlignment,
       controlAffinity: t < 0.5 ? a?.controlAffinity : b?.controlAffinity,
+      isThreeLine: t < 0.5 ? a?.isThreeLine : b?.isThreeLine,
     );
   }
 
@@ -247,6 +252,7 @@ class ListTileThemeData with Diagnosticable {
     visualDensity,
     titleAlignment,
     controlAffinity,
+    isThreeLine,
   ]);
 
   @override
@@ -278,7 +284,8 @@ class ListTileThemeData with Diagnosticable {
         other.mouseCursor == mouseCursor &&
         other.visualDensity == visualDensity &&
         other.titleAlignment == titleAlignment &&
-        other.controlAffinity == controlAffinity;
+        other.controlAffinity == controlAffinity &&
+        other.isThreeLine == isThreeLine;
   }
 
   @override
@@ -314,7 +321,7 @@ class ListTileThemeData with Diagnosticable {
     properties.add(DoubleProperty('minTileHeight', minTileHeight, defaultValue: null));
     properties.add(DiagnosticsProperty<bool>('enableFeedback', enableFeedback, defaultValue: null));
     properties.add(
-      DiagnosticsProperty<MaterialStateProperty<MouseCursor?>>(
+      DiagnosticsProperty<WidgetStateProperty<MouseCursor?>>(
         'mouseCursor',
         mouseCursor,
         defaultValue: null,
@@ -337,6 +344,7 @@ class ListTileThemeData with Diagnosticable {
         defaultValue: null,
       ),
     );
+    properties.add(DiagnosticsProperty<bool>('isThreeLine', isThreeLine, defaultValue: null));
   }
 }
 
@@ -367,7 +375,7 @@ class ListTileTheme extends InheritedTheme {
     Color? tileColor,
     Color? selectedTileColor,
     bool? enableFeedback,
-    MaterialStateProperty<MouseCursor?>? mouseCursor,
+    WidgetStateProperty<MouseCursor?>? mouseCursor,
     double? horizontalTitleGap,
     double? minVerticalPadding,
     double? minLeadingWidth,
@@ -421,7 +429,7 @@ class ListTileTheme extends InheritedTheme {
   final double? _minVerticalPadding;
   final double? _minLeadingWidth;
   final bool? _enableFeedback;
-  final MaterialStateProperty<MouseCursor?>? _mouseCursor;
+  final WidgetStateProperty<MouseCursor?>? _mouseCursor;
   final ListTileControlAffinity? _controlAffinity;
 
   /// The configuration of this theme.
@@ -570,9 +578,10 @@ class ListTileTheme extends InheritedTheme {
     double? minLeadingWidth,
     double? minTileHeight,
     ListTileTitleAlignment? titleAlignment,
-    MaterialStateProperty<MouseCursor?>? mouseCursor,
+    WidgetStateProperty<MouseCursor?>? mouseCursor,
     VisualDensity? visualDensity,
     ListTileControlAffinity? controlAffinity,
+    bool? isThreeLine,
     required Widget child,
   }) {
     return Builder(
@@ -603,6 +612,7 @@ class ListTileTheme extends InheritedTheme {
             mouseCursor: mouseCursor ?? parent.mouseCursor,
             visualDensity: visualDensity ?? parent.visualDensity,
             controlAffinity: controlAffinity ?? parent.controlAffinity,
+            isThreeLine: isThreeLine ?? parent.isThreeLine,
           ),
           child: child,
         );
@@ -627,6 +637,7 @@ class ListTileTheme extends InheritedTheme {
         horizontalTitleGap: horizontalTitleGap,
         minVerticalPadding: minVerticalPadding,
         minLeadingWidth: minLeadingWidth,
+        isThreeLine: _data?.isThreeLine,
       ),
       child: child,
     );

@@ -22,6 +22,7 @@ void main() {
 
     final Codec codec = await descriptor.instantiateCodec();
     expect(codec.frameCount, 1);
+    codec.dispose();
   });
 
   test('basic image descriptor - encoded - square', () async {
@@ -35,6 +36,7 @@ void main() {
 
     final Codec codec = await descriptor.instantiateCodec();
     expect(codec.frameCount, 1);
+    codec.dispose();
   });
 
   test('basic image descriptor - encoded - animated', () async {
@@ -49,12 +51,13 @@ void main() {
     final Codec codec = await descriptor.instantiateCodec();
     expect(codec.frameCount, 4);
     expect(codec.repetitionCount, -1);
+    codec.dispose();
   });
 
   test('basic image descriptor - raw', () async {
-    final Uint8List bytes = Uint8List.fromList(List<int>.filled(16, 0xFFABCDEF));
+    final bytes = Uint8List.fromList(List<int>.filled(16, 0xFFABCDEF));
     final ImmutableBuffer buffer = await ImmutableBuffer.fromUint8List(bytes);
-    final ImageDescriptor descriptor = ImageDescriptor.raw(
+    final descriptor = ImageDescriptor.raw(
       buffer,
       width: 4,
       height: 4,
@@ -68,6 +71,7 @@ void main() {
 
     final Codec codec = await descriptor.instantiateCodec();
     expect(codec.frameCount, 1);
+    codec.dispose();
   });
 
   test('HEIC image', () async {
@@ -81,11 +85,12 @@ void main() {
 
     final Codec codec = await descriptor.instantiateCodec();
     expect(codec.frameCount, 1);
+    codec.dispose();
   }, skip: !(Platform.isAndroid || Platform.isIOS || Platform.isMacOS || Platform.isWindows));
 }
 
 Future<Uint8List> readFile(String fileName) async {
-  final File file = File(path.join('flutter', 'testing', 'resources', fileName));
+  final file = File(path.join('flutter', 'testing', 'resources', fileName));
   return file.readAsBytes();
 }
 

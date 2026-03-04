@@ -9,9 +9,12 @@
 
 #include "flutter/shell/platform/embedder/embedder.h"
 #include "flutter/shell/platform/linux/fl_display_monitor.h"
+#include "flutter/shell/platform/linux/fl_keyboard_manager.h"
 #include "flutter/shell/platform/linux/fl_mouse_cursor_handler.h"
-#include "flutter/shell/platform/linux/fl_renderer.h"
+#include "flutter/shell/platform/linux/fl_opengl_manager.h"
+#include "flutter/shell/platform/linux/fl_renderable.h"
 #include "flutter/shell/platform/linux/fl_task_runner.h"
+#include "flutter/shell/platform/linux/fl_text_input_handler.h"
 #include "flutter/shell/platform/linux/public/flutter_linux/fl_dart_project.h"
 #include "flutter/shell/platform/linux/public/flutter_linux/fl_engine.h"
 
@@ -48,39 +51,35 @@ typedef gboolean (*FlEnginePlatformMessageHandler)(
     gpointer user_data);
 
 /**
- * FlEngineUpdateSemanticsHandler:
- * @engine: an #FlEngine.
- * @node: semantic node information.
- * @user_data: (closure): data provided when registering this handler.
+ * fl_engine_new_with_binary_messenger:
+ * @binary_messenger: an #FlBinaryMessenger.
  *
- * Function called when semantics node updates are received.
- */
-typedef void (*FlEngineUpdateSemanticsHandler)(
-    FlEngine* engine,
-    const FlutterSemanticsUpdate2* update,
-    gpointer user_data);
-
-/**
- * fl_engine_new_with_renderer:
- * @project: an #FlDartProject.
- * @renderer: an #FlRenderer.
- *
- * Creates new Flutter engine.
+ * Creates a new engine with a custom binary messenger. Used for testing.
  *
  * Returns: a new #FlEngine.
  */
-FlEngine* fl_engine_new_with_renderer(FlDartProject* project,
-                                      FlRenderer* renderer);
+FlEngine* fl_engine_new_with_binary_messenger(
+    FlBinaryMessenger* binary_messenger);
 
 /**
- * fl_engine_get_renderer:
+ * fl_engine_get_renderer_type:
  * @engine: an #FlEngine.
  *
- * Gets the renderer used by this engine.
+ * Gets the rendering type used by this engine.
  *
- * Returns: an #FlRenderer.
+ * Returns: type of rendering used.
  */
-FlRenderer* fl_engine_get_renderer(FlEngine* engine);
+FlutterRendererType fl_engine_get_renderer_type(FlEngine* engine);
+
+/**
+ * fl_engine_get_opengl_manager:
+ * @engine: an #FlEngine.
+ *
+ * Gets the OpenGL manager used by this engine.
+ *
+ * Returns: an #FlOpenGLManager.
+ */
+FlOpenGLManager* fl_engine_get_opengl_manager(FlEngine* engine);
 
 /**
  * fl_engine_get_display_monitor:
@@ -96,7 +95,9 @@ FlDisplayMonitor* fl_engine_get_display_monitor(FlEngine* engine);
  * fl_engine_start:
  * @engine: an #FlEngine.
  * @error: (allow-none): #GError location to store the error occurring, or %NULL
- * to ignore.
+ * to ignore. If `error` is not %NULL, `*error` must be initialized (typically
+ * %NULL, but an error from a previous call using GLib error handling is
+ * explicitly valid).
  *
  * Starts the Flutter engine.
  *
@@ -127,8 +128,18 @@ void fl_engine_notify_display_update(FlEngine* engine,
                                      size_t displays_length);
 
 /**
+ * fl_engine_set_implicit_view:
+ * @engine: an #FlEngine.
+ * @renderable: the object that will render the implicit view.
+ *
+ * Sets the object to render the implicit view.
+ */
+void fl_engine_set_implicit_view(FlEngine* engine, FlRenderable* renderable);
+
+/**
  * fl_engine_add_view:
  * @engine: an #FlEngine.
+ * @renderable: the object that will render this view.
  * @width: width of view in pixels.
  * @height: height of view in pixels.
  * @pixel_ratio: scale factor for view.
@@ -143,6 +154,7 @@ void fl_engine_notify_display_update(FlEngine* engine,
  * Returns: the ID for the view.
  */
 FlutterViewId fl_engine_add_view(FlEngine* engine,
+                                 FlRenderable* renderable,
                                  size_t width,
                                  size_t height,
                                  double pixel_ratio,
@@ -155,7 +167,9 @@ FlutterViewId fl_engine_add_view(FlEngine* engine,
  * @engine: an #FlEngine.
  * @result: a #GAsyncResult.
  * @error: (allow-none): #GError location to store the error occurring, or %NULL
- * to ignore.
+ * to ignore. If `error` is not %NULL, `*error` must be initialized (typically
+ * %NULL, but an error from a previous call using GLib error handling is
+ * explicitly valid).
  *
  * Completes request started with fl_engine_add_view().
  *
@@ -164,6 +178,18 @@ FlutterViewId fl_engine_add_view(FlEngine* engine,
 gboolean fl_engine_add_view_finish(FlEngine* engine,
                                    GAsyncResult* result,
                                    GError** error);
+
+/**
+ * fl_engine_get_renderable:
+ * @engine: an #FlEngine.
+ * @view_id: ID to check.
+ *
+ * Gets the renderable associated with the give view ID.
+ *
+ * Returns: (transfer full): a reference to an #FlRenderable or %NULL if none
+ * for this ID.
+ */
+FlRenderable* fl_engine_get_renderable(FlEngine* engine, FlutterViewId view_id);
 
 /**
  * fl_engine_remove_view:
@@ -187,7 +213,9 @@ void fl_engine_remove_view(FlEngine* engine,
  * @engine: an #FlEngine.
  * @result: a #GAsyncResult.
  * @error: (allow-none): #GError location to store the error occurring, or %NULL
- * to ignore.
+ * to ignore. If `error` is not %NULL, `*error` must be initialized (typically
+ * %NULL, but an error from a previous call using GLib error handling is
+ * explicitly valid).
  *
  * Completes request started with fl_engine_remove_view().
  *
@@ -214,22 +242,6 @@ gboolean fl_engine_remove_view_finish(FlEngine* engine,
 void fl_engine_set_platform_message_handler(
     FlEngine* engine,
     FlEnginePlatformMessageHandler handler,
-    gpointer user_data,
-    GDestroyNotify destroy_notify);
-
-/**
- * fl_engine_set_update_semantics_handler:
- * @engine: an #FlEngine.
- * @handler: function to call when a semantics update is received.
- * @user_data: (closure): user data to pass to @handler.
- * @destroy_notify: (allow-none): a function which gets called to free
- * @user_data, or %NULL.
- *
- * Registers the function called when a semantics update is received.
- */
-void fl_engine_set_update_semantics_handler(
-    FlEngine* engine,
-    FlEngineUpdateSemanticsHandler handler,
     gpointer user_data,
     GDestroyNotify destroy_notify);
 
@@ -415,7 +427,9 @@ void fl_engine_send_key_event(FlEngine* engine,
  * @result: a #GAsyncResult.
  * @handled: location to write if this event was handled by the engine.
  * @error: (allow-none): #GError location to store the error occurring, or %NULL
- * to ignore.
+ * to ignore. If `error` is not %NULL, `*error` must be initialized (typically
+ * %NULL, but an error from a previous call using GLib error handling is
+ * explicitly valid).
  *
  * Completes request started with fl_engine_send_key_event().
  *
@@ -429,12 +443,14 @@ gboolean fl_engine_send_key_event_finish(FlEngine* engine,
 /**
  * fl_engine_dispatch_semantics_action:
  * @engine: an #FlEngine.
- * @id: the semantics action identifier.
+ * @view_id: the view that the event occured on.
+ * @node_id: the semantics action identifier.
  * @action: the action being dispatched.
  * @data: (allow-none): data associated with the action.
  */
 void fl_engine_dispatch_semantics_action(FlEngine* engine,
-                                         uint64_t id,
+                                         FlutterViewId view_id,
+                                         uint64_t node_id,
                                          FlutterSemanticsAction action,
                                          GBytes* data);
 
@@ -444,7 +460,9 @@ void fl_engine_dispatch_semantics_action(FlEngine* engine,
  * @handle: handle that was provided in #FlEnginePlatformMessageHandler.
  * @response: (allow-none): response to send or %NULL for an empty response.
  * @error: (allow-none): #GError location to store the error occurring, or %NULL
- * to ignore.
+ * to ignore. If `error` is not %NULL, `*error` must be initialized (typically
+ * %NULL, but an error from a previous call using GLib error handling is
+ * explicitly valid).
  *
  * Responds to a platform message.
  *
@@ -480,7 +498,9 @@ void fl_engine_send_platform_message(FlEngine* engine,
  * @engine: an #FlEngine.
  * @result: a #GAsyncResult.
  * @error: (allow-none): #GError location to store the error occurring, or %NULL
- * to ignore.
+ * to ignore. If `error` is not %NULL, `*error` must be initialized (typically
+ * %NULL, but an error from a previous call using GLib error handling is
+ * explicitly valid).
  *
  * Completes request started with fl_engine_send_platform_message().
  *
@@ -564,14 +584,48 @@ void fl_engine_update_accessibility_features(FlEngine* engine, int32_t flags);
 void fl_engine_request_app_exit(FlEngine* engine);
 
 /**
+ * fl_engine_get_keyboard_manager:
+ * @engine: an #FlEngine.
+ *
+ * Gets the keyboard manager used by this engine.
+ *
+ * Returns: an #FlKeyboardManager.
+ */
+FlKeyboardManager* fl_engine_get_keyboard_manager(FlEngine* engine);
+
+/**
+ * fl_engine_get_text_input_handler:
+ * @engine: an #FlEngine.
+ *
+ * Gets the text input handler used by this engine.
+ *
+ * Returns: an #FlTextInputHandler.
+ */
+FlTextInputHandler* fl_engine_get_text_input_handler(FlEngine* engine);
+
+/**
  * fl_engine_get_mouse_cursor_handler:
  * @engine: an #FlEngine.
  *
  * Gets the mouse cursor handler used by this engine.
  *
- * Returns: a #FlMouseCursorHandler.
+ * Returns: an #FlMouseCursorHandler.
  */
 FlMouseCursorHandler* fl_engine_get_mouse_cursor_handler(FlEngine* engine);
+
+/**
+ * fl_engine_for_id:
+ * @handle: an engine identifier obtained through
+ * PlatformDispatcher.instance.engineId.
+ *
+ * Returns Flutter engine associated with the identifier. The identifier
+ * must be valid and for a running engine otherwise the behavior is
+ * undefined.
+ * Must be called from the main thread.
+ *
+ * Returns: a #FlEngine or NULL.
+ */
+FlEngine* fl_engine_for_id(int64_t handle);
 
 G_END_DECLS
 

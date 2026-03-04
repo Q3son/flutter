@@ -14,7 +14,6 @@ class ScrollNotificationObserverApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      theme: ThemeData(useMaterial3: true),
       // The Scaffold widget contains a [ScrollNotificationObserver].
       // This is used by [AppBar] for its scrolled under behavior.
       //
@@ -40,7 +39,8 @@ class ScrollNotificationObserverExample extends StatefulWidget {
       _ScrollNotificationObserverExampleState();
 }
 
-class _ScrollNotificationObserverExampleState extends State<ScrollNotificationObserverExample> {
+class _ScrollNotificationObserverExampleState
+    extends State<ScrollNotificationObserverExample> {
   ScrollNotificationObserverState? _scrollNotificationObserver;
   ScrollController controller = ScrollController();
   bool _scrolledDown = false;
@@ -106,7 +106,10 @@ class _ScrollNotificationObserverExampleState extends State<ScrollNotificationOb
                   child: Padding(
                     padding: EdgeInsets.all(8.0),
                     child: Column(
-                      children: <Widget>[Icon(Icons.arrow_upward_rounded), Text('Scroll to top')],
+                      children: <Widget>[
+                        Icon(Icons.arrow_upward_rounded),
+                        Text('Scroll to top'),
+                      ],
                     ),
                   ),
                 ),

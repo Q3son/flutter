@@ -13,7 +13,9 @@ void main() {
 
     await tester.pumpWidget(
       const CupertinoApp(
-        home: Center(child: CupertinoFormRow(prefix: prefix, child: CupertinoTextField())),
+        home: Center(
+          child: CupertinoFormRow(prefix: prefix, child: CupertinoTextField()),
+        ),
       ),
     );
 
@@ -24,7 +26,9 @@ void main() {
     const Widget child = CupertinoTextField();
 
     await tester.pumpWidget(
-      const CupertinoApp(home: Center(child: CupertinoFormRow(child: child))),
+      const CupertinoApp(
+        home: Center(child: CupertinoFormRow(child: child)),
+      ),
     );
 
     expect(child, tester.widget(find.byType(CupertinoTextField)));
@@ -79,7 +83,9 @@ void main() {
 
     await tester.pumpWidget(
       const CupertinoApp(
-        home: Center(child: CupertinoFormRow(error: error, child: CupertinoTextField())),
+        home: Center(
+          child: CupertinoFormRow(error: error, child: CupertinoTextField()),
+        ),
       ),
     );
 
@@ -91,7 +97,9 @@ void main() {
 
     await tester.pumpWidget(
       const CupertinoApp(
-        home: Center(child: CupertinoFormRow(helper: helper, child: CupertinoTextField())),
+        home: Center(
+          child: CupertinoFormRow(helper: helper, child: CupertinoTextField()),
+        ),
       ),
     );
 
@@ -140,6 +148,8 @@ void main() {
     expect(errorTextStyle.style.color, CupertinoColors.destructiveRed);
   });
 
+  // TODO(justinmc): Don't test Material interactions in Cupertino tests.
+  // https://github.com/flutter/flutter/issues/177028
   testWidgets('CupertinoFormRow adapts to MaterialApp dark mode', (WidgetTester tester) async {
     const Widget prefix = Text('Prefix');
     const Widget helper = Text('Helper');
@@ -174,5 +184,16 @@ void main() {
     expect(prefixParagraph.text.style!.color, CupertinoColors.label);
     // Text style should not return unresolved color.
     expect(prefixParagraph.text.style!.color.toString().contains('UNRESOLVED'), isFalse);
+  });
+
+  testWidgets('CupertinoFormRow does not crash at zero area', (WidgetTester tester) async {
+    await tester.pumpWidget(
+      const CupertinoApp(
+        home: Center(
+          child: SizedBox.shrink(child: CupertinoFormRow(child: Text('X'))),
+        ),
+      ),
+    );
+    expect(tester.getSize(find.byType(CupertinoFormRow)), Size.zero);
   });
 }

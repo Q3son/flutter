@@ -39,12 +39,14 @@ class FilterContents : public Contents {
   enum class MorphType { kDilate, kErode };
 
   /// Creates a gaussian blur that operates in 2 dimensions.
-  /// See also: `MakeDirectionalGaussianBlur`
+  ///
+  /// For definition of parameters, see DlBlurImageFilter.
   static std::shared_ptr<FilterContents> MakeGaussianBlur(
       const FilterInput::Ref& input,
       Sigma sigma_x,
       Sigma sigma_y,
       Entity::TileMode tile_mode = Entity::TileMode::kDecal,
+      std::optional<Rect> bounds = std::nullopt,
       BlurStyle mask_blur_style = BlurStyle::kNormal,
       const Geometry* mask_geometry = nullptr);
 
@@ -122,11 +124,7 @@ class FilterContents : public Contents {
   std::optional<Snapshot> RenderToSnapshot(
       const ContentContext& renderer,
       const Entity& entity,
-      std::optional<Rect> coverage_limit = std::nullopt,
-      const std::optional<SamplerDescriptor>& sampler_descriptor = std::nullopt,
-      bool msaa_enabled = true,
-      int32_t mip_count = 1,
-      std::string_view label = "Filter Snapshot") const override;
+      const SnapshotOptions& options) const override;
 
   /// @brief  Determines the coverage of source pixels that will be needed
   ///         to produce results for the specified |output_limit| under the
@@ -190,7 +188,29 @@ class FilterContents : public Contents {
       const Matrix& effect_transform,
       const Rect& output_limit) const = 0;
 
-  /// @brief  Converts zero or more filter inputs into a render instruction.
+  /// Applies the specific filter logic to the given inputs and returns an
+  /// Entity representing the filtered result.
+  ///
+  /// This is the primary method that subclasses must implement to define their
+  /// filtering behavior. It takes the results of evaluating the filter inputs
+  /// (as Snapshots) and produces a new Entity containing the filtered output.
+  ///
+  /// @param[in] inputs The evaluated inputs to the filter, typically as
+  /// Snapshots.
+  /// @param[in] renderer The content context providing rendering resources.
+  /// @param[in] entity The entity applying this filter, providing transform,
+  /// blend mode, and other context.
+  /// @param[in] effect_transform An additional transform applied after the
+  /// entity's transform, often used in subpass scenarios.
+  /// @param[in] coverage The calculated coverage area of the filter's output
+  /// in the coordinate space after applying the entity and effect transforms.
+  /// @param[in] coverage_hint An optional hint representing the desired output
+  /// coverage area, which can be used for optimization (e.g., rendering only a
+  /// portion of the input).
+  ///
+  /// @return An optional Entity containing the rendered result of the filter.
+  /// Returns `std::nullopt` if the filter cannot be applied or results in empty
+  /// output.
   virtual std::optional<Entity> RenderFilter(
       const FilterInput::Vector& inputs,
       const ContentContext& renderer,

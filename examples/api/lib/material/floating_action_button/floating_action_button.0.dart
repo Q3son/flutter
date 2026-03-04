@@ -15,10 +15,7 @@ class FloatingActionButtonExampleApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      theme: ThemeData(useMaterial3: true),
-      home: const FloatingActionButtonExample(),
-    );
+    return const MaterialApp(home: FloatingActionButtonExample());
   }
 }
 
@@ -26,10 +23,12 @@ class FloatingActionButtonExample extends StatefulWidget {
   const FloatingActionButtonExample({super.key});
 
   @override
-  State<FloatingActionButtonExample> createState() => _FloatingActionButtonExampleState();
+  State<FloatingActionButtonExample> createState() =>
+      _FloatingActionButtonExampleState();
 }
 
-class _FloatingActionButtonExampleState extends State<FloatingActionButtonExample> {
+class _FloatingActionButtonExampleState
+    extends State<FloatingActionButtonExample> {
   // The FAB's foregroundColor, backgroundColor, and shape
   static const List<(Color?, Color? background, ShapeBorder?)> customizations =
       <(Color?, Color?, ShapeBorder?)>[

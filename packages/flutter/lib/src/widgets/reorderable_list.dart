@@ -168,7 +168,7 @@ class ReorderableList extends StatefulWidget {
     this.anchor = 0.0,
     this.cacheExtent,
     this.dragStartBehavior = DragStartBehavior.start,
-    this.keyboardDismissBehavior = ScrollViewKeyboardDismissBehavior.manual,
+    this.keyboardDismissBehavior,
     this.restorationId,
     this.clipBehavior = Clip.hardEdge,
     this.autoScrollerVelocityScalar,
@@ -280,8 +280,9 @@ class ReorderableList extends StatefulWidget {
 
   /// {@macro flutter.widgets.scroll_view.keyboardDismissBehavior}
   ///
-  /// The default is [ScrollViewKeyboardDismissBehavior.manual]
-  final ScrollViewKeyboardDismissBehavior keyboardDismissBehavior;
+  /// If [keyboardDismissBehavior] is null then it will fallback to the inherited
+  /// [ScrollBehavior.getKeyboardDismissBehavior].
+  final ScrollViewKeyboardDismissBehavior? keyboardDismissBehavior;
 
   /// {@macro flutter.widgets.scrollable.restorationId}
   final String? restorationId;
@@ -587,8 +588,8 @@ class SliverReorderableList extends StatefulWidget {
   ///  * [maybeOf], a similar function that will return null if no
   ///    [SliverReorderableList] ancestor is found.
   static SliverReorderableListState of(BuildContext context) {
-    final SliverReorderableListState? result =
-        context.findAncestorStateOfType<SliverReorderableListState>();
+    final SliverReorderableListState? result = context
+        .findAncestorStateOfType<SliverReorderableListState>();
     assert(() {
       if (result == null) {
         throw FlutterError.fromParts(<DiagnosticsNode>[
@@ -755,10 +756,9 @@ class SliverReorderableListState extends State<SliverReorderableList>
 
       if (_items.containsKey(index)) {
         _dragIndex = index;
-        _recognizer =
-            recognizer
-              ..onStart = _dragStart
-              ..addPointer(event);
+        _recognizer = recognizer
+          ..onStart = _dragStart
+          ..addPointer(event);
         _recognizerPointer = event.pointer;
       } else {
         // TODO(darrenaustin): Can we handle this better, maybe scroll to the item?
@@ -852,7 +852,13 @@ class SliverReorderableListState extends State<SliverReorderableList>
 
   void _dragEnd(_DragInfo item) {
     setState(() {
-      if (_insertIndex == item.index) {
+      if (_insertIndex! - item.index == 1) {
+        // When returning to original position from below, _insertIndex equals
+        // item.index + 1 because insertion index is calculated with the dragged
+        // item still present. Use the actual target position for animation.
+        _finalDropPosition = _itemOffsetAt(_insertIndex! - 1);
+      } else if (_insertIndex == item.index) {
+        // No movement - animate to current position
         _finalDropPosition = _itemOffsetAt(_insertIndex!);
       } else if (_reverse) {
         if (_insertIndex! >= _items.length) {
@@ -945,8 +951,9 @@ class SliverReorderableListState extends State<SliverReorderableList>
 
       final Rect geometry = item.targetGeometry();
       final double itemStart = _scrollDirection == Axis.vertical ? geometry.top : geometry.left;
-      final double itemExtent =
-          _scrollDirection == Axis.vertical ? geometry.height : geometry.width;
+      final double itemExtent = _scrollDirection == Axis.vertical
+          ? geometry.height
+          : geometry.width;
       final double itemEnd = itemStart + itemExtent;
       final double itemMiddle = itemStart + itemExtent / 2;
 
@@ -1050,8 +1057,7 @@ class SliverReorderableListState extends State<SliverReorderableList>
     }
 
     // First, determine which semantics actions apply.
-    final Map<CustomSemanticsAction, VoidCallback> semanticsActions =
-        <CustomSemanticsAction, VoidCallback>{};
+    final semanticsActions = <CustomSemanticsAction, VoidCallback>{};
 
     // Create the appropriate semantics actions.
     void moveToStart() => reorder(index, 0);
@@ -1062,17 +1068,16 @@ class SliverReorderableListState extends State<SliverReorderableList>
     void moveAfter() => reorder(index, index + 2);
 
     final WidgetsLocalizations localizations = WidgetsLocalizations.of(context);
-    final bool isHorizontal = _scrollDirection == Axis.horizontal;
+    final isHorizontal = _scrollDirection == Axis.horizontal;
     // If the item can move to before its current position in the list.
     if (index > 0) {
       semanticsActions[CustomSemanticsAction(label: localizations.reorderItemToStart)] =
           moveToStart;
       String reorderItemBefore = localizations.reorderItemUp;
       if (isHorizontal) {
-        reorderItemBefore =
-            Directionality.of(context) == TextDirection.ltr
-                ? localizations.reorderItemLeft
-                : localizations.reorderItemRight;
+        reorderItemBefore = Directionality.of(context) == TextDirection.ltr
+            ? localizations.reorderItemLeft
+            : localizations.reorderItemRight;
       }
       semanticsActions[CustomSemanticsAction(label: reorderItemBefore)] = moveBefore;
     }
@@ -1081,10 +1086,9 @@ class SliverReorderableListState extends State<SliverReorderableList>
     if (index < widget.itemCount - 1) {
       String reorderItemAfter = localizations.reorderItemDown;
       if (isHorizontal) {
-        reorderItemAfter =
-            Directionality.of(context) == TextDirection.ltr
-                ? localizations.reorderItemRight
-                : localizations.reorderItemLeft;
+        reorderItemAfter = Directionality.of(context) == TextDirection.ltr
+            ? localizations.reorderItemRight
+            : localizations.reorderItemLeft;
       }
       semanticsActions[CustomSemanticsAction(label: reorderItemAfter)] = moveAfter;
       semanticsActions[CustomSemanticsAction(label: localizations.reorderItemToEnd)] = moveToEnd;
@@ -1103,7 +1107,7 @@ class SliverReorderableListState extends State<SliverReorderableList>
   @override
   Widget build(BuildContext context) {
     assert(debugCheckHasOverlay(context));
-    final SliverChildBuilderDelegate childrenDelegate = SliverChildBuilderDelegate(
+    final childrenDelegate = SliverChildBuilderDelegate(
       _itemBuilder,
       childCount: widget.itemCount,
       findChildIndexCallback: widget.findChildIndexCallback,
@@ -1228,6 +1232,7 @@ class _ReorderableItemState extends State<_ReorderableItem> {
       newTargetOffset = Offset.zero;
     }
     if (newTargetOffset != _targetOffset) {
+      final Offset previousTarget = _targetOffset;
       _targetOffset = newTargetOffset;
       if (animate) {
         if (_offsetAnimation == null) {
@@ -1243,7 +1248,14 @@ class _ReorderableItemState extends State<_ReorderableItem> {
                 })
                 ..forward();
         } else {
-          _startOffset = offset;
+          // Animation interrupted - calculate current position from previous animation
+          final double currentAnimValue = Curves.easeInOut.transform(_offsetAnimation!.value);
+          final Offset currentPosition = Offset.lerp(
+            _startOffset,
+            previousTarget,
+            currentAnimValue,
+          )!;
+          _startOffset = currentPosition;
           _offsetAnimation!.forward(from: 0.0);
         }
       } else {
@@ -1268,7 +1280,7 @@ class _ReorderableItemState extends State<_ReorderableItem> {
   }
 
   Rect targetGeometry() {
-    final RenderBox itemRenderBox = context.findRenderObject()! as RenderBox;
+    final itemRenderBox = context.findRenderObject()! as RenderBox;
     final Offset itemPosition = itemRenderBox.localToGlobal(Offset.zero) + _targetOffset;
     return itemPosition & itemRenderBox.size;
   }
@@ -1397,16 +1409,8 @@ class _DragInfo extends Drag {
     this.proxyDecorator,
     required this.tickerProvider,
   }) {
-    // TODO(polina-c): stop duplicating code across disposables
-    // https://github.com/flutter/flutter/issues/137435
-    if (kFlutterMemoryAllocationsEnabled) {
-      FlutterMemoryAllocations.instance.dispatchObjectCreated(
-        library: 'package:flutter/widgets.dart',
-        className: '$_DragInfo',
-        object: this,
-      );
-    }
-    final RenderBox itemRenderBox = item.context.findRenderObject()! as RenderBox;
+    assert(debugMaybeDispatchCreated('widgets', '_DragInfo', this));
+    final itemRenderBox = item.context.findRenderObject()! as RenderBox;
     listState = item._listState;
     index = item.index;
     child = item.widget.child;
@@ -1448,9 +1452,7 @@ class _DragInfo extends Drag {
   late Offset _rawDragPosition;
 
   void dispose() {
-    if (kFlutterMemoryAllocationsEnabled) {
-      FlutterMemoryAllocations.instance.dispatchObjectDisposed(object: this);
-    }
+    assert(debugMaybeDispatchDisposed(this));
     _proxyAnimation?.dispose();
   }
 
@@ -1490,11 +1492,10 @@ class _DragInfo extends Drag {
     if (boundary == null) {
       return offset;
     }
-    final Offset adjOffset =
-        boundary!
-            .nearestPositionWithinBoundary((offset - dragOffset) & itemSize)
-            .shift(dragOffset)
-            .topLeft;
+    final Offset adjOffset = boundary!
+        .nearestPositionWithinBoundary((offset - dragOffset) & itemSize)
+        .shift(dragOffset)
+        .topLeft;
     return adjOffset;
   }
 
@@ -1522,7 +1523,7 @@ class _DragInfo extends Drag {
 
 Offset _overlayOrigin(BuildContext context) {
   final OverlayState overlay = Overlay.of(context, debugRequiredFor: context.widget);
-  final RenderBox overlayBox = overlay.context.findRenderObject()! as RenderBox;
+  final overlayBox = overlay.context.findRenderObject()! as RenderBox;
   return overlayBox.localToGlobal(Offset.zero);
 }
 
@@ -1562,12 +1563,11 @@ class _DragItemProxy extends StatelessWidget {
           Offset effectivePosition = position;
           final Offset? dropPosition = listState._finalDropPosition;
           if (dropPosition != null) {
-            effectivePosition =
-                Offset.lerp(
-                  dropPosition - overlayOrigin,
-                  effectivePosition,
-                  Curves.easeOut.transform(animation.value),
-                )!;
+            effectivePosition = Offset.lerp(
+              dropPosition - overlayOrigin,
+              effectivePosition,
+              Curves.easeOut.transform(animation.value),
+            )!;
           }
           return Positioned(
             left: effectivePosition.dx,
@@ -1580,10 +1580,9 @@ class _DragItemProxy extends StatelessWidget {
                 minHeight: constraints.minHeight,
                 maxWidth: constraints.maxWidth,
                 maxHeight: constraints.maxHeight,
-                alignment:
-                    listState._scrollDirection == Axis.horizontal
-                        ? Alignment.centerLeft
-                        : Alignment.topCenter,
+                alignment: listState._scrollDirection == Axis.horizontal
+                    ? Alignment.centerLeft
+                    : Alignment.topCenter,
                 child: child,
               ),
             ),

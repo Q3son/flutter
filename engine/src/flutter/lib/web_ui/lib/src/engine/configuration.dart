@@ -47,8 +47,29 @@ library configuration;
 import 'dart:js_interop';
 
 import 'package:meta/meta.dart';
-import 'canvaskit/renderer.dart';
 import 'dom.dart';
+
+enum CanvasKitVariant {
+  /// The appropriate variant is chosen based on the browser.
+  ///
+  /// This is the default variant.
+  auto,
+
+  /// The full variant that can be used in any browser.
+  full,
+
+  /// The variant that is optimized for Chromium browsers.
+  ///
+  /// WARNING: In most cases, you should use [auto] instead of this variant. Using
+  /// this variant in a non-Chromium browser will result in a broken app.
+  chromium,
+
+  /// The variant that contains the new WebParagraph implementation on top of Chrome's Text Clusters
+  /// API: https://github.com/fserb/canvas2D/blob/master/spec/enhanced-textmetrics.md
+  ///
+  /// WARNING: This is an experimental variant that's not yet ready for production use.
+  experimentalWebParagraph,
+}
 
 /// The Web Engine configuration for the current application.
 FlutterConfiguration get configuration {
@@ -125,14 +146,14 @@ class FlutterConfiguration {
   }
 
   FlutterConfiguration withOverrides(JsFlutterConfiguration? overrides) {
-    final JsFlutterConfiguration newJsConfig =
+    final newJsConfig =
         objectConstructor.assign(
               <String, Object>{}.jsify(),
               _configuration.jsify(),
               overrides.jsify(),
             )
             as JsFlutterConfiguration;
-    final FlutterConfiguration newConfig = FlutterConfiguration();
+    final newConfig = FlutterConfiguration();
     newConfig._configuration = newJsConfig;
     return newConfig;
   }
@@ -171,12 +192,6 @@ class FlutterConfiguration {
   // These properties affect tree shaking and therefore cannot be supplied at
   // runtime. They must be static constants for the compiler to remove dead code
   // effectively.
-
-  /// Auto detect which rendering backend to use.
-  ///
-  /// Using flutter tools option "--web-renderer=auto" would set the value to
-  /// true. Otherwise, it would be false.
-  static const bool flutterWebAutoDetect = bool.fromEnvironment('FLUTTER_WEB_AUTO_DETECT');
 
   static const bool flutterWebUseSkwasm = bool.fromEnvironment('FLUTTER_WEB_USE_SKWASM');
 
@@ -275,6 +290,13 @@ class FlutterConfiguration {
     'FLUTTER_WEB_CANVASKIT_FORCE_CPU_ONLY',
   );
 
+  bool get canvasKitForceMultiSurfaceRasterizer =>
+      _configuration?.canvasKitForceMultiSurfaceRasterizer ??
+      _defaultCanvasKitForceMultiSurfaceRasterizer;
+  static const bool _defaultCanvasKitForceMultiSurfaceRasterizer = bool.fromEnvironment(
+    'FLUTTER_WEB_CANVASKIT_FORCE_MULTI_SURFACE_RASTERIZER',
+  );
+
   /// The maximum number of canvases to use when rendering in CanvasKit.
   ///
   /// Limits the amount of overlays that can be created.
@@ -346,63 +368,39 @@ class FlutterConfiguration {
 external JsFlutterConfiguration? get _jsConfiguration;
 
 /// The JS bindings for the object that's set as `window.flutterConfiguration`.
-@JS()
-@anonymous
-@staticInterop
-class JsFlutterConfiguration {
-  external factory JsFlutterConfiguration();
-}
+extension type JsFlutterConfiguration._(JSObject _) implements JSObject {
+  external JsFlutterConfiguration({
+    String? assetBase,
+    String? canvasKitBaseUrl,
+    String? canvasKitVariant,
+    bool? canvasKitForceCpuOnly,
+    bool? canvasKitForceMultiSurfaceRasterizer,
+    double? canvasKitMaximumSurfaces,
+    bool? debugShowSemanticsNodes,
+    DomElement? hostElement,
+    bool? multiViewEnabled,
+    String? nonce,
+    String? renderer,
+    String? fontFallbackBaseUrl,
+    bool? forceSingleThreadedSkwasm,
+  });
 
-extension JsFlutterConfigurationExtension on JsFlutterConfiguration {
-  @JS('assetBase')
-  external JSString? get _assetBase;
-  String? get assetBase => _assetBase?.toDart;
-
-  @JS('canvasKitBaseUrl')
-  external JSString? get _canvasKitBaseUrl;
-  String? get canvasKitBaseUrl => _canvasKitBaseUrl?.toDart;
-
-  @JS('canvasKitVariant')
-  external JSString? get _canvasKitVariant;
-  String? get canvasKitVariant => _canvasKitVariant?.toDart;
-
-  @JS('canvasKitForceCpuOnly')
-  external JSBoolean? get _canvasKitForceCpuOnly;
-  bool? get canvasKitForceCpuOnly => _canvasKitForceCpuOnly?.toDart;
-
-  @JS('canvasKitMaximumSurfaces')
-  external JSNumber? get _canvasKitMaximumSurfaces;
-  double? get canvasKitMaximumSurfaces => _canvasKitMaximumSurfaces?.toDartDouble;
-
-  @JS('debugShowSemanticsNodes')
-  external JSBoolean? get _debugShowSemanticsNodes;
-  bool? get debugShowSemanticsNodes => _debugShowSemanticsNodes?.toDart;
-
+  external String? get assetBase;
+  external String? get canvasKitBaseUrl;
+  external String? get canvasKitVariant;
+  external bool? get canvasKitForceCpuOnly;
+  external bool? get canvasKitForceMultiSurfaceRasterizer;
+  external double? get canvasKitMaximumSurfaces;
+  external bool? get debugShowSemanticsNodes;
   external DomElement? get hostElement;
-
-  @JS('multiViewEnabled')
-  external JSBoolean? get _multiViewEnabled;
-  bool? get multiViewEnabled => _multiViewEnabled?.toDart;
-
-  @JS('nonce')
-  external JSString? get _nonce;
-  String? get nonce => _nonce?.toDart;
-
-  @JS('renderer')
-  external JSString? get _renderer;
-  String? get renderer => _renderer?.toDart;
-
-  @JS('fontFallbackBaseUrl')
-  external JSString? get _fontFallbackBaseUrl;
-  String? get fontFallbackBaseUrl => _fontFallbackBaseUrl?.toDart;
-
-  @JS('forceSingleThreadedSkwasm')
-  external JSBoolean? get _forceSingleThreadedSkwasm;
-  bool? get forceSingleThreadedSkwasm => _forceSingleThreadedSkwasm?.toDart;
+  external bool? get multiViewEnabled;
+  external String? get nonce;
+  external String? get renderer;
+  external String? get fontFallbackBaseUrl;
+  external bool? get forceSingleThreadedSkwasm;
 }
 
 /// A JavaScript entrypoint that allows developer to set rendering backend
 /// at runtime before launching the application.
 @JS('window.flutterWebRenderer')
-external JSString? get __requestedRendererType;
-String? get _requestedRendererType => __requestedRendererType?.toDart;
+external String? get _requestedRendererType;

@@ -2,9 +2,6 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import 'dart:js_interop';
-import 'dart:js_util' as js_util;
-
 import 'package:test/bootstrap/browser.dart';
 import 'package:test/test.dart';
 import 'package:ui/src/engine.dart';
@@ -23,17 +20,39 @@ void testMain() {
       EngineFlutterDisplay.instance.debugOverrideDevicePixelRatio(1.0);
     });
 
+<<<<<<< HEAD
     test('Surface allocates canvases efficiently', () {
       final Surface surface = Surface();
       final CkSurface originalSurface = surface.acquireFrame(const ui.Size(9, 19)).skiaSurface;
       final DomOffscreenCanvas original = surface.debugGetOffscreenCanvas()!;
+=======
+    test('CkOnscreenSurface resizes correctly', () async {
+      final surfaceProvider = OnscreenSurfaceProvider(
+        OnscreenCanvasProvider(),
+        (OnscreenCanvasProvider canvasProvider) => CkOnscreenSurface(canvasProvider),
+      );
+      final surface = surfaceProvider.createSurface() as CkOnscreenSurface;
+      await surface.initialized;
+      final canvas = surface.hostElement.children.single as DomHTMLCanvasElement;
+      ui.Size canvasSize = getCssSize(canvas);
+
+      // Expect size 1x1 initially.
+      expect(canvas.width, 1);
+      expect(canvas.height, 1);
+      expect(canvasSize.width, 1);
+      expect(canvasSize.height, 1);
+
+      surface.setSize(const BitmapSize(9, 19));
+      canvasSize = getCssSize(canvas);
+>>>>>>> 48c32af0345e9ad5747f78ddce828c7f795f7159
 
       // Expect exact requested dimensions.
-      expect(original.width, 9);
-      expect(original.height, 19);
-      expect(originalSurface.width(), 9);
-      expect(originalSurface.height(), 19);
+      expect(canvas.width, 9);
+      expect(canvas.height, 19);
+      expect(canvasSize.width, 9);
+      expect(canvasSize.height, 19);
 
+<<<<<<< HEAD
       // Shrinking causes the surface to create a new canvas with the exact
       // size requested.
       final CkSurface shrunkSurface = surface.acquireFrame(const ui.Size(5, 15)).skiaSurface;
@@ -85,10 +104,58 @@ void testMain() {
       expect(shrunkSurface2, isNot(same(hugeSurface)));
       expect(shrunkSurface2.width(), 5);
       expect(shrunkSurface2.height(), 15);
+=======
+      // Shrinking causes us to resize the canvas.
+      surface.setSize(const BitmapSize(5, 15));
+      canvasSize = getCssSize(canvas);
+      expect(canvas.width, 5);
+      expect(canvas.height, 15);
+      expect(canvasSize.width, 5);
+      expect(canvasSize.height, 15);
+
+      // Increasing the size causes us to resize the canvas.
+      surface.setSize(const BitmapSize(10, 20));
+      canvasSize = getCssSize(canvas);
+
+      // Expect exact dimensions
+      expect(canvas.width, 10);
+      expect(canvas.height, 20);
+      expect(canvasSize.width, 10);
+      expect(canvasSize.height, 20);
+
+      // Subsequent increases also cause canvas resizing.
+      surface.setSize(const BitmapSize(11, 22));
+      canvasSize = getCssSize(canvas);
+
+      expect(canvas.width, 11);
+      expect(canvas.height, 22);
+      expect(canvasSize.width, 11);
+      expect(canvasSize.height, 22);
+
+      // Increases beyond the 40% limit will cause a canvas resize. STATIC_ASSERT_FOR_WEB
+      surface.setSize(const BitmapSize(20, 40));
+      canvasSize = getCssSize(canvas);
+
+      // Also exact
+      expect(canvas.width, 20);
+      expect(canvas.height, 40);
+      expect(canvasSize.width, 20);
+      expect(canvasSize.height, 40);
+
+      // Shrink again. Resize the canvas.
+      surface.setSize(const BitmapSize(5, 15));
+      canvasSize = getCssSize(canvas);
+
+      expect(canvas.width, 5);
+      expect(canvas.height, 15);
+      expect(canvasSize.width, 5);
+      expect(canvasSize.height, 15);
+>>>>>>> 48c32af0345e9ad5747f78ddce828c7f795f7159
 
       // Doubling the DPR should halve the CSS width, height, and translation of the canvas.
       // This tests https://github.com/flutter/flutter/issues/77084
       EngineFlutterDisplay.instance.debugOverrideDevicePixelRatio(2.0);
+<<<<<<< HEAD
       final CkSurface dpr2Surface2 = surface.acquireFrame(const ui.Size(5, 15)).skiaSurface;
       final DomOffscreenCanvas dpr2Canvas = surface.debugGetOffscreenCanvas()!;
       expect(dpr2Canvas, same(huge));
@@ -183,6 +250,13 @@ void testMain() {
       expect(dpr2Canvas, same(huge));
       expect(dpr2Canvas.width, 5);
       expect(dpr2Canvas.height, 15);
+=======
+      surface.setSize(const BitmapSize(5, 15));
+      canvasSize = getCssSize(canvas);
+
+      expect(canvas.width, 5);
+      expect(canvas.height, 15);
+>>>>>>> 48c32af0345e9ad5747f78ddce828c7f795f7159
       // Canvas is half the size in logical pixels because device pixel ratio is
       // 2.0.
       expect(canvasSize.width, 2.5);
@@ -190,20 +264,17 @@ void testMain() {
       // Skip on wasm since same() doesn't work for JSValues.
     }, skip: isWasm);
 
-    test(
-      'Surface creates new context when WebGL context is restored',
-      () async {
-        final Surface surface = Surface();
-        expect(surface.debugForceNewContext, isTrue);
-        final CkSurface before = surface.acquireFrame(const ui.Size(9, 19)).skiaSurface;
-        expect(surface.debugForceNewContext, isFalse);
+    test('CkOnscreenSurface falls back to software rendering', () async {
+      CkSurface.debugForceGLFailure = true;
+      final surface = CkOnscreenSurface(OnscreenCanvasProvider());
+      await surface.initialized;
 
-        // Pump a timer to flush any microtasks.
-        await Future<void>.delayed(Duration.zero);
-        final CkSurface afterAcquireFrame = surface.acquireFrame(const ui.Size(9, 19)).skiaSurface;
-        // Existing context is reused.
-        expect(afterAcquireFrame, same(before));
+      expect(surface.supportsWebGl, isFalse);
+      expect(surface.skSurface, isNotNull);
+      CkSurface.debugForceGLFailure = false;
+    });
 
+<<<<<<< HEAD
         // Emulate WebGL context loss.
         final DomOffscreenCanvas canvas = surface.debugGetOffscreenCanvas()!;
         final Object ctx = canvas.getContext('webgl2')!;
@@ -211,14 +282,19 @@ void testMain() {
           'WEBGL_lose_context',
         ]);
         js_util.callMethod<void>(loseContextExtension, 'loseContext', const <void>[]);
+=======
+    test('CkOffscreenSurface falls back to software rendering', () async {
+      CkSurface.debugForceGLFailure = true;
+      final surface = CkOffscreenSurface(OffscreenCanvasProvider());
+      await surface.initialized;
+>>>>>>> 48c32af0345e9ad5747f78ddce828c7f795f7159
 
-        // Pump a timer to allow the "lose context" event to propagate.
-        await Future<void>.delayed(Duration.zero);
-        // We don't create a new GL context until the context is restored.
-        expect(surface.debugContextLost, isTrue);
-        final bool isContextLost = js_util.callMethod<bool>(ctx, 'isContextLost', const <void>[]);
-        expect(isContextLost, isTrue);
+      expect(surface.supportsWebGl, isFalse);
+      expect(surface.skSurface, isNotNull);
+      CkSurface.debugForceGLFailure = false;
+    });
 
+<<<<<<< HEAD
         // Emulate WebGL context restoration.
         js_util.callMethod<void>(loseContextExtension, 'restoreContext', const <void>[]);
 
@@ -314,37 +390,27 @@ void testMain() {
     test('can recover from MakeSWCanvasSurface failure', () async {
       debugOverrideJsConfiguration(
         <String, Object?>{'canvasKitForceCpuOnly': true}.jsify() as JsFlutterConfiguration?,
+=======
+    test('does not recreate surface if size is the same', () async {
+      final surfaceProvider = OnscreenSurfaceProvider(
+        OnscreenCanvasProvider(),
+        (OnscreenCanvasProvider canvasProvider) => CkOnscreenSurface(canvasProvider),
+>>>>>>> 48c32af0345e9ad5747f78ddce828c7f795f7159
       );
-      addTearDown(() => debugOverrideJsConfiguration(null));
-
-      final Surface surface = Surface();
-      surface.debugThrowOnSoftwareSurfaceCreation = true;
-      expect(
-        () => surface.createOrUpdateSurface(const BitmapSize(12, 34)),
-        throwsA(isA<CanvasKitError>()),
-      );
-      await Future<void>.delayed(Duration.zero);
-
-      expect(surface.debugForceNewContext, isFalse);
-
-      surface.debugThrowOnSoftwareSurfaceCreation = false;
-      final ckSurface = surface.createOrUpdateSurface(const BitmapSize(12, 34));
-
-      expect(ckSurface.surface.width(), 12);
-      expect(ckSurface.surface.height(), 34);
+      final surface = surfaceProvider.createSurface() as CkOnscreenSurface;
+      await surface.initialized;
+      surface.setSize(const BitmapSize(10, 20));
+      final SkSurface? skSurface1 = surface.skSurface;
+      surface.setSize(const BitmapSize(10, 20));
+      final SkSurface? skSurface2 = surface.skSurface;
+      expect(skSurface1, same(skSurface2));
     });
   });
 }
 
-DomCanvasElement getDisplayCanvas(Surface surface) {
-  assert(surface.isDisplayCanvas);
-  return surface.hostElement.children.first as DomCanvasElement;
-}
-
 /// Extracts the CSS style values of 'width' and 'height' and returns them
 /// as a [ui.Size].
-ui.Size getCssSize(Surface surface) {
-  final DomCanvasElement canvas = getDisplayCanvas(surface);
+ui.Size getCssSize(DomHTMLCanvasElement canvas) {
   final String cssWidth = canvas.style.width;
   final String cssHeight = canvas.style.height;
   // CSS width and height should be in the form 'NNNpx'. So cut off the 'px' and

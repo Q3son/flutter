@@ -730,12 +730,51 @@ class AutofillConfiguration {
   Map<String, dynamic>? toJson() {
     return enabled
         ? <String, dynamic>{
-          'uniqueIdentifier': uniqueIdentifier,
-          'hints': autofillHints,
-          'editingValue': currentEditingValue.toJSON(),
-          if (hintText != null) 'hintText': hintText,
-        }
+            'uniqueIdentifier': uniqueIdentifier,
+            'hints': autofillHints,
+            'editingValue': currentEditingValue.toJSON(),
+            'hintText': ?hintText,
+          }
         : null;
+  }
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) {
+      return true;
+    }
+    if (other.runtimeType != runtimeType) {
+      return false;
+    }
+    return other is AutofillConfiguration &&
+        other.enabled == enabled &&
+        other.uniqueIdentifier == uniqueIdentifier &&
+        listEquals(other.autofillHints, autofillHints) &&
+        other.currentEditingValue == currentEditingValue &&
+        other.hintText == hintText;
+  }
+
+  @override
+  int get hashCode {
+    return Object.hash(
+      enabled,
+      uniqueIdentifier,
+      Object.hashAll(autofillHints),
+      currentEditingValue,
+      hintText,
+    );
+  }
+
+  @override
+  String toString() {
+    final description = <String>[
+      'enabled: $enabled',
+      'uniqueIdentifier: $uniqueIdentifier',
+      'autofillHints: $autofillHints',
+      'currentEditingValue: $currentEditingValue',
+      if (hintText != null) 'hintText: $hintText',
+    ];
+    return 'AutofillConfiguration(${description.join(', ')})';
   }
 }
 

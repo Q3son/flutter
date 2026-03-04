@@ -7,6 +7,7 @@ import 'dart:typed_data';
 
 import 'package:flutter_devicelab/framework/devices.dart';
 import 'package:flutter_devicelab/framework/framework.dart';
+import 'package:flutter_devicelab/framework/ios.dart';
 import 'package:flutter_devicelab/framework/task_result.dart';
 import 'package:flutter_devicelab/framework/utils.dart';
 import 'package:flutter_devicelab/tasks/integration_tests.dart';
@@ -19,14 +20,14 @@ Future<void> main() async {
     await createFlavorsTest().call();
     await createIntegrationTestFlavorsTest().call();
 
-    final String projectDir = '${flutterDirectory.path}/dev/integration_tests/flavors';
+    final projectDir = '${flutterDirectory.path}/dev/integration_tests/flavors';
     final TaskResult installTestsResult = await inDirectory(projectDir, () async {
       await flutter('install', options: <String>['--flavor', 'paid', '-d', 'macos']);
       await flutter(
         'install',
         options: <String>['--flavor', 'paid', '--uninstall-only', '-d', 'macos'],
       );
-      final StringBuffer stderr = StringBuffer();
+      final stderr = StringBuffer();
       await evalFlutter(
         'build',
         canFail: true,
@@ -34,26 +35,25 @@ Future<void> main() async {
         options: <String>['macos', '--flavor', 'bogus'],
       );
 
-      final Uint8List assetManifestFileData =
-          File(
-            path.join(
-              projectDir,
-              'build',
-              'macos',
-              'Build',
-              'Products',
-              'Debug-paid',
-              'Debug Paid.app',
-              'Contents',
-              'Frameworks',
-              'App.framework',
-              'Resources',
-              'flutter_assets',
-              'AssetManifest.bin',
-            ),
-          ).readAsBytesSync();
+      final Uint8List assetManifestFileData = File(
+        path.join(
+          projectDir,
+          'build',
+          'macos',
+          'Build',
+          'Products',
+          'Debug-paid',
+          'Debug Paid.app',
+          'Contents',
+          'Frameworks',
+          'App.framework',
+          'Resources',
+          'flutter_assets',
+          'AssetManifest.bin',
+        ),
+      ).readAsBytesSync();
 
-      final Map<Object?, Object?> assetManifest =
+      final assetManifest =
           const StandardMessageCodec().decodeMessage(ByteData.sublistView(assetManifestFileData))
               as Map<Object?, Object?>;
 
@@ -73,7 +73,7 @@ Future<void> main() async {
         );
       }
 
-      final String stderrString = stderr.toString();
+      final stderrString = stderr.toString();
       print(stderrString);
       if (!stderrString.contains('The Xcode project defines schemes:')) {
         print(stderrString);
@@ -83,6 +83,67 @@ Future<void> main() async {
       return TaskResult.success(null);
     });
 
+    await _testFlavorWhenBuiltFromXcode(projectDir);
+
     return installTestsResult;
   });
+}
+
+Future<TaskResult> _testFlavorWhenBuiltFromXcode(String projectDir) async {
+  await inDirectory(projectDir, () async {
+    // This will put FLAVOR=free in the Flutter/ephemeral/Flutter-Generated.xcconfig file
+    await flutter(
+      'build',
+      options: <String>['macos', '--config-only', '--debug', '--flavor', 'free'],
+    );
+  });
+
+  final generatedXcconfig = File(
+    path.join(projectDir, 'macos/Flutter/ephemeral/Flutter-Generated.xcconfig'),
+  );
+  if (!generatedXcconfig.existsSync()) {
+    throw TaskResult.failure('Unable to find Generated.xcconfig');
+  }
+  if (!generatedXcconfig.readAsStringSync().contains('FLAVOR=free')) {
+    throw TaskResult.failure('Generated.xcconfig does not contain FLAVOR=free');
+  }
+
+  const configuration = 'Debug-paid';
+  const productName = 'Debug Paid';
+  const buildDir = 'build/macos';
+  final appPath = '$projectDir/$buildDir/$configuration/$productName.app';
+
+  // Delete app bundle before build to ensure checks below do not use previously
+  // built bundle.
+  final appBundle = Directory(appPath);
+  if (appBundle.existsSync()) {
+    appBundle.deleteSync(recursive: true);
+  }
+
+  if (!await runXcodeBuild(
+    platformDirectory: path.join(projectDir, 'macos'),
+    destination: 'platform=macOS',
+    testName: 'flavors_test_macos',
+    configuration: configuration,
+    scheme: 'paid',
+    actions: <String>['clean', 'build'],
+    extraOptions: <String>['BUILD_DIR=${path.join(projectDir, buildDir)}'],
+    skipCodesign: true,
+  )) {
+    throw TaskResult.failure('Build failed');
+  }
+
+  if (!appBundle.existsSync()) {
+    throw TaskResult.failure('App not found at $appPath');
+  }
+
+  if (!generatedXcconfig.readAsStringSync().contains('FLAVOR=free')) {
+    throw TaskResult.failure('Generated.xcconfig does not contain FLAVOR=free');
+  }
+
+  // Despite FLAVOR=free being in the Generated.xcconfig, the flavor found in
+  // the test should be "paid" because it was built with the "Debug-paid" configuration.
+  return createFlavorsTest(
+    extraOptions: <String>['--flavor', 'paid', '--use-application-binary=$appPath'],
+  ).call();
 }

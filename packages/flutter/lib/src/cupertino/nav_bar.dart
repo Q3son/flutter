@@ -17,9 +17,11 @@ import 'button.dart';
 import 'colors.dart';
 import 'constants.dart';
 import 'icons.dart';
+import 'localizations.dart';
 import 'page_scaffold.dart';
 import 'route.dart';
 import 'search_field.dart';
+import 'sheet.dart';
 import 'theme.dart';
 
 /// Modes that determine how to display the navigation bar's bottom in relation to scroll events.
@@ -44,7 +46,7 @@ enum NavigationBarBottomMode {
 const double _kNavBarPersistentHeight = kMinInteractiveDimensionCupertino;
 
 /// Size increase from expanding the navigation bar into an iOS-11-style large title
-/// form in a [CustomScrollView].
+/// configuration in a [CustomScrollView].
 const double _kNavBarLargeTitleHeightExtension = 52.0;
 
 /// Number of logical pixels scrolled down before the title text is transferred
@@ -63,14 +65,50 @@ const double _kNavBarBottomPadding = 8.0;
 
 const double _kNavBarBackButtonTapWidth = 50.0;
 
+<<<<<<< HEAD
 /// The width of the 'Cancel' button if the search field in a
 /// [CupertinoSliverNavigationBar.search] is active.
 const double _kSearchFieldCancelButtonWidth = 65.0;
+=======
+// The minimum text scale to apply to contents of the nav bar which can scale to
+// a size less than the default, such as the large title.
+//
+// Eyeballed on an iPhone 15 simulator running iOS 17.5.
+const double _kMinScaleFactor = 0.9;
+
+// The maximum text scale to apply to contents of the nav bar, except the large
+// title which can grow larger but is damped.
+//
+// Calculated on an iPhone 15 simulator running iOS 17.5.
+const double _kMaxScaleFactor = 1.235;
+
+// The damping ratio applied to reduce the rate at which the large title scales.
+//
+// Eyeballed on an iPhone 15 simulator running iOS 17.5.
+const double _kLargeTitleScaleDampingRatio = 3.0;
+
+/// The width of the 'Cancel' button if the search field in a
+/// [CupertinoSliverNavigationBar.search] is active.
+///
+/// Eyeballed on an iPhone 15 simulator running iOS 17.5.
+const double _kSearchFieldCancelButtonWidth = 67.0;
+
+/// The height of the unscaled search field used in
+/// a [CupertinoSliverNavigationBar.search].
+const double _kSearchFieldHeight = 36.0;
+>>>>>>> 48c32af0345e9ad5747f78ddce828c7f795f7159
 
 /// The duration of the animation when the search field in
 /// [CupertinoSliverNavigationBar.search] is tapped.
 const Duration _kNavBarSearchDuration = Duration(milliseconds: 300);
 
+<<<<<<< HEAD
+=======
+/// The curve of the animation when the search field in
+/// [CupertinoSliverNavigationBar.search] is tapped.
+const Curve _kNavBarSearchCurve = Curves.easeInOut;
+
+>>>>>>> 48c32af0345e9ad5747f78ddce828c7f795f7159
 /// Title text transfer fade.
 const Duration _kNavBarTitleFadeDuration = Duration(milliseconds: 150);
 
@@ -86,6 +124,18 @@ const Border _kDefaultNavBarBorder = Border(
 const Border _kTransparentNavBarBorder = Border(
   bottom: BorderSide(color: Color(0x00000000), width: 0.0),
 );
+
+/// The curve of the animation of the top nav bar regardless of push/pop
+/// direction in the hero transition between two nav bars.
+///
+/// Eyeballed on an iPhone 15 Pro simulator running iOS 17.5.
+const Curve _kTopNavBarHeaderTransitionCurve = Cubic(0.0, 0.45, 0.45, 0.98);
+
+/// The curve of the animation of the bottom nav bar regardless of push/pop
+/// direction in the hero transition between two nav bars.
+///
+/// Eyeballed on an iPhone 15 Pro simulator running iOS 17.5.
+const Curve _kBottomNavBarHeaderTransitionCurve = Cubic(0.05, 0.90, 0.90, 0.95);
 
 // There's a single tag for all instances of navigation bars because they can
 // all transition between each other (per Navigator) via Hero transitions.
@@ -123,7 +173,8 @@ class _FixedSizeSlidingTransition extends AnimatedWidget {
   const _FixedSizeSlidingTransition({
     required this.isLTR,
     required this.offsetAnimation,
-    required this.size,
+    required this.width,
+    required this.height,
     required this.child,
   }) : super(listenable: offsetAnimation);
 
@@ -131,8 +182,11 @@ class _FixedSizeSlidingTransition extends AnimatedWidget {
   // left-to-right.
   final bool isLTR;
 
-  // The fixed size to impose on `child`.
-  final Size size;
+  // The fixed width to impose on `child`.
+  final double width;
+
+  // The fixed height to impose on `child`.
+  final double height;
 
   // The animated offset from the top-leading corner of the stack.
   //
@@ -154,8 +208,8 @@ class _FixedSizeSlidingTransition extends AnimatedWidget {
       top: offsetAnimation.value.dy,
       left: isLTR ? offsetAnimation.value.dx : null,
       right: isLTR ? null : offsetAnimation.value.dx,
-      width: size.width,
-      height: size.height,
+      width: width,
+      height: height,
       child: child,
     );
   }
@@ -174,7 +228,7 @@ Widget _wrapWithBackground({
   bool updateSystemUiOverlay = true,
   bool enableBackgroundFilterBlur = true,
 }) {
-  Widget result = child;
+  var result = child;
   if (updateSystemUiOverlay) {
     final bool isDark = backgroundColor.computeLuminance() < 0.179;
     final Brightness newBrightness = brightness ?? (isDark ? Brightness.dark : Brightness.light);
@@ -199,7 +253,7 @@ Widget _wrapWithBackground({
       child: result,
     );
   }
-  final DecoratedBox childWithBackground = DecoratedBox(
+  final childWithBackground = DecoratedBox(
     decoration: BoxDecoration(border: border, color: backgroundColor),
     child: result,
   );
@@ -213,6 +267,13 @@ Widget _wrapWithBackground({
   );
 }
 
+double _dampScaleFactor(double scaledFontSize, double unscaledFontSize, double dampingRatio) {
+  final double scaleFactor = scaledFontSize / unscaledFontSize;
+  return scaleFactor < 1.0
+      ? math.max(_kMinScaleFactor, scaleFactor)
+      : 1.0 + ((scaleFactor - 1.0) / dampingRatio);
+}
+
 // Whether the current route supports nav bar hero transitions from or to.
 bool _isTransitionable(BuildContext context) {
   final ModalRoute<dynamic>? route = ModalRoute.of(context);
@@ -220,7 +281,9 @@ bool _isTransitionable(BuildContext context) {
   // Fullscreen dialogs never transitions their nav bar with other push-style
   // pages' nav bars or with other fullscreen dialog pages on the way in or on
   // the way out.
-  return route is PageRoute && !route.fullscreenDialog;
+  return route is PageRoute &&
+      !route.fullscreenDialog &&
+      !CupertinoSheetRoute.hasParentSheet(context);
 }
 
 /// An iOS-styled navigation bar.
@@ -232,7 +295,7 @@ bool _isTransitionable(BuildContext context) {
 /// toolbar, typically for actions and navigation.
 ///
 /// The [leading] widget will automatically be a back chevron icon button (or a
-/// close button in case of a fullscreen dialog) to pop the current route if none
+/// cancel button in case of a fullscreen dialog) to pop the current route if none
 /// is provided and [automaticallyImplyLeading] is true (true by default).
 ///
 /// This toolbar should be placed at top of the screen where it will
@@ -403,7 +466,7 @@ class CupertinoNavigationBar extends StatefulWidget implements ObstructingPrefer
   ///
   /// Specifically this navigation bar will:
   ///
-  /// 1. Show a 'Close' button if the current route is a `fullscreenDialog`.
+  /// 1. Show a 'Cancel' button if the current route is a `fullscreenDialog`.
   /// 2. Show a back chevron with [previousPageTitle] if [previousPageTitle] is
   ///    not null.
   /// 3. Show a back chevron with the previous route's `title` if the current
@@ -589,8 +652,13 @@ class CupertinoNavigationBar extends StatefulWidget implements ObstructingPrefer
 
   @override
   Size get preferredSize {
-    final double heightForDrawer = bottom?.preferredSize.height ?? 0.0;
-    return Size.fromHeight(_kNavBarPersistentHeight + heightForDrawer);
+    final double bottomHeight = bottom?.preferredSize.height ?? 0.0;
+
+    final double effectiveLargeHeight = largeTitle != null
+        ? _kNavBarLargeTitleHeightExtension
+        : 0.0;
+
+    return Size.fromHeight(_kNavBarPersistentHeight + bottomHeight + effectiveLargeHeight);
   }
 
   @override
@@ -633,7 +701,7 @@ class _CupertinoNavigationBarState extends State<CupertinoNavigationBar> {
     if (notification is ScrollUpdateNotification && notification.depth == 0) {
       final ScrollMetrics metrics = notification.metrics;
       final double oldScrollAnimationValue = _scrollAnimationValue;
-      double scrollExtent = 0.0;
+      var scrollExtent = 0.0;
       switch (metrics.axisDirection) {
         case AxisDirection.up:
           // Scroll view is reversed
@@ -685,29 +753,24 @@ class _CupertinoNavigationBarState extends State<CupertinoNavigationBar> {
 
     final Border? initialBorder =
         widget.automaticBackgroundVisibility && parentPageScaffoldBackgroundColor != null
-            ? _kTransparentNavBarBorder
-            : widget.border;
-    final Border? effectiveBorder =
-        widget.border == null
-            ? null
-            : Border.lerp(initialBorder, widget.border, _scrollAnimationValue);
+        ? _kTransparentNavBarBorder
+        : widget.border;
+    final Border? effectiveBorder = widget.border == null
+        ? null
+        : Border.lerp(initialBorder, widget.border, _scrollAnimationValue);
 
     final Color effectiveBackgroundColor =
         widget.automaticBackgroundVisibility && parentPageScaffoldBackgroundColor != null
-            ? Color.lerp(
-                  parentPageScaffoldBackgroundColor,
-                  backgroundColor,
-                  _scrollAnimationValue,
-                ) ??
-                backgroundColor
-            : backgroundColor;
+        ? Color.lerp(parentPageScaffoldBackgroundColor, backgroundColor, _scrollAnimationValue) ??
+              backgroundColor
+        : backgroundColor;
 
     final double bottomHeight = widget.bottom?.preferredSize.height ?? 0.0;
     final double persistentHeight =
         _kNavBarPersistentHeight + bottomHeight + MediaQuery.paddingOf(context).top;
     final double largeHeight = persistentHeight + _kNavBarLargeTitleHeightExtension;
 
-    final _NavigationBarStaticComponents components = _NavigationBarStaticComponents(
+    final components = _NavigationBarStaticComponents(
       keys: keys,
       route: ModalRoute.of(context),
       userLeading: widget.leading,
@@ -718,8 +781,10 @@ class _CupertinoNavigationBarState extends State<CupertinoNavigationBar> {
       userTrailing: widget.trailing,
       padding: widget.padding,
       userLargeTitle: widget.largeTitle,
+      userBottom: widget.bottom,
       large: widget.largeTitle != null,
       staticBar: true, // This one does not scroll
+      context: context,
     );
 
     // Standard persistent components
@@ -748,12 +813,16 @@ class _CupertinoNavigationBarState extends State<CupertinoNavigationBar> {
                     style: CupertinoTheme.of(context).textTheme.navLargeTitleTextStyle,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    child: _LargeTitle(child: components.largeTitle),
+                    child: _LargeTitle(
+                      height: _kNavBarLargeTitleHeightExtension,
+                      child: components.largeTitle,
+                    ),
                   ),
                 ),
               ),
             ),
-            if (widget.bottom != null) SizedBox(height: bottomHeight, child: widget.bottom),
+            if (widget.bottom != null)
+              SizedBox(height: bottomHeight, child: components.navBarBottom),
           ],
         ),
       );
@@ -764,7 +833,8 @@ class _CupertinoNavigationBarState extends State<CupertinoNavigationBar> {
         child: Column(
           children: <Widget>[
             navBar,
-            if (widget.bottom != null) SizedBox(height: bottomHeight, child: widget.bottom),
+            if (widget.bottom != null)
+              SizedBox(height: bottomHeight, child: components.navBarBottom),
           ],
         ),
       );
@@ -801,6 +871,8 @@ class _CupertinoNavigationBarState extends State<CupertinoNavigationBar> {
             border: effectiveBorder,
             hasUserMiddle: widget.middle != null,
             largeExpanded: widget.largeTitle != null,
+            searchable: false,
+            automaticBackgroundVisibility: widget.automaticBackgroundVisibility,
             child: navBar,
           ),
         );
@@ -820,18 +892,25 @@ class _CupertinoNavigationBarState extends State<CupertinoNavigationBar> {
 /// It should be placed at top of the screen and automatically accounts for
 /// the iOS status bar.
 ///
+/// This navigation bar is expanded only in portrait orientation. In landscape
+/// mode, the navigation bar remains permanently collapsed. The navigation bar
+/// also collapses when scrolling in portrait mode.
+///
 /// Minimally, a [largeTitle] widget will appear in the middle of the app bar
 /// when the sliver is collapsed and transfer to the area below in larger font
-/// when the sliver is expanded.
+/// when the sliver is expanded. This expanded view will only trigger in
+/// portrait orientation, while in landscape mode the bar will stay in its
+/// collapsed view.
 ///
-/// For advanced uses, an optional [middle] widget can be supplied to show a
-/// different widget in the middle of the navigation bar when the sliver is collapsed.
+/// For advanced uses, an optional [middle] widget
+/// can be supplied to show a different widget in the middle of the navigation
+/// bar when the sliver is collapsed.
 ///
 /// Like [CupertinoNavigationBar], it also supports a [leading] and [trailing]
 /// widget on the static section on top that remains while scrolling.
 ///
 /// The [leading] widget will automatically be a back chevron icon button (or a
-/// close button in case of a fullscreen dialog) to pop the current route if none
+/// cancel button in case of a fullscreen dialog) to pop the current route if none
 /// is provided and [automaticallyImplyLeading] is true (true by default).
 ///
 /// The [largeTitle] widget will automatically be a title text from the current
@@ -851,11 +930,6 @@ class _CupertinoNavigationBarState extends State<CupertinoNavigationBar> {
 /// Use [transitionBetweenRoutes] or [heroTag] to customize the transition
 /// behavior for multiple navigation bars per route.
 ///
-/// [CupertinoSliverNavigationBar] by default disables text scaling to match the
-/// native iOS behavior. To override this behavior, wrap each of the
-/// [CupertinoSliverNavigationBar]'s components inside a [MediaQuery] with the
-/// desired [TextScaler].
-///
 /// The [stretch] parameter determines whether the nav bar should stretch to
 /// fill the over-scroll area. The nav bar can still expand and contract as the
 /// user scrolls, but it will also stretch when the user over-scrolls if the
@@ -867,6 +941,15 @@ class _CupertinoNavigationBarState extends State<CupertinoNavigationBar> {
 /// ** See code in examples/api/lib/cupertino/nav_bar/cupertino_sliver_nav_bar.0.dart **
 /// {@end-tool}
 ///
+<<<<<<< HEAD
+=======
+/// {@tool dartpad}
+/// To add a widget to the bottom of the nav bar, wrap it with [PreferredSize] and provide its fully extended size.
+///
+/// ** See code in examples/api/lib/cupertino/nav_bar/cupertino_sliver_nav_bar.2.dart **
+/// {@end-tool}
+///
+>>>>>>> 48c32af0345e9ad5747f78ddce828c7f795f7159
 /// See also:
 ///
 ///  * [CupertinoNavigationBar], an iOS navigation bar for use on non-scrolling
@@ -1021,10 +1104,12 @@ class CupertinoSliverNavigationBar extends StatefulWidget {
   /// A widget to place in the middle of the static navigation bar instead of
   /// the [largeTitle].
   ///
-  /// This widget is visible in both collapsed and expanded states if
-  /// [alwaysShowMiddle] is true, otherwise just in collapsed state. The text
-  /// supplied in [largeTitle] will no longer appear in collapsed state if a
-  /// [middle] widget is provided.
+  /// If [alwaysShowMiddle] is true, this widget is visible in both the
+  /// collapsed and expanded states of the navigation bar. Else, it is visible
+  /// only in the collapsed state.
+  ///
+  /// If null, [largeTitle] will be displayed in the navigation bar's collapsed
+  /// state.
   final Widget? middle;
 
   /// {@macro flutter.cupertino.CupertinoNavigationBar.trailing}
@@ -1067,13 +1152,19 @@ class CupertinoSliverNavigationBar extends StatefulWidget {
   ///  * [PreferredSize], which can be used to give an arbitrary widget a preferred size.
   final PreferredSizeWidget? bottom;
 
-  /// Modes that determine how to display the navigation bar's [bottom] and scrolling behavior.
+  /// Modes that determine how to display the navigation bar's [bottom], or the
+  /// search field in a [CupertinoSliverNavigationBar.search].
   ///
-  /// Defaults to [NavigationBarBottomMode.automatic] if this is null and a [bottom] is provided.
+  /// If null, defaults to [NavigationBarBottomMode.automatic] if either a
+  /// [bottom] is provided or this is a [CupertinoSliverNavigationBar.search].
   final NavigationBarBottomMode? bottomMode;
 
   /// Called when the search field in [CupertinoSliverNavigationBar.search]
+<<<<<<< HEAD
   /// is tapped, toggling the search state between active and inactive.
+=======
+  /// is tapped, toggling between an active and an inactive search state.
+>>>>>>> 48c32af0345e9ad5747f78ddce828c7f795f7159
   final ValueChanged<bool>? onSearchableBottomTap;
 
   /// True if the navigation bar's background color has no transparency.
@@ -1114,26 +1205,54 @@ class _CupertinoSliverNavigationBarState extends State<CupertinoSliverNavigation
     with TickerProviderStateMixin {
   late _NavigationBarStaticComponentsKeys keys;
   ScrollableState? _scrollableState;
+<<<<<<< HEAD
   _NavigationBarSearchField? preferredSizeSearchField;
   late AnimationController _animationController;
   late Animation<double> persistentHeightAnimation;
   late Animation<double> largeTitleHeightAnimation;
   bool searchIsActive = false;
+=======
+  Widget? effectiveMiddle;
+  late AnimationController _animationController;
+  late CurvedAnimation _searchAnimation;
+  late Animation<double> persistentHeightAnimation;
+  late Animation<double> largeTitleHeightAnimation;
+  late double scaledSearchFieldHeight;
+  late double scaledLargeTitleHeight;
+  bool searchIsActive = false;
+  bool isPortrait = true;
+>>>>>>> 48c32af0345e9ad5747f78ddce828c7f795f7159
 
   @override
   void initState() {
     super.initState();
     keys = _NavigationBarStaticComponentsKeys();
+<<<<<<< HEAD
     _setupSearchableAnimation();
     if (widget._searchable) {
       assert(widget.searchField != null);
       preferredSizeSearchField = _NavigationBarSearchField(searchField: widget.searchField!);
+=======
+    _animationController = AnimationController(vsync: this, duration: _kNavBarSearchDuration);
+    _searchAnimation = CurvedAnimation(parent: _animationController, curve: _kNavBarSearchCurve);
+  }
+
+  @override
+  void didUpdateWidget(CupertinoSliverNavigationBar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.middle != oldWidget.middle) {
+      _updateEffectiveMiddle();
+>>>>>>> 48c32af0345e9ad5747f78ddce828c7f795f7159
     }
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    isPortrait = MediaQuery.orientationOf(context) == Orientation.portrait;
+    _updateEffectiveMiddle();
+    _computeScaledHeights();
+    _setupSearchableAnimation();
     _scrollableState?.position.isScrollingNotifier.removeListener(_handleScrollChange);
     _scrollableState = Scrollable.maybeOf(context);
     _scrollableState?.position.isScrollingNotifier.addListener(_handleScrollChange);
@@ -1144,6 +1263,10 @@ class _CupertinoSliverNavigationBarState extends State<CupertinoSliverNavigation
     if (_scrollableState?.position != null) {
       _scrollableState?.position.isScrollingNotifier.removeListener(_handleScrollChange);
     }
+<<<<<<< HEAD
+=======
+    _searchAnimation.dispose();
+>>>>>>> 48c32af0345e9ad5747f78ddce828c7f795f7159
     _animationController.dispose();
     super.dispose();
   }
@@ -1151,13 +1274,18 @@ class _CupertinoSliverNavigationBarState extends State<CupertinoSliverNavigation
   double get _bottomHeight {
     assert(!widget._searchable || widget.bottom == null);
     if (widget._searchable) {
+<<<<<<< HEAD
       return preferredSizeSearchField!.preferredSize.height;
+=======
+      return scaledSearchFieldHeight + _kNavBarBottomPadding;
+>>>>>>> 48c32af0345e9ad5747f78ddce828c7f795f7159
     } else if (widget.bottom != null) {
       return widget.bottom!.preferredSize.height;
     }
     return 0.0;
   }
 
+<<<<<<< HEAD
   void _setupSearchableAnimation() {
     _animationController = AnimationController(vsync: this, duration: _kNavBarSearchDuration);
     final Tween<double> persistentHeightTween = Tween<double>(
@@ -1170,6 +1298,36 @@ class _CupertinoSliverNavigationBarState extends State<CupertinoSliverNavigation
       begin: _kNavBarLargeTitleHeightExtension,
       end: 0.0,
     );
+=======
+  void _updateEffectiveMiddle() {
+    effectiveMiddle = widget.middle ?? (isPortrait ? null : widget.largeTitle);
+  }
+
+  void _computeScaledHeights() {
+    final TextScaler textScaler = MediaQuery.textScalerOf(context);
+    scaledSearchFieldHeight =
+        _kSearchFieldHeight *
+        _dampScaleFactor(
+          textScaler.scale(_kSearchFieldHeight),
+          _kSearchFieldHeight,
+          _kMaxScaleFactor,
+        );
+    scaledLargeTitleHeight = isPortrait
+        ? _kNavBarLargeTitleHeightExtension *
+              _dampScaleFactor(
+                textScaler.scale(_kNavBarLargeTitleHeightExtension),
+                _kNavBarLargeTitleHeightExtension,
+                _kLargeTitleScaleDampingRatio,
+              )
+        : 0.0;
+  }
+
+  void _setupSearchableAnimation() {
+    final persistentHeightTween = Tween<double>(begin: _kNavBarPersistentHeight, end: 0.0);
+    persistentHeightAnimation = persistentHeightTween.animate(_animationController)
+      ..addStatusListener(_handleSearchFieldStatusChanged);
+    final largeTitleHeightTween = Tween<double>(begin: scaledLargeTitleHeight, end: 0.0);
+>>>>>>> 48c32af0345e9ad5747f78ddce828c7f795f7159
     largeTitleHeightAnimation = largeTitleHeightTween.animate(_animationController);
   }
 
@@ -1180,8 +1338,14 @@ class _CupertinoSliverNavigationBarState extends State<CupertinoSliverNavigation
     }
 
     double? target;
+<<<<<<< HEAD
     final double bottomScrollOffset =
         widget.bottomMode == NavigationBarBottomMode.always ? 0.0 : _bottomHeight;
+=======
+    final double bottomScrollOffset = widget.bottomMode == NavigationBarBottomMode.always
+        ? 0.0
+        : _bottomHeight;
+>>>>>>> 48c32af0345e9ad5747f78ddce828c7f795f7159
     final bool canScrollBottom =
         (widget._searchable || widget.bottom != null) && bottomScrollOffset > 0.0;
 
@@ -1190,14 +1354,14 @@ class _CupertinoSliverNavigationBarState extends State<CupertinoSliverNavigation
     if (canScrollBottom && position.pixels < bottomScrollOffset) {
       target = position.pixels > bottomScrollOffset / 2 ? bottomScrollOffset : 0.0;
     } else if (position.pixels > bottomScrollOffset &&
-        position.pixels < bottomScrollOffset + _kNavBarLargeTitleHeightExtension) {
-      target =
-          position.pixels > bottomScrollOffset + (_kNavBarLargeTitleHeightExtension / 2)
-              ? bottomScrollOffset + _kNavBarLargeTitleHeightExtension
-              : bottomScrollOffset;
+        position.pixels < bottomScrollOffset + scaledLargeTitleHeight) {
+      target = position.pixels > bottomScrollOffset + (scaledLargeTitleHeight / 2)
+          ? bottomScrollOffset + scaledLargeTitleHeight
+          : bottomScrollOffset;
     }
 
-    if (target != null) {
+    // If the target is not null and within the scrollable range, animate to it.
+    if (target != null && target <= position.maxScrollExtent) {
       position.animateTo(
         target,
         // Eyeballed on an iPhone 16 simulator running iOS 18.
@@ -1208,6 +1372,7 @@ class _CupertinoSliverNavigationBarState extends State<CupertinoSliverNavigation
   }
 
   void _handleSearchFieldStatusChanged(AnimationStatus status) {
+<<<<<<< HEAD
     switch (status) {
       case AnimationStatus.completed:
       case AnimationStatus.dismissed:
@@ -1219,6 +1384,22 @@ class _CupertinoSliverNavigationBarState extends State<CupertinoSliverNavigation
       case AnimationStatus.reverse:
         searchIsActive = false;
     }
+=======
+    // If the search animation is stopped, rebuild so that the leading, middle,
+    // and trailing widgets that were collapsed while the search field was
+    // active are re-expanded. Otherwise, rebuild to update this widget with the
+    // animation controller's values.
+    setState(() {
+      switch (status) {
+        case AnimationStatus.forward:
+          searchIsActive = true;
+        case AnimationStatus.reverse:
+          searchIsActive = false;
+        case AnimationStatus.completed:
+        case AnimationStatus.dismissed:
+      }
+    });
+>>>>>>> 48c32af0345e9ad5747f78ddce828c7f795f7159
   }
 
   void _onSearchFieldTap() {
@@ -1230,9 +1411,10 @@ class _CupertinoSliverNavigationBarState extends State<CupertinoSliverNavigation
 
   @override
   Widget build(BuildContext context) {
-    final _NavigationBarStaticComponents components = _NavigationBarStaticComponents(
+    final components = _NavigationBarStaticComponents(
       keys: keys,
       route: ModalRoute.of(context),
+<<<<<<< HEAD
       userLeading:
           widget.leading != null
               ? Visibility(visible: !searchIsActive, child: widget.leading!)
@@ -1245,22 +1427,62 @@ class _CupertinoSliverNavigationBarState extends State<CupertinoSliverNavigation
           widget.trailing != null
               ? Visibility(visible: !searchIsActive, child: widget.trailing!)
               : null,
+=======
+      userLeading: widget.leading != null
+          ? Visibility(visible: !searchIsActive, child: widget.leading!)
+          : null,
+      automaticallyImplyLeading: widget.automaticallyImplyLeading,
+      automaticallyImplyTitle: widget.automaticallyImplyTitle,
+      previousPageTitle: widget.previousPageTitle,
+      userMiddle: _animationController.isAnimating ? const Text('') : effectiveMiddle,
+      userTrailing: widget.trailing != null
+          ? Visibility(visible: !searchIsActive, child: widget.trailing!)
+          : null,
+>>>>>>> 48c32af0345e9ad5747f78ddce828c7f795f7159
       userLargeTitle: widget.largeTitle,
+      userBottom:
+          (widget._searchable
+              ? searchIsActive
+                    ? _ActiveSearchableBottom(
+                        animationController: _animationController,
+                        animation: persistentHeightAnimation,
+                        searchField: widget.searchField,
+                        searchFieldHeight: scaledSearchFieldHeight,
+                        onSearchFieldTap: _onSearchFieldTap,
+                      )
+                    : _InactiveSearchableBottom(
+                        animationController: _animationController,
+                        animation: persistentHeightAnimation,
+                        searchField: widget.searchField,
+                        searchFieldHeight: scaledSearchFieldHeight,
+                        onSearchFieldTap: _onSearchFieldTap,
+                      )
+              : widget.bottom) ??
+          const SizedBox.shrink(),
       padding: widget.padding,
-      large: true,
+      large: isPortrait,
       staticBar: false, // This one scrolls.
+      context: context,
     );
 
     return MediaQuery.withNoTextScaling(
       child: AnimatedBuilder(
+<<<<<<< HEAD
         animation: _animationController,
+=======
+        animation: _searchAnimation,
+>>>>>>> 48c32af0345e9ad5747f78ddce828c7f795f7159
         builder: (BuildContext context, Widget? child) {
           return SliverPersistentHeader(
             pinned: true, // iOS navigation bars are always pinned.
             delegate: _LargeTitleNavigationBarSliverDelegate(
               keys: keys,
               components: components,
+<<<<<<< HEAD
               userMiddle: widget.middle,
+=======
+              userMiddle: effectiveMiddle,
+>>>>>>> 48c32af0345e9ad5747f78ddce828c7f795f7159
               backgroundColor:
                   CupertinoDynamicColor.maybeResolve(widget.backgroundColor, context) ??
                   CupertinoTheme.of(context).barBackgroundColor,
@@ -1273,6 +1495,7 @@ class _CupertinoSliverNavigationBarState extends State<CupertinoSliverNavigation
               heroTag: widget.heroTag,
               persistentHeight: persistentHeightAnimation.value + MediaQuery.paddingOf(context).top,
               largeTitleHeight: largeTitleHeightAnimation.value,
+<<<<<<< HEAD
               alwaysShowMiddle: widget.alwaysShowMiddle && widget.middle != null,
               stretchConfiguration:
                   widget.stretch && !searchIsActive ? OverScrollHeaderStretchConfiguration() : null,
@@ -1300,6 +1523,19 @@ class _CupertinoSliverNavigationBarState extends State<CupertinoSliverNavigation
                       : widget.bottomMode ?? NavigationBarBottomMode.automatic,
               bottomHeight: _bottomHeight,
               controller: _animationController,
+=======
+              alwaysShowMiddle: widget.alwaysShowMiddle && effectiveMiddle != null,
+              stretchConfiguration: widget.stretch && !searchIsActive
+                  ? OverScrollHeaderStretchConfiguration()
+                  : null,
+              enableBackgroundFilterBlur: widget.enableBackgroundFilterBlur,
+              bottomMode: searchIsActive
+                  ? NavigationBarBottomMode.always
+                  : widget.bottomMode ?? NavigationBarBottomMode.automatic,
+              bottomHeight: _bottomHeight,
+              controller: _animationController,
+              searchable: widget._searchable,
+>>>>>>> 48c32af0345e9ad5747f78ddce828c7f795f7159
             ),
           );
         },
@@ -1327,10 +1563,13 @@ class _LargeTitleNavigationBarSliverDelegate extends SliverPersistentHeaderDeleg
     required this.alwaysShowMiddle,
     required this.stretchConfiguration,
     required this.enableBackgroundFilterBlur,
-    required this.bottom,
     required this.bottomMode,
     required this.bottomHeight,
     required this.controller,
+<<<<<<< HEAD
+=======
+    required this.searchable,
+>>>>>>> 48c32af0345e9ad5747f78ddce828c7f795f7159
   });
 
   final _NavigationBarStaticComponentsKeys keys;
@@ -1348,10 +1587,13 @@ class _LargeTitleNavigationBarSliverDelegate extends SliverPersistentHeaderDeleg
   final double largeTitleHeight;
   final bool alwaysShowMiddle;
   final bool enableBackgroundFilterBlur;
-  final Widget bottom;
   final NavigationBarBottomMode bottomMode;
   final double bottomHeight;
   final AnimationController controller;
+<<<<<<< HEAD
+=======
+  final bool searchable;
+>>>>>>> 48c32af0345e9ad5747f78ddce828c7f795f7159
 
   @override
   double get minExtent =>
@@ -1378,7 +1620,7 @@ class _LargeTitleNavigationBarSliverDelegate extends SliverPersistentHeaderDeleg
       1,
     );
 
-    final _PersistentNavigationBar persistentNavigationBar = _PersistentNavigationBar(
+    final persistentNavigationBar = _PersistentNavigationBar(
       components: components,
       padding: padding,
       // If a user specified middle exists, always show it. Otherwise, show
@@ -1392,20 +1634,17 @@ class _LargeTitleNavigationBarSliverDelegate extends SliverPersistentHeaderDeleg
 
     final Border? initialBorder =
         automaticBackgroundVisibility && parentPageScaffoldBackgroundColor != null
-            ? _kTransparentNavBarBorder
-            : border;
-    final Border? effectiveBorder =
-        border == null ? null : Border.lerp(initialBorder, border, shrinkAnimationValue);
+        ? _kTransparentNavBarBorder
+        : border;
+    final Border? effectiveBorder = border == null
+        ? null
+        : Border.lerp(initialBorder, border, shrinkAnimationValue);
 
     final Color effectiveBackgroundColor =
         automaticBackgroundVisibility && parentPageScaffoldBackgroundColor != null
-            ? Color.lerp(
-                  parentPageScaffoldBackgroundColor,
-                  backgroundColor,
-                  shrinkAnimationValue,
-                ) ??
-                backgroundColor
-            : backgroundColor;
+        ? Color.lerp(parentPageScaffoldBackgroundColor, backgroundColor, shrinkAnimationValue) ??
+              backgroundColor
+        : backgroundColor;
 
     final Widget navBar = _wrapWithBackground(
       border: effectiveBorder,
@@ -1423,10 +1662,9 @@ class _LargeTitleNavigationBarSliverDelegate extends SliverPersistentHeaderDeleg
                     top: persistentHeight,
                     left: 0.0,
                     right: 0.0,
-                    bottom:
-                        bottomMode == NavigationBarBottomMode.automatic
-                            ? bottomHeight * (1.0 - bottomShrinkFactor)
-                            : 0.0,
+                    bottom: bottomMode == NavigationBarBottomMode.automatic
+                        ? bottomHeight * (1.0 - bottomShrinkFactor)
+                        : 0.0,
                     child: ClipRect(
                       child: Padding(
                         padding: const EdgeInsetsDirectional.only(
@@ -1446,7 +1684,10 @@ class _LargeTitleNavigationBarSliverDelegate extends SliverPersistentHeaderDeleg
                                 style: CupertinoTheme.of(context).textTheme.navLargeTitleTextStyle,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                child: _LargeTitle(child: components.largeTitle),
+                                child: _LargeTitle(
+                                  height: largeTitleHeight,
+                                  child: components.largeTitle,
+                                ),
                               ),
                             ),
                           ),
@@ -1462,14 +1703,14 @@ class _LargeTitleNavigationBarSliverDelegate extends SliverPersistentHeaderDeleg
                       bottom: 0.0,
                       child: SizedBox(
                         height: bottomHeight * (1.0 - bottomShrinkFactor),
-                        child: ClipRect(child: bottom),
+                        child: ClipRect(child: components.navBarBottom),
                       ),
                     ),
                 ],
               ),
             ),
             if (bottomMode == NavigationBarBottomMode.always)
-              SizedBox(height: bottomHeight, child: bottom),
+              SizedBox(height: bottomHeight, child: components.navBarBottom),
           ],
         ),
       ),
@@ -1497,6 +1738,8 @@ class _LargeTitleNavigationBarSliverDelegate extends SliverPersistentHeaderDeleg
         border: effectiveBorder,
         hasUserMiddle: userMiddle != null && (alwaysShowMiddle || !showLargeTitle),
         largeExpanded: showLargeTitle,
+        searchable: searchable,
+        automaticBackgroundVisibility: automaticBackgroundVisibility,
         child: navBar,
       ),
     );
@@ -1517,10 +1760,14 @@ class _LargeTitleNavigationBarSliverDelegate extends SliverPersistentHeaderDeleg
         alwaysShowMiddle != oldDelegate.alwaysShowMiddle ||
         heroTag != oldDelegate.heroTag ||
         enableBackgroundFilterBlur != oldDelegate.enableBackgroundFilterBlur ||
-        bottom != oldDelegate.bottom ||
         bottomMode != oldDelegate.bottomMode ||
         bottomHeight != oldDelegate.bottomHeight ||
+<<<<<<< HEAD
         controller != oldDelegate.controller;
+=======
+        controller != oldDelegate.controller ||
+        searchable != oldDelegate.searchable;
+>>>>>>> 48c32af0345e9ad5747f78ddce828c7f795f7159
   }
 }
 
@@ -1529,23 +1776,31 @@ class _LargeTitleNavigationBarSliverDelegate extends SliverPersistentHeaderDeleg
 /// Magnifies on over-scroll when [CupertinoSliverNavigationBar.stretch]
 /// parameter is true.
 class _LargeTitle extends SingleChildRenderObjectWidget {
-  const _LargeTitle({super.child});
+  const _LargeTitle({super.child, required this.height});
+
+  final double height;
 
   @override
   _RenderLargeTitle createRenderObject(BuildContext context) {
     return _RenderLargeTitle(
       alignment: AlignmentDirectional.bottomStart.resolve(Directionality.of(context)),
+      height: height,
     );
   }
 
   @override
   void updateRenderObject(BuildContext context, _RenderLargeTitle renderObject) {
-    renderObject.alignment = AlignmentDirectional.bottomStart.resolve(Directionality.of(context));
+    renderObject
+      ..alignment = AlignmentDirectional.bottomStart.resolve(Directionality.of(context))
+      ..height = height;
   }
 }
 
 class _RenderLargeTitle extends RenderShiftedBox {
-  _RenderLargeTitle({required Alignment alignment}) : _alignment = alignment, super(null);
+  _RenderLargeTitle({required Alignment alignment, required double height})
+    : _alignment = alignment,
+      _height = height,
+      super(null);
 
   Alignment get alignment => _alignment;
   Alignment _alignment;
@@ -1558,15 +1813,25 @@ class _RenderLargeTitle extends RenderShiftedBox {
     markNeedsLayout();
   }
 
+  double get height => _height;
+  double _height;
+  set height(double value) {
+    if (_height == value) {
+      return;
+    }
+    _height = value;
+
+    markNeedsLayout();
+  }
+
   double _scale = 1.0;
 
-  static double _computeTitleScale(Size childSize, BoxConstraints constraints) {
-    const double maxHeight = _kNavBarLargeTitleHeightExtension - _kNavBarBottomPadding;
+  static double _computeTitleScale(Size childSize, BoxConstraints constraints, double height) {
+    final double maxHeight = height - _kNavBarBottomPadding;
     final double scale = 1.0 + 0.03 * (constraints.maxHeight - maxHeight) / maxHeight;
-    final double maxScale =
-        childSize.width != 0.0
-            ? clampDouble(constraints.maxWidth / childSize.width, 1.0, 1.1)
-            : 1.1;
+    final double maxScale = childSize.width != 0.0
+        ? clampDouble(constraints.maxWidth / childSize.width, 1.0, 1.1)
+        : 1.1;
     return clampDouble(scale, 1.0, maxScale);
   }
 
@@ -1576,7 +1841,7 @@ class _RenderLargeTitle extends RenderShiftedBox {
     if (distance == null) {
       return null;
     }
-    final BoxParentData childParentData = child!.parentData! as BoxParentData;
+    final childParentData = child!.parentData! as BoxParentData;
     return childParentData.offset.dy + distance * _scale;
   }
 
@@ -1592,7 +1857,7 @@ class _RenderLargeTitle extends RenderShiftedBox {
       return null;
     }
     final Size childSize = child.getDryLayout(childConstraints);
-    final double scale = _computeTitleScale(childSize, constraints);
+    final double scale = _computeTitleScale(childSize, constraints, height);
     final Size scaledChildSize = childSize * scale;
     return result * scale +
         alignment.alongOffset(constraints.biggest - scaledChildSize as Offset).dy;
@@ -1609,8 +1874,8 @@ class _RenderLargeTitle extends RenderShiftedBox {
 
     final BoxConstraints childConstraints = constraints.widthConstraints().loosen();
     child.layout(childConstraints, parentUsesSize: true);
-    _scale = _computeTitleScale(child.size, constraints);
-    final BoxParentData childParentData = child.parentData! as BoxParentData;
+    _scale = _computeTitleScale(child.size, constraints, height);
+    final childParentData = child.parentData! as BoxParentData;
     childParentData.offset = alignment.alongOffset(size - (child.size * _scale) as Offset);
   }
 
@@ -1620,7 +1885,7 @@ class _RenderLargeTitle extends RenderShiftedBox {
 
     super.applyPaintTransform(child, transform);
 
-    transform.scale(_scale, _scale);
+    transform.scaleByDouble(_scale, _scale, _scale, 1);
   }
 
   @override
@@ -1630,7 +1895,7 @@ class _RenderLargeTitle extends RenderShiftedBox {
     if (child == null) {
       layer = null;
     } else {
-      final BoxParentData childParentData = child.parentData! as BoxParentData;
+      final childParentData = child.parentData! as BoxParentData;
 
       layer = context.pushTransform(
         needsCompositing,
@@ -1652,10 +1917,9 @@ class _RenderLargeTitle extends RenderShiftedBox {
 
     final Offset childOffset = (child.parentData! as BoxParentData).offset;
 
-    final Matrix4 transform =
-        Matrix4.identity()
-          ..scale(1.0 / _scale, 1.0 / _scale, 1.0)
-          ..translate(-childOffset.dx, -childOffset.dy);
+    final transform = Matrix4.identity()
+      ..scaleByDouble(1.0 / _scale, 1.0 / _scale, 1.0, 1)
+      ..translateByDouble(-childOffset.dx, -childOffset.dy, 0, 1);
 
     return result.addWithRawTransform(
       transform: transform,
@@ -1694,22 +1958,26 @@ class _PersistentNavigationBar extends StatelessWidget {
       );
       // When the middle's visibility can change on the fly like with large title
       // slivers, wrap with animated opacity.
-      middle =
-          middleVisible == null
-              ? middle
-              : AnimatedOpacity(
-                opacity: middleVisible! ? 1.0 : 0.0,
-                duration: _kNavBarTitleFadeDuration,
-                child: middle,
-              );
+      middle = middleVisible == null
+          ? middle
+          : AnimatedOpacity(
+              opacity: middleVisible! ? 1.0 : 0.0,
+              duration: _kNavBarTitleFadeDuration,
+              child: middle,
+            );
     }
 
     Widget? leading = components.leading;
     final Widget? backChevron = components.backChevron;
     final Widget? backLabel = components.backLabel;
 
-    if (leading == null && backChevron != null && backLabel != null) {
+    if (leading == null &&
+        backChevron != null &&
+        backLabel != null &&
+        !CupertinoSheetRoute.hasParentSheet(context)) {
       leading = CupertinoNavigationBarBackButton._assemble(backChevron, backLabel);
+    } else {
+      leading = Align(widthFactor: 1.0, child: leading);
     }
 
     Widget paddedToolbar = NavigationToolbar(
@@ -1728,7 +1996,11 @@ class _PersistentNavigationBar extends StatelessWidget {
 
     return SizedBox(
       height: _kNavBarPersistentHeight + MediaQuery.paddingOf(context).top,
-      child: SafeArea(bottom: false, child: paddedToolbar),
+      child: SafeArea(
+        top: !CupertinoSheetRoute.hasParentSheet(context),
+        bottom: false,
+        child: paddedToolbar,
+      ),
     );
   }
 }
@@ -1748,7 +2020,8 @@ class _NavigationBarStaticComponentsKeys {
       backLabelKey = GlobalKey(debugLabel: 'Back label'),
       middleKey = GlobalKey(debugLabel: 'Middle'),
       trailingKey = GlobalKey(debugLabel: 'Trailing'),
-      largeTitleKey = GlobalKey(debugLabel: 'Large title');
+      largeTitleKey = GlobalKey(debugLabel: 'Large title'),
+      navBarBottomKey = GlobalKey(debugLabel: 'Navigation bar bottom');
 
   final GlobalKey navBarBoxKey;
   final GlobalKey leadingKey;
@@ -1757,6 +2030,7 @@ class _NavigationBarStaticComponentsKeys {
   final GlobalKey middleKey;
   final GlobalKey trailingKey;
   final GlobalKey largeTitleKey;
+  final GlobalKey navBarBottomKey;
 }
 
 // Based on various user Widgets and other parameters, construct KeyedSubtree
@@ -1775,21 +2049,25 @@ class _NavigationBarStaticComponents {
     required Widget? userMiddle,
     required Widget? userTrailing,
     required Widget? userLargeTitle,
+    required Widget? userBottom,
     required EdgeInsetsDirectional? padding,
     required bool large,
     required bool staticBar,
+    required BuildContext context,
   }) : leading = createLeading(
          leadingKey: keys.leadingKey,
          userLeading: userLeading,
          route: route,
          automaticallyImplyLeading: automaticallyImplyLeading,
          padding: padding,
+         context: context,
        ),
        backChevron = createBackChevron(
          backChevronKey: keys.backChevronKey,
          userLeading: userLeading,
          route: route,
          automaticallyImplyLeading: automaticallyImplyLeading,
+         context: context,
        ),
        backLabel = createBackLabel(
          backLabelKey: keys.backLabelKey,
@@ -1797,6 +2075,7 @@ class _NavigationBarStaticComponents {
          route: route,
          previousPageTitle: previousPageTitle,
          automaticallyImplyLeading: automaticallyImplyLeading,
+         context: context,
        ),
        middle = createMiddle(
          middleKey: keys.middleKey,
@@ -1806,11 +2085,13 @@ class _NavigationBarStaticComponents {
          automaticallyImplyTitle: automaticallyImplyTitle,
          large: large,
          staticBar: staticBar,
+         context: context,
        ),
        trailing = createTrailing(
          trailingKey: keys.trailingKey,
          userTrailing: userTrailing,
          padding: padding,
+         context: context,
        ),
        largeTitle = createLargeTitle(
          largeTitleKey: keys.largeTitleKey,
@@ -1818,6 +2099,12 @@ class _NavigationBarStaticComponents {
          route: route,
          automaticImplyTitle: automaticallyImplyTitle,
          large: large,
+         context: context,
+       ),
+       navBarBottom = createNavBarBottom(
+         navBarBottomKey: keys.navBarBottomKey,
+         userBottom: userBottom,
+         context: context,
        );
 
   static Widget? _derivedTitle({
@@ -1841,6 +2128,7 @@ class _NavigationBarStaticComponents {
     required ModalRoute<dynamic>? route,
     required bool automaticallyImplyLeading,
     required EdgeInsetsDirectional? padding,
+    required BuildContext context,
   }) {
     Widget? leadingContent;
 
@@ -1855,7 +2143,7 @@ class _NavigationBarStaticComponents {
         onPressed: () {
           route.navigator!.maybePop();
         },
-        child: const Text('Close'),
+        child: Text(CupertinoLocalizations.of(context).cancelButtonLabel),
       );
     }
 
@@ -1867,7 +2155,10 @@ class _NavigationBarStaticComponents {
       key: leadingKey,
       child: Padding(
         padding: EdgeInsetsDirectional.only(start: padding?.start ?? _kNavBarEdgePadding),
-        child: IconTheme.merge(data: const IconThemeData(size: 32.0), child: leadingContent),
+        child: MediaQuery(
+          data: MediaQuery.of(context).copyWith(textScaler: _clampedTextScaler(context)),
+          child: IconTheme.merge(data: const IconThemeData(size: 32.0), child: leadingContent),
+        ),
       ),
     );
   }
@@ -1878,6 +2169,7 @@ class _NavigationBarStaticComponents {
     required Widget? userLeading,
     required ModalRoute<dynamic>? route,
     required bool automaticallyImplyLeading,
+    required BuildContext context,
   }) {
     if (userLeading != null ||
         !automaticallyImplyLeading ||
@@ -1887,7 +2179,13 @@ class _NavigationBarStaticComponents {
       return null;
     }
 
-    return KeyedSubtree(key: backChevronKey, child: const _BackChevron());
+    return KeyedSubtree(
+      key: backChevronKey,
+      child: MediaQuery(
+        data: MediaQuery.of(context).copyWith(textScaler: _clampedTextScaler(context)),
+        child: const _BackChevron(),
+      ),
+    );
   }
 
   /// This widget is not decorated with a font since the font style could
@@ -1899,6 +2197,7 @@ class _NavigationBarStaticComponents {
     required ModalRoute<dynamic>? route,
     required bool automaticallyImplyLeading,
     required String? previousPageTitle,
+    required BuildContext context,
   }) {
     if (userLeading != null ||
         !automaticallyImplyLeading ||
@@ -1910,7 +2209,10 @@ class _NavigationBarStaticComponents {
 
     return KeyedSubtree(
       key: backLabelKey,
-      child: _BackLabel(specifiedPreviousTitle: previousPageTitle, route: route),
+      child: MediaQuery(
+        data: MediaQuery.of(context).copyWith(textScaler: _clampedTextScaler(context)),
+        child: _BackLabel(specifiedPreviousTitle: previousPageTitle, route: route),
+      ),
     );
   }
 
@@ -1925,8 +2227,9 @@ class _NavigationBarStaticComponents {
     required bool staticBar,
     required bool automaticallyImplyTitle,
     required ModalRoute<dynamic>? route,
+    required BuildContext context,
   }) {
-    Widget? middleContent = userMiddle;
+    var middleContent = userMiddle;
 
     if (large && staticBar) {
       // Static bar only displays the middle, or the large, not both.
@@ -1947,7 +2250,13 @@ class _NavigationBarStaticComponents {
       return null;
     }
 
-    return KeyedSubtree(key: middleKey, child: middleContent);
+    return KeyedSubtree(
+      key: middleKey,
+      child: MediaQuery(
+        data: MediaQuery.of(context).copyWith(textScaler: _clampedTextScaler(context)),
+        child: middleContent,
+      ),
+    );
   }
 
   final KeyedSubtree? trailing;
@@ -1955,6 +2264,7 @@ class _NavigationBarStaticComponents {
     required GlobalKey trailingKey,
     required Widget? userTrailing,
     required EdgeInsetsDirectional? padding,
+    required BuildContext context,
   }) {
     if (userTrailing == null) {
       return null;
@@ -1964,7 +2274,10 @@ class _NavigationBarStaticComponents {
       key: trailingKey,
       child: Padding(
         padding: EdgeInsetsDirectional.only(end: padding?.end ?? _kNavBarEdgePadding),
-        child: IconTheme.merge(data: const IconThemeData(size: 32.0), child: userTrailing),
+        child: MediaQuery(
+          data: MediaQuery.of(context).copyWith(textScaler: _clampedTextScaler(context)),
+          child: IconTheme.merge(data: const IconThemeData(size: 32.0), child: userTrailing),
+        ),
       ),
     );
   }
@@ -1978,6 +2291,7 @@ class _NavigationBarStaticComponents {
     required bool large,
     required bool automaticImplyTitle,
     required ModalRoute<dynamic>? route,
+    required BuildContext context,
   }) {
     if (!large) {
       return null;
@@ -1992,7 +2306,42 @@ class _NavigationBarStaticComponents {
       'largeTitle was not provided and there was no title from the route.',
     );
 
-    return KeyedSubtree(key: largeTitleKey, child: largeTitleContent!);
+    return KeyedSubtree(
+      key: largeTitleKey,
+      child: MediaQuery(
+        data: MediaQuery.of(context).copyWith(
+          textScaler: TextScaler.linear(
+            _dampScaleFactor(
+              MediaQuery.textScalerOf(context).scale(_kNavBarLargeTitleHeightExtension),
+              _kNavBarLargeTitleHeightExtension,
+              _kLargeTitleScaleDampingRatio,
+            ),
+          ),
+        ),
+        child: largeTitleContent!,
+      ),
+    );
+  }
+
+  final KeyedSubtree? navBarBottom;
+  static KeyedSubtree? createNavBarBottom({
+    required GlobalKey navBarBottomKey,
+    required Widget? userBottom,
+    required BuildContext context,
+  }) {
+    return KeyedSubtree(
+      key: navBarBottomKey,
+      child: MediaQuery(
+        data: MediaQuery.of(context).copyWith(textScaler: MediaQuery.textScalerOf(context)),
+        child: userBottom ?? const SizedBox.shrink(),
+      ),
+    );
+  }
+
+  static TextScaler _clampedTextScaler(BuildContext context) {
+    return MediaQuery.textScalerOf(
+      context,
+    ).clamp(minScaleFactor: 1.0, maxScaleFactor: _kMaxScaleFactor);
   }
 }
 
@@ -2070,12 +2419,13 @@ class CupertinoNavigationBarBackButton extends StatelessWidget {
       );
     }
 
+    final CupertinoLocalizations localizations = CupertinoLocalizations.of(context);
     return CupertinoButton(
       padding: EdgeInsets.zero,
       child: Semantics(
         container: true,
         excludeSemantics: true,
-        label: 'Back',
+        label: localizations.backButtonLabel,
         button: true,
         child: DefaultTextStyle(
           style: actionTextStyle,
@@ -2136,7 +2486,7 @@ class _BackChevron extends StatelessWidget {
     switch (textDirection) {
       case TextDirection.rtl:
         iconWidget = Transform(
-          transform: Matrix4.identity()..scale(-1.0, 1.0, 1.0),
+          transform: Matrix4.identity()..scaleByDouble(-1.0, 1.0, 1.0, 1),
           alignment: Alignment.center,
           transformHitTests: false,
           child: iconWidget,
@@ -2164,10 +2514,10 @@ class _BackLabel extends StatelessWidget {
       return const SizedBox.shrink();
     }
 
-    Text textWidget = Text(previousTitle, maxLines: 1, overflow: TextOverflow.ellipsis);
+    var textWidget = Text(previousTitle, maxLines: 1, overflow: TextOverflow.ellipsis);
 
     if (previousTitle.length > 12) {
-      textWidget = const Text('Back');
+      textWidget = Text(CupertinoLocalizations.of(context).backButtonLabel);
     }
 
     return Align(alignment: AlignmentDirectional.centerStart, widthFactor: 1.0, child: textWidget);
@@ -2178,8 +2528,7 @@ class _BackLabel extends StatelessWidget {
     if (specifiedPreviousTitle != null) {
       return _buildPreviousTitleWidget(context, specifiedPreviousTitle, null);
     } else if (route is CupertinoRouteTransitionMixin<dynamic> && !route!.isFirst) {
-      final CupertinoRouteTransitionMixin<dynamic> cupertinoRoute =
-          route! as CupertinoRouteTransitionMixin<dynamic>;
+      final cupertinoRoute = route! as CupertinoRouteTransitionMixin<dynamic>;
       // There is no timing issue because the previousTitle Listenable changes
       // happen during route modifications before the ValueListenableBuilder
       // is built.
@@ -2203,6 +2552,7 @@ class _CancelButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+<<<<<<< HEAD
     return Align(
       alignment: Alignment.centerLeft,
       child: Opacity(
@@ -2213,6 +2563,19 @@ class _CancelButton extends StatelessWidget {
           // TODO(victorsanni): Localize this string.
           // See https://github.com/flutter/flutter/issues/48616.
           child: const Text('Cancel', maxLines: 1, overflow: TextOverflow.clip),
+=======
+    final CupertinoLocalizations localizations = CupertinoLocalizations.of(context);
+    return MediaQuery.withNoTextScaling(
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: Opacity(
+          opacity: opacity,
+          child: CupertinoButton(
+            padding: EdgeInsets.zero,
+            onPressed: onPressed,
+            child: Text(localizations.cancelButtonLabel, maxLines: 1, overflow: TextOverflow.clip),
+          ),
+>>>>>>> 48c32af0345e9ad5747f78ddce828c7f795f7159
         ),
       ),
     );
@@ -2225,6 +2588,7 @@ class _InactiveSearchableBottom extends StatelessWidget {
   const _InactiveSearchableBottom({
     required this.animationController,
     required this.searchField,
+<<<<<<< HEAD
     required this.onSearchFieldTap,
     required this.animation,
   });
@@ -2232,13 +2596,43 @@ class _InactiveSearchableBottom extends StatelessWidget {
   final AnimationController animationController;
   final _NavigationBarSearchField? searchField;
   final Animation<double> animation;
+=======
+    required this.animation,
+    required this.searchFieldHeight,
+    required this.onSearchFieldTap,
+  });
+
+  final AnimationController animationController;
+  final Widget? searchField;
+  final Animation<double> animation;
+  final double searchFieldHeight;
+>>>>>>> 48c32af0345e9ad5747f78ddce828c7f795f7159
   final void Function()? onSearchFieldTap;
 
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
       animation: animation,
+<<<<<<< HEAD
       child: GestureDetector(onTap: onSearchFieldTap, child: searchField),
+=======
+      child: GestureDetector(
+        onTap: onSearchFieldTap,
+        child: AbsorbPointer(
+          child: FocusableActionDetector(
+            descendantsAreFocusable: false,
+            child: Padding(
+              padding: const EdgeInsetsDirectional.only(
+                start: _kNavBarEdgePadding,
+                end: _kNavBarEdgePadding,
+                bottom: _kNavBarBottomPadding,
+              ),
+              child: SizedBox(height: searchFieldHeight, child: searchField),
+            ),
+          ),
+        ),
+      ),
+>>>>>>> 48c32af0345e9ad5747f78ddce828c7f795f7159
       builder: (BuildContext context, Widget? child) {
         return LayoutBuilder(
           builder: (BuildContext context, BoxConstraints constraints) {
@@ -2253,7 +2647,14 @@ class _InactiveSearchableBottom extends StatelessWidget {
                 // A decoy 'Cancel' button used in the collapsed-to-expanded animation.
                 SizedBox(
                   width: animationController.value * _kSearchFieldCancelButtonWidth,
+<<<<<<< HEAD
                   child: _CancelButton(opacity: 0.4, onPressed: () {}),
+=======
+                  child: Padding(
+                    padding: const EdgeInsets.only(bottom: _kNavBarBottomPadding),
+                    child: _CancelButton(opacity: 0.4, onPressed: () {}),
+                  ),
+>>>>>>> 48c32af0345e9ad5747f78ddce828c7f795f7159
                 ),
               ],
             );
@@ -2271,22 +2672,46 @@ class _ActiveSearchableBottom extends StatelessWidget {
     required this.animationController,
     required this.searchField,
     required this.animation,
+<<<<<<< HEAD
+=======
+    required this.searchFieldHeight,
+>>>>>>> 48c32af0345e9ad5747f78ddce828c7f795f7159
     required this.onSearchFieldTap,
   });
 
   final AnimationController animationController;
   final Widget? searchField;
   final Animation<double> animation;
+<<<<<<< HEAD
+=======
+  final double searchFieldHeight;
+>>>>>>> 48c32af0345e9ad5747f78ddce828c7f795f7159
   final void Function()? onSearchFieldTap;
 
   @override
   Widget build(BuildContext context) {
     return Padding(
+<<<<<<< HEAD
       padding: const EdgeInsets.only(left: _kNavBarEdgePadding),
       child: Row(
         spacing: _kNavBarEdgePadding,
         children: <Widget>[
           Expanded(child: searchField ?? const SizedBox.shrink()),
+=======
+      padding: const EdgeInsetsDirectional.only(
+        start: _kNavBarEdgePadding,
+        bottom: _kNavBarBottomPadding,
+      ),
+      child: Row(
+        spacing: 12.0, // Eyeballed on an iPhone 15 simulator running iOS 17.5.
+        children: <Widget>[
+          Expanded(
+            child: SizedBox(
+              height: searchFieldHeight,
+              child: searchField ?? const SizedBox.shrink(),
+            ),
+          ),
+>>>>>>> 48c32af0345e9ad5747f78ddce828c7f795f7159
           AnimatedBuilder(
             animation: animation,
             child: FadeTransition(
@@ -2306,6 +2731,7 @@ class _ActiveSearchableBottom extends StatelessWidget {
   }
 }
 
+<<<<<<< HEAD
 /// The search field used in the expanded state of a
 /// [CupertinoSliverNavigationBar.search].
 class _NavigationBarSearchField extends StatelessWidget implements PreferredSizeWidget {
@@ -2335,6 +2761,8 @@ class _NavigationBarSearchField extends StatelessWidget implements PreferredSize
   Size get preferredSize => const Size.fromHeight(searchFieldHeight + verticalPadding * 2);
 }
 
+=======
+>>>>>>> 48c32af0345e9ad5747f78ddce828c7f795f7159
 /// This should always be the first child of Hero widgets.
 ///
 /// This class helps each Hero transition obtain the start or end navigation
@@ -2353,6 +2781,8 @@ class _TransitionableNavigationBar extends StatelessWidget {
     required this.border,
     required this.hasUserMiddle,
     required this.largeExpanded,
+    required this.searchable,
+    required this.automaticBackgroundVisibility,
     required this.child,
   }) : assert(!largeExpanded || largeTitleTextStyle != null),
        super(key: componentsKeys.navBarBoxKey);
@@ -2365,11 +2795,12 @@ class _TransitionableNavigationBar extends StatelessWidget {
   final Border? border;
   final bool hasUserMiddle;
   final bool largeExpanded;
+  final bool searchable;
+  final bool automaticBackgroundVisibility;
   final Widget child;
 
   RenderBox get renderBox {
-    final RenderBox box =
-        componentsKeys.navBarBoxKey.currentContext!.findRenderObject()! as RenderBox;
+    final box = componentsKeys.navBarBoxKey.currentContext!.findRenderObject()! as RenderBox;
     assert(
       box.attached,
       '_TransitionableNavigationBar.renderBox should be called when building '
@@ -2379,10 +2810,14 @@ class _TransitionableNavigationBar extends StatelessWidget {
     return box;
   }
 
+  bool get userGestureInProgress {
+    return Navigator.of(componentsKeys.navBarBoxKey.currentContext!).userGestureInProgress;
+  }
+
   @override
   Widget build(BuildContext context) {
     assert(() {
-      bool inHero = false;
+      var inHero = false;
       context.visitAncestorElements((Element ancestor) {
         if (ancestor is ComponentElement) {
           assert(
@@ -2433,67 +2868,46 @@ class _NavigationBarTransition extends StatelessWidget {
   }) : heightTween = Tween<double>(
          begin: bottomNavBar.renderBox.size.height,
          end: topNavBar.renderBox.size.height,
-       ),
-       backgroundTween = ColorTween(
-         begin: bottomNavBar.backgroundColor,
-         end: topNavBar.backgroundColor,
-       ),
-       borderTween = BorderTween(begin: bottomNavBar.border, end: topNavBar.border);
+       );
 
   final Animation<double> animation;
   final _TransitionableNavigationBar topNavBar;
   final _TransitionableNavigationBar bottomNavBar;
 
   final Tween<double> heightTween;
-  final ColorTween backgroundTween;
-  final BorderTween borderTween;
 
   @override
   Widget build(BuildContext context) {
-    final _NavigationBarComponentsTransition componentsTransition =
-        _NavigationBarComponentsTransition(
-          animation: animation,
-          bottomNavBar: bottomNavBar,
-          topNavBar: topNavBar,
-          directionality: Directionality.of(context),
-        );
+    final componentsTransition = _NavigationBarComponentsTransition(
+      animation: animation,
+      bottomNavBar: bottomNavBar,
+      topNavBar: topNavBar,
+      directionality: Directionality.of(context),
+    );
 
-    final List<Widget> children = <Widget>[
-      // Draw an empty navigation bar box with changing shape behind all the
-      // moving components without any components inside it itself.
-      AnimatedBuilder(
-        animation: animation,
-        builder: (BuildContext context, Widget? child) {
-          return _wrapWithBackground(
-            // Don't update the system status bar color mid-flight.
-            updateSystemUiOverlay: false,
-            backgroundColor: backgroundTween.evaluate(animation)!,
-            border: borderTween.evaluate(animation),
-            child: SizedBox(height: heightTween.evaluate(animation), width: double.infinity),
-          );
-        },
-      ),
-      // Draw all the components on top of the empty bar box.
+    final children = <Widget>[
+      if (componentsTransition.bottomNavBarBackground != null)
+        componentsTransition.bottomNavBarBackground!,
       if (componentsTransition.bottomBackChevron != null) componentsTransition.bottomBackChevron!,
       if (componentsTransition.bottomBackLabel != null) componentsTransition.bottomBackLabel!,
       if (componentsTransition.bottomLeading != null) componentsTransition.bottomLeading!,
       if (componentsTransition.bottomMiddle != null) componentsTransition.bottomMiddle!,
       if (componentsTransition.bottomLargeTitle != null) componentsTransition.bottomLargeTitle!,
       if (componentsTransition.bottomTrailing != null) componentsTransition.bottomTrailing!,
+      if (componentsTransition.bottomNavBarBottom != null) componentsTransition.bottomNavBarBottom!,
       // Draw top components on top of the bottom components.
+      if (componentsTransition.topNavBarBackground != null)
+        componentsTransition.topNavBarBackground!,
       if (componentsTransition.topLeading != null) componentsTransition.topLeading!,
       if (componentsTransition.topBackChevron != null) componentsTransition.topBackChevron!,
       if (componentsTransition.topBackLabel != null) componentsTransition.topBackLabel!,
       if (componentsTransition.topMiddle != null) componentsTransition.topMiddle!,
       if (componentsTransition.topLargeTitle != null) componentsTransition.topLargeTitle!,
       if (componentsTransition.topTrailing != null) componentsTransition.topTrailing!,
+      if (componentsTransition.topNavBarBottom != null) componentsTransition.topNavBarBottom!,
     ];
 
-    // The actual outer box is big enough to contain both the bottom and top
-    // navigation bars. It's not a direct Rect lerp because some components
-    // can actually be outside the linearly lerp'ed Rect in the middle of
-    // the animation, such as the topLargeTitle. The text scaling is disabled to
-    // avoid odd transitions between pages.
+    // The text scaling is disabled to avoid odd transitions between pages.
     return MediaQuery.withNoTextScaling(
       child: SizedBox(
         height: math.max(heightTween.begin!, heightTween.end!) + MediaQuery.paddingOf(context).top,
@@ -2546,9 +2960,17 @@ class _NavigationBarComponentsTransition {
        topHasUserMiddle = topNavBar.hasUserMiddle,
        bottomLargeExpanded = bottomNavBar.largeExpanded,
        topLargeExpanded = topNavBar.largeExpanded,
+       bottomBackgroundColor = bottomNavBar.backgroundColor,
+       topBackgroundColor = topNavBar.backgroundColor,
+       bottomBorder = bottomNavBar.border,
+       topBorder = topNavBar.border,
+       bottomAutomaticBackgroundVisibility = bottomNavBar.automaticBackgroundVisibility,
+       userGestureInProgress =
+           topNavBar.userGestureInProgress || bottomNavBar.userGestureInProgress,
+       searchable = topNavBar.searchable && bottomNavBar.searchable,
        transitionBox =
-       // paintBounds are based on offset zero so it's ok to expand the Rects.
-       bottomNavBar.renderBox.paintBounds.expandToInclude(topNavBar.renderBox.paintBounds),
+           // paintBounds are based on offset zero so it's ok to expand the Rects.
+           bottomNavBar.renderBox.paintBounds.expandToInclude(topNavBar.renderBox.paintBounds),
        forwardDirection = directionality == TextDirection.ltr ? 1.0 : -1.0;
 
   static final Animatable<double> fadeOut = Tween<double>(begin: 1.0, end: 0.0);
@@ -2575,6 +2997,14 @@ class _NavigationBarComponentsTransition {
   final bool topHasUserMiddle;
   final bool bottomLargeExpanded;
   final bool topLargeExpanded;
+  final bool userGestureInProgress;
+  final bool searchable;
+  final bool bottomAutomaticBackgroundVisibility;
+
+  final Color? bottomBackgroundColor;
+  final Color? topBackgroundColor;
+  final Border? bottomBorder;
+  final Border? topBorder;
 
   // This is the outer box in which all the components will be fitted. The
   // sizing component of RelativeRects will be based on this rect's size.
@@ -2583,10 +3013,10 @@ class _NavigationBarComponentsTransition {
   // x-axis unity number representing the direction of growth for text.
   final double forwardDirection;
 
-  // Take a widget it its original ancestor navigation bar render box and
+  // Take a widget in its original ancestor navigation bar render box and
   // translate it into a RelativeBox in the transition navigation bar box.
   RelativeRect positionInTransitionBox(GlobalKey key, {required RenderBox from}) {
-    final RenderBox componentBox = key.currentContext!.findRenderObject()! as RenderBox;
+    final componentBox = key.currentContext!.findRenderObject()! as RenderBox;
     assert(componentBox.attached);
 
     return RelativeRect.fromRect(
@@ -2613,17 +3043,18 @@ class _NavigationBarComponentsTransition {
     required RenderBox fromNavBarBox,
     required GlobalKey toKey,
     required RenderBox toNavBarBox,
+    Curve curve = const Interval(0.0, 1.0),
     required Widget child,
   }) {
-    final RenderBox fromBox = fromKey.currentContext!.findRenderObject()! as RenderBox;
-    final RenderBox toBox = toKey.currentContext!.findRenderObject()! as RenderBox;
+    final fromBox = fromKey.currentContext!.findRenderObject()! as RenderBox;
+    final toBox = toKey.currentContext!.findRenderObject()! as RenderBox;
 
     final bool isLTR = forwardDirection > 0;
 
     // The animation moves the fromBox so its anchor (left-center or right-center
     // depending on the writing direction) aligns with toBox's anchor.
-    final Offset fromAnchorLocal = Offset(isLTR ? 0 : fromBox.size.width, fromBox.size.height / 2);
-    final Offset toAnchorLocal = Offset(isLTR ? 0 : toBox.size.width, toBox.size.height / 2);
+    final fromAnchorLocal = Offset(isLTR ? 0 : fromBox.size.width, fromBox.size.height / 2);
+    final toAnchorLocal = Offset(isLTR ? 0 : toBox.size.width, toBox.size.height / 2);
     final Offset fromAnchorInFromBox = fromBox.localToGlobal(
       fromAnchorLocal,
       ancestor: fromNavBarBox,
@@ -2638,27 +3069,29 @@ class _NavigationBarComponentsTransition {
 
     // The offset to move fromAnchor to toAnchor, in transitionBox's top-leading
     // coordinates.
-    final Offset translation =
-        isLTR
-            ? toAnchorInToBox - fromAnchorInFromBox
-            : Offset(toNavBarBox.size.width - toAnchorInToBox.dx, toAnchorInToBox.dy) -
-                Offset(fromNavBarBox.size.width - fromAnchorInFromBox.dx, fromAnchorInFromBox.dy);
+    final Offset translation = isLTR
+        ? toAnchorInToBox - fromAnchorInFromBox
+        : Offset(toNavBarBox.size.width - toAnchorInToBox.dx, toAnchorInToBox.dy) -
+              Offset(fromNavBarBox.size.width - fromAnchorInFromBox.dx, fromAnchorInFromBox.dy);
 
     final RelativeRect fromBoxMargin = positionInTransitionBox(fromKey, from: fromNavBarBox);
-    final Offset fromOriginInTransitionBox = Offset(
+    final fromOriginInTransitionBox = Offset(
       isLTR ? fromBoxMargin.left : fromBoxMargin.right,
       fromBoxMargin.top,
     );
 
-    final Tween<Offset> anchorMovementInTransitionBox = Tween<Offset>(
+    final anchorMovementInTransitionBox = Tween<Offset>(
       begin: fromOriginInTransitionBox,
       end: fromOriginInTransitionBox + translation,
     );
 
     return _FixedSizeSlidingTransition(
       isLTR: isLTR,
-      offsetAnimation: animation.drive(anchorMovementInTransitionBox),
-      size: fromBox.size,
+      offsetAnimation: animation
+          .drive(CurveTween(curve: curve))
+          .drive(anchorMovementInTransitionBox),
+      width: fromNavBarBox.size.width,
+      height: fromBox.size.height,
       child: child,
     );
   }
@@ -2671,8 +3104,50 @@ class _NavigationBarComponentsTransition {
     return animation.drive(fadeOut.chain(CurveTween(curve: Interval(0.0, t, curve: curve))));
   }
 
+  // The parent of the hero animation, which is the route animation.
+  Animation<double> get routeAnimation {
+    // The hero animation is a CurvedAnimation.
+    assert(animation is CurvedAnimation);
+    return (animation as CurvedAnimation).parent;
+  }
+
+  Widget? get bottomNavBarBackground {
+    if (bottomBackgroundColor == null ||
+        (bottomLargeExpanded && bottomAutomaticBackgroundVisibility)) {
+      return null;
+    }
+    final Curve animationCurve = animation.status == AnimationStatus.forward
+        ? Curves.fastEaseInToSlowEaseOut
+        : Curves.fastEaseInToSlowEaseOut.flipped;
+
+    final Animation<double> pageTransitionAnimation = routeAnimation.drive(
+      CurveTween(curve: userGestureInProgress ? Curves.linear : animationCurve),
+    );
+
+    final RelativeRect from = positionInTransitionBox(
+      bottomComponents.navBarBoxKey,
+      from: bottomNavBarBox,
+    );
+
+    final positionTween = RelativeRectTween(
+      end: from.shift(Offset(forwardDirection * -bottomNavBarBox.size.width, 0.0)),
+      begin: from,
+    );
+
+    return PositionedTransition(
+      rect: pageTransitionAnimation.drive(positionTween),
+      child: _wrapWithBackground(
+        // Don't update the system status bar color mid-flight.
+        updateSystemUiOverlay: false,
+        backgroundColor: bottomBackgroundColor!,
+        border: topBorder,
+        child: SizedBox(height: bottomNavBarBox.size.height, width: double.infinity),
+      ),
+    );
+  }
+
   Widget? get bottomLeading {
-    final KeyedSubtree? bottomLeading = bottomComponents.leadingKey.currentWidget as KeyedSubtree?;
+    final bottomLeading = bottomComponents.leadingKey.currentWidget as KeyedSubtree?;
 
     if (bottomLeading == null) {
       return null;
@@ -2685,8 +3160,7 @@ class _NavigationBarComponentsTransition {
   }
 
   Widget? get bottomBackChevron {
-    final KeyedSubtree? bottomBackChevron =
-        bottomComponents.backChevronKey.currentWidget as KeyedSubtree?;
+    final bottomBackChevron = bottomComponents.backChevronKey.currentWidget as KeyedSubtree?;
 
     if (bottomBackChevron == null) {
       return null;
@@ -2702,8 +3176,7 @@ class _NavigationBarComponentsTransition {
   }
 
   Widget? get bottomBackLabel {
-    final KeyedSubtree? bottomBackLabel =
-        bottomComponents.backLabelKey.currentWidget as KeyedSubtree?;
+    final bottomBackLabel = bottomComponents.backLabelKey.currentWidget as KeyedSubtree?;
 
     if (bottomBackLabel == null) {
       return null;
@@ -2715,7 +3188,7 @@ class _NavigationBarComponentsTransition {
     );
 
     // Transition away by sliding horizontally to the leading edge off of the screen.
-    final RelativeRectTween positionTween = RelativeRectTween(
+    final positionTween = RelativeRectTween(
       begin: from,
       end: from.shift(Offset(forwardDirection * (-bottomNavBarBox.size.width / 2.0), 0.0)),
     );
@@ -2730,9 +3203,9 @@ class _NavigationBarComponentsTransition {
   }
 
   Widget? get bottomMiddle {
-    final KeyedSubtree? bottomMiddle = bottomComponents.middleKey.currentWidget as KeyedSubtree?;
-    final KeyedSubtree? topBackLabel = topComponents.backLabelKey.currentWidget as KeyedSubtree?;
-    final KeyedSubtree? topLeading = topComponents.leadingKey.currentWidget as KeyedSubtree?;
+    final bottomMiddle = bottomComponents.middleKey.currentWidget as KeyedSubtree?;
+    final topBackLabel = topComponents.backLabelKey.currentWidget as KeyedSubtree?;
+    final topLeading = topComponents.leadingKey.currentWidget as KeyedSubtree?;
 
     // The middle component is non-null when the nav bar is a large title
     // nav bar but would be invisible when expanded, therefore don't show it here.
@@ -2783,10 +3256,8 @@ class _NavigationBarComponentsTransition {
   }
 
   Widget? get bottomLargeTitle {
-    final KeyedSubtree? bottomLargeTitle =
-        bottomComponents.largeTitleKey.currentWidget as KeyedSubtree?;
-    final KeyedSubtree? topBackLabel = topComponents.backLabelKey.currentWidget as KeyedSubtree?;
-    final KeyedSubtree? topLeading = topComponents.leadingKey.currentWidget as KeyedSubtree?;
+    final bottomLargeTitle = bottomComponents.largeTitleKey.currentWidget as KeyedSubtree?;
+    final topBackLabel = topComponents.backLabelKey.currentWidget as KeyedSubtree?;
 
     if (bottomLargeTitle == null || !bottomLargeExpanded) {
       return null;
@@ -2799,6 +3270,7 @@ class _NavigationBarComponentsTransition {
         fromNavBarBox: bottomNavBarBox,
         toKey: topComponents.backLabelKey,
         toNavBarBox: topNavBarBox,
+        curve: Interval(0.0, animation.status == AnimationStatus.forward ? 0.7 : 1.0),
         child: FadeTransition(
           opacity: fadeOutBy(0.6),
           child: Align(
@@ -2818,37 +3290,32 @@ class _NavigationBarComponentsTransition {
       );
     }
 
-    if (topLeading != null) {
-      // Unlike bottom middle, the bottom large title moves when it can't
-      // transition to the top back label position.
-      final RelativeRect from = positionInTransitionBox(
-        bottomComponents.largeTitleKey,
-        from: bottomNavBarBox,
-      );
+    // Unlike bottom middle, the bottom large title moves when it can't
+    // transition to the top back label position.
+    final RelativeRect from = positionInTransitionBox(
+      bottomComponents.largeTitleKey,
+      from: bottomNavBarBox,
+    );
 
-      final RelativeRectTween positionTween = RelativeRectTween(
-        begin: from,
-        end: from.shift(Offset(forwardDirection * bottomNavBarBox.size.width / 4.0, 0.0)),
-      );
+    final positionTween = RelativeRectTween(
+      begin: from,
+      end: from.shift(Offset(forwardDirection * bottomNavBarBox.size.width / 4.0, 0.0)),
+    );
 
-      // Just shift slightly towards the trailing edge instead of moving to the
-      // back label position.
-      return PositionedTransition(
-        rect: animation.drive(positionTween),
-        child: FadeTransition(
-          opacity: fadeOutBy(0.4),
-          // Keep the font when transitioning into a non-back-label leading.
-          child: DefaultTextStyle(style: bottomLargeTitleTextStyle!, child: bottomLargeTitle.child),
-        ),
-      );
-    }
-
-    return null;
+    // Just shift slightly towards the trailing edge instead of moving to the
+    // back label position.
+    return PositionedTransition(
+      rect: animation.drive(positionTween),
+      child: FadeTransition(
+        opacity: fadeOutBy(0.4),
+        // Keep the font when transitioning into a non-back-label leading.
+        child: DefaultTextStyle(style: bottomLargeTitleTextStyle!, child: bottomLargeTitle.child),
+      ),
+    );
   }
 
   Widget? get bottomTrailing {
-    final KeyedSubtree? bottomTrailing =
-        bottomComponents.trailingKey.currentWidget as KeyedSubtree?;
+    final bottomTrailing = bottomComponents.trailingKey.currentWidget as KeyedSubtree?;
 
     if (bottomTrailing == null) {
       return null;
@@ -2860,8 +3327,81 @@ class _NavigationBarComponentsTransition {
     );
   }
 
+  Widget? get bottomNavBarBottom {
+    final bottomNavBarBottom = bottomComponents.navBarBottomKey.currentWidget as KeyedSubtree?;
+
+    if (bottomNavBarBottom == null) {
+      return null;
+    }
+
+    final RelativeRect from = positionInTransitionBox(
+      bottomComponents.navBarBottomKey,
+      from: bottomNavBarBox,
+    );
+    // Shift in from the leading edge of the screen.
+    final positionTween = RelativeRectTween(
+      begin: from,
+      end: from.shift(Offset(forwardDirection * -bottomNavBarBox.size.width, 0.0)),
+    );
+
+    Widget child = bottomNavBarBottom.child;
+    final Curve animationCurve = animation.status == AnimationStatus.forward
+        ? _kBottomNavBarHeaderTransitionCurve
+        : _kBottomNavBarHeaderTransitionCurve.flipped;
+
+    // Fade out only if this is not a CupertinoSliverNavigationBar.search to
+    // CupertinoSliverNavigationBar.search transition.
+    if (!searchable) {
+      child = FadeTransition(
+        opacity: fadeOutBy(0.8, curve: animationCurve),
+        child: child,
+      );
+    }
+
+    return PositionedTransition(
+      rect:
+          // The bottom widget animates linearly during a backswipe by a user gesture.
+          userGestureInProgress
+          ? routeAnimation.drive(CurveTween(curve: Curves.linear)).drive(positionTween)
+          : animation.drive(CurveTween(curve: animationCurve)).drive(positionTween),
+
+      child: ClipRect(child: child),
+    );
+  }
+
+  Widget? get topNavBarBackground {
+    if (topBackgroundColor == null) {
+      return null;
+    }
+    final Curve animationCurve = animation.status == AnimationStatus.forward
+        ? Curves.fastEaseInToSlowEaseOut
+        : Curves.fastEaseInToSlowEaseOut.flipped;
+
+    final Animation<double> pageTransitionAnimation = routeAnimation.drive(
+      CurveTween(curve: userGestureInProgress ? Curves.linear : animationCurve),
+    );
+
+    final RelativeRect to = positionInTransitionBox(topComponents.navBarBoxKey, from: topNavBarBox);
+
+    final positionTween = RelativeRectTween(
+      begin: to.shift(Offset(forwardDirection * topNavBarBox.size.width, 0.0)),
+      end: to,
+    );
+
+    return PositionedTransition(
+      rect: pageTransitionAnimation.drive(positionTween),
+      child: _wrapWithBackground(
+        // Don't update the system status bar color mid-flight.
+        updateSystemUiOverlay: false,
+        backgroundColor: topBackgroundColor!,
+        border: topBorder,
+        child: SizedBox(height: topNavBarBox.size.height, width: double.infinity),
+      ),
+    );
+  }
+
   Widget? get topLeading {
-    final KeyedSubtree? topLeading = topComponents.leadingKey.currentWidget as KeyedSubtree?;
+    final topLeading = topComponents.leadingKey.currentWidget as KeyedSubtree?;
 
     if (topLeading == null) {
       return null;
@@ -2874,10 +3414,8 @@ class _NavigationBarComponentsTransition {
   }
 
   Widget? get topBackChevron {
-    final KeyedSubtree? topBackChevron =
-        topComponents.backChevronKey.currentWidget as KeyedSubtree?;
-    final KeyedSubtree? bottomBackChevron =
-        bottomComponents.backChevronKey.currentWidget as KeyedSubtree?;
+    final topBackChevron = topComponents.backChevronKey.currentWidget as KeyedSubtree?;
+    final bottomBackChevron = bottomComponents.backChevronKey.currentWidget as KeyedSubtree?;
 
     if (topBackChevron == null) {
       return null;
@@ -2887,40 +3425,67 @@ class _NavigationBarComponentsTransition {
       topComponents.backChevronKey,
       from: topNavBarBox,
     );
-    RelativeRect from = to;
+    var from = to;
 
-    // If it's the first page with a back chevron, shift in slightly from the
-    // right.
-    if (bottomBackChevron == null) {
-      final RenderBox topBackChevronBox =
-          topComponents.backChevronKey.currentContext!.findRenderObject()! as RenderBox;
-      from = to.shift(Offset(forwardDirection * topBackChevronBox.size.width * 2.0, 0.0));
+    Widget child = topBackChevron.child;
+    // Values eyeballed from an iPhone 15 simulator running iOS 17.5.
+    const Curve forwardScaleCurve = Interval(0.0, 0.2);
+    const Curve backwardScaleCurve = Interval(0.8, 1.0);
+    const Curve forwardPositionCurve = Interval(0.0, 0.5);
+    const Curve backwardPositionCurve = Interval(0.5, 1.0);
+    final Curve effectiveScaleCurve;
+    final Curve effectivePositionCurve;
+
+    if (animation.status == AnimationStatus.forward) {
+      effectiveScaleCurve = forwardScaleCurve;
+      effectivePositionCurve = forwardPositionCurve;
+    } else {
+      effectiveScaleCurve = backwardScaleCurve;
+      effectivePositionCurve = backwardPositionCurve;
     }
 
-    final RelativeRectTween positionTween = RelativeRectTween(begin: from, end: to);
+    // If it's the first page with a back chevron, shrink and shift in slightly
+    // from the right.
+    if (bottomBackChevron == null) {
+      final topBackChevronBox =
+          topComponents.backChevronKey.currentContext!.findRenderObject()! as RenderBox;
+      from = to.shift(Offset(forwardDirection * topBackChevronBox.size.width * 2.0, 0.0));
+      child = ScaleTransition(
+        scale: routeAnimation.drive(CurveTween(curve: effectiveScaleCurve)),
+        child: child,
+      );
+    }
+
+    final positionTween = RelativeRectTween(begin: from, end: to);
 
     return PositionedTransition(
-      rect: animation.drive(positionTween),
+      rect: routeAnimation.drive(CurveTween(curve: effectivePositionCurve)).drive(positionTween),
       child: FadeTransition(
-        opacity: fadeInFrom(bottomBackChevron == null ? 0.7 : 0.4),
-        child: DefaultTextStyle(style: topBackButtonTextStyle, child: topBackChevron.child),
+        opacity: routeAnimation.drive(
+          CurveTween(
+            curve: Interval(
+              // Fades faster going back from the first page with a back chevron.
+              bottomBackChevron == null && animation.status != AnimationStatus.forward ? 0.9 : 0.4,
+              1.0,
+            ),
+          ),
+        ),
+        child: DefaultTextStyle(style: topBackButtonTextStyle, child: child),
       ),
     );
   }
 
   Widget? get topBackLabel {
-    final KeyedSubtree? bottomMiddle = bottomComponents.middleKey.currentWidget as KeyedSubtree?;
-    final KeyedSubtree? bottomLargeTitle =
-        bottomComponents.largeTitleKey.currentWidget as KeyedSubtree?;
-    final KeyedSubtree? topBackLabel = topComponents.backLabelKey.currentWidget as KeyedSubtree?;
+    final bottomMiddle = bottomComponents.middleKey.currentWidget as KeyedSubtree?;
+    final bottomLargeTitle = bottomComponents.largeTitleKey.currentWidget as KeyedSubtree?;
+    final topBackLabel = topComponents.backLabelKey.currentWidget as KeyedSubtree?;
 
     if (topBackLabel == null) {
       return null;
     }
 
-    final RenderAnimatedOpacity? topBackLabelOpacity =
-        topComponents.backLabelKey.currentContext
-            ?.findAncestorRenderObjectOfType<RenderAnimatedOpacity>();
+    final RenderAnimatedOpacity? topBackLabelOpacity = topComponents.backLabelKey.currentContext
+        ?.findAncestorRenderObjectOfType<RenderAnimatedOpacity>();
 
     Animation<double>? midClickOpacity;
     if (topBackLabelOpacity != null && topBackLabelOpacity.opacity.value < 1.0) {
@@ -2940,6 +3505,7 @@ class _NavigationBarComponentsTransition {
         fromNavBarBox: bottomNavBarBox,
         toKey: topComponents.backLabelKey,
         toNavBarBox: topNavBarBox,
+        curve: Interval(0.0, animation.status == AnimationStatus.forward ? 0.7 : 1.0),
         child: FadeTransition(
           opacity: midClickOpacity ?? fadeInFrom(0.4),
           child: DefaultTextStyleTransition(
@@ -2978,7 +3544,7 @@ class _NavigationBarComponentsTransition {
   }
 
   Widget? get topMiddle {
-    final KeyedSubtree? topMiddle = topComponents.middleKey.currentWidget as KeyedSubtree?;
+    final topMiddle = topComponents.middleKey.currentWidget as KeyedSubtree?;
 
     if (topMiddle == null) {
       return null;
@@ -2991,17 +3557,16 @@ class _NavigationBarComponentsTransition {
     }
 
     final RelativeRect to = positionInTransitionBox(topComponents.middleKey, from: topNavBarBox);
-    final RenderBox toBox =
-        topComponents.middleKey.currentContext!.findRenderObject()! as RenderBox;
+    final toBox = topComponents.middleKey.currentContext!.findRenderObject()! as RenderBox;
 
     final bool isLTR = forwardDirection > 0;
 
     // Anchor is the top-leading point of toBox, in transition box's top-leading
     // coordinate space.
-    final Offset toAnchorInTransitionBox = Offset(isLTR ? to.left : to.right, to.top);
+    final toAnchorInTransitionBox = Offset(isLTR ? to.left : to.right, to.top);
 
     // Shift in from the trailing edge of the screen.
-    final Tween<Offset> anchorMovementInTransitionBox = Tween<Offset>(
+    final anchorMovementInTransitionBox = Tween<Offset>(
       begin: Offset(
         // the "width / 2" here makes the middle widget's horizontal center on
         // the trailing edge of the top nav bar.
@@ -3014,7 +3579,8 @@ class _NavigationBarComponentsTransition {
     return _FixedSizeSlidingTransition(
       isLTR: isLTR,
       offsetAnimation: animation.drive(anchorMovementInTransitionBox),
-      size: toBox.size,
+      width: toBox.size.width,
+      height: toBox.size.height,
       child: FadeTransition(
         opacity: fadeInFrom(0.25),
         child: DefaultTextStyle(style: topTitleTextStyle, child: topMiddle.child),
@@ -3023,7 +3589,7 @@ class _NavigationBarComponentsTransition {
   }
 
   Widget? get topTrailing {
-    final KeyedSubtree? topTrailing = topComponents.trailingKey.currentWidget as KeyedSubtree?;
+    final topTrailing = topComponents.trailingKey.currentWidget as KeyedSubtree?;
 
     if (topTrailing == null) {
       return null;
@@ -3036,7 +3602,7 @@ class _NavigationBarComponentsTransition {
   }
 
   Widget? get topLargeTitle {
-    final KeyedSubtree? topLargeTitle = topComponents.largeTitleKey.currentWidget as KeyedSubtree?;
+    final topLargeTitle = topComponents.largeTitleKey.currentWidget as KeyedSubtree?;
 
     if (topLargeTitle == null || !topLargeExpanded) {
       return null;
@@ -3048,15 +3614,23 @@ class _NavigationBarComponentsTransition {
     );
 
     // Shift in from the trailing edge of the screen.
-    final RelativeRectTween positionTween = RelativeRectTween(
+    final positionTween = RelativeRectTween(
       begin: to.shift(Offset(forwardDirection * topNavBarBox.size.width, 0.0)),
       end: to,
     );
 
+    final Curve animationCurve = animation.status == AnimationStatus.forward
+        ? _kTopNavBarHeaderTransitionCurve
+        : _kTopNavBarHeaderTransitionCurve.flipped;
+
     return PositionedTransition(
-      rect: animation.drive(positionTween),
+      rect:
+          // The large title animates linearly during a backswipe by a user gesture.
+          userGestureInProgress
+          ? routeAnimation.drive(CurveTween(curve: Curves.linear)).drive(positionTween)
+          : animation.drive(CurveTween(curve: animationCurve)).drive(positionTween),
       child: FadeTransition(
-        opacity: fadeInFrom(0.3),
+        opacity: fadeInFrom(0.0, curve: animationCurve),
         child: DefaultTextStyle(
           style: topLargeTitleTextStyle!,
           maxLines: 1,
@@ -3066,12 +3640,54 @@ class _NavigationBarComponentsTransition {
       ),
     );
   }
+
+  Widget? get topNavBarBottom {
+    final topNavBarBottom = topComponents.navBarBottomKey.currentWidget as KeyedSubtree?;
+
+    if (topNavBarBottom == null) {
+      return null;
+    }
+
+    final RelativeRect to = positionInTransitionBox(
+      topComponents.navBarBottomKey,
+      from: topNavBarBox,
+    );
+    // Shift in from the trailing edge of the screen.
+    final positionTween = RelativeRectTween(
+      begin: to.shift(Offset(forwardDirection * topNavBarBox.size.width, 0.0)),
+      end: to,
+    );
+
+    Widget child = topNavBarBottom.child;
+
+    final Curve animationCurve = animation.status == AnimationStatus.forward
+        ? _kTopNavBarHeaderTransitionCurve
+        : _kTopNavBarHeaderTransitionCurve.flipped;
+
+    // Fade in only if this is not a CupertinoSliverNavigationBar.search to
+    // CupertinoSliverNavigationBar.search transition.
+    if (!searchable) {
+      child = FadeTransition(
+        opacity: fadeInFrom(0.0, curve: animationCurve),
+        child: child,
+      );
+    }
+
+    return PositionedTransition(
+      rect:
+          // The bottom widget animates linearly during a backswipe by a user gesture.
+          userGestureInProgress
+          ? routeAnimation.drive(CurveTween(curve: Curves.linear)).drive(positionTween)
+          : animation.drive(CurveTween(curve: animationCurve)).drive(positionTween),
+      child: ClipRect(child: child),
+    );
+  }
 }
 
 /// Navigation bars' hero rect tween that will move between the static bars
 /// but keep a constant size that's the bigger of both navigation bars.
 RectTween _linearTranslateWithLargestRectSizeTween(Rect? begin, Rect? end) {
-  final Size largestSize = Size(
+  final largestSize = Size(
     math.max(begin!.size.width, end!.size.width),
     math.max(begin.size.height, end.size.height),
   );
@@ -3111,15 +3727,14 @@ Widget _navBarHeroFlightShuttleBuilder(
   assert(fromHeroContext.widget is Hero);
   assert(toHeroContext.widget is Hero);
 
-  final Hero fromHeroWidget = fromHeroContext.widget as Hero;
-  final Hero toHeroWidget = toHeroContext.widget as Hero;
+  final fromHeroWidget = fromHeroContext.widget as Hero;
+  final toHeroWidget = toHeroContext.widget as Hero;
 
   assert(fromHeroWidget.child is _TransitionableNavigationBar);
   assert(toHeroWidget.child is _TransitionableNavigationBar);
 
-  final _TransitionableNavigationBar fromNavBar =
-      fromHeroWidget.child as _TransitionableNavigationBar;
-  final _TransitionableNavigationBar toNavBar = toHeroWidget.child as _TransitionableNavigationBar;
+  final fromNavBar = fromHeroWidget.child as _TransitionableNavigationBar;
+  final toNavBar = toHeroWidget.child as _TransitionableNavigationBar;
 
   assert(
     fromNavBar.componentsKeys.navBarBoxKey.currentContext!.owner != null,

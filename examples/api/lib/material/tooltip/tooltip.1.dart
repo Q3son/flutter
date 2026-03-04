@@ -14,7 +14,9 @@ class TooltipExampleApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      theme: ThemeData(tooltipTheme: const TooltipThemeData(preferBelow: false)),
+      theme: ThemeData(
+        tooltipTheme: const TooltipThemeData(preferBelow: false),
+      ),
       home: Scaffold(
         appBar: AppBar(title: const Text('Tooltip Sample')),
         body: const Center(child: TooltipSample()),
@@ -32,9 +34,11 @@ class TooltipSample extends StatelessWidget {
       message: 'I am a Tooltip',
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(25),
-        gradient: const LinearGradient(colors: <Color>[Colors.amber, Colors.red]),
+        gradient: const LinearGradient(
+          colors: <Color>[Colors.amber, Colors.red],
+        ),
       ),
-      height: 50,
+      constraints: const BoxConstraints(minWidth: 250),
       padding: const EdgeInsets.all(8.0),
       preferBelow: true,
       textStyle: const TextStyle(fontSize: 24),

@@ -2,7 +2,6 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import 'package:flutter/material.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -10,7 +9,7 @@ import 'semantics_tester.dart';
 
 void main() {
   testWidgets('Semantics 1', (WidgetTester tester) async {
-    final SemanticsTester semantics = SemanticsTester(tester);
+    final semantics = SemanticsTester(tester);
 
     // smoketest
     await tester.pumpWidget(
@@ -202,7 +201,7 @@ void main() {
               rect: TestSemantics.fullScreen,
               children: <TestSemantics>[
                 TestSemantics(
-                  id: 4,
+                  id: 2,
                   label: 'child1',
                   rect: const Rect.fromLTRB(0.0, 0.0, 800.0, 10.0),
                   flags: <SemanticsFlag>[SemanticsFlag.hasSelectedState, SemanticsFlag.isSelected],

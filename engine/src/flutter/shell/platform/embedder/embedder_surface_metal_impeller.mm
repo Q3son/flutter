@@ -41,6 +41,7 @@ EmbedderSurfaceMetalImpeller::EmbedderSurfaceMetalImpeller(
                                              impeller_framebuffer_blend_shaders_length),
   };
   context_ = impeller::ContextMTL::Create(
+      impeller::Flags{},
       (__bridge id<MTLDevice>)device,               // device
       (__bridge id<MTLCommandQueue>)command_queue,  // command_queue
       shader_mappings,                              // shader_libraries_data
@@ -83,7 +84,7 @@ std::shared_ptr<impeller::Context> EmbedderSurfaceMetalImpeller::CreateImpellerC
 }
 
 GPUCAMetalLayerHandle EmbedderSurfaceMetalImpeller::GetCAMetalLayer(
-    const SkISize& frame_info) const {
+    const DlISize& frame_info) const {
   FML_CHECK(false) << "Only rendering to MTLTexture is supported.";
   return nullptr;
 }
@@ -93,7 +94,7 @@ bool EmbedderSurfaceMetalImpeller::PresentDrawable(GrMTLHandle drawable) const {
   return false;
 }
 
-GPUMTLTextureInfo EmbedderSurfaceMetalImpeller::GetMTLTexture(const SkISize& frame_info) const {
+GPUMTLTextureInfo EmbedderSurfaceMetalImpeller::GetMTLTexture(const DlISize& frame_info) const {
   return metal_dispatch_table_.get_texture(frame_info);
 }
 

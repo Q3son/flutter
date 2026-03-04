@@ -7,7 +7,6 @@ package io.flutter.embedding.android;
 import static io.flutter.Build.API_LEVELS;
 
 import android.annotation.SuppressLint;
-import android.annotation.TargetApi;
 import android.app.Activity;
 import android.content.Context;
 import android.content.res.Configuration;
@@ -60,6 +59,7 @@ import io.flutter.embedding.engine.renderer.FlutterRenderer;
 import io.flutter.embedding.engine.renderer.FlutterRenderer.DisplayFeatureState;
 import io.flutter.embedding.engine.renderer.FlutterRenderer.DisplayFeatureType;
 import io.flutter.embedding.engine.renderer.FlutterUiDisplayListener;
+import io.flutter.embedding.engine.renderer.FlutterUiResizeListener;
 import io.flutter.embedding.engine.renderer.RenderSurface;
 import io.flutter.embedding.engine.systemchannels.SettingsChannel;
 import io.flutter.plugin.common.BinaryMessenger;
@@ -77,6 +77,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Displays a Flutter UI on an Android device.
@@ -103,17 +104,32 @@ import java.util.Set;
  *       io.flutter.embedding.android.RenderMode#surface} render mode.
  * </ol>
  *
- * See <a>https://source.android.com/devices/graphics/arch-tv#surface_or_texture</a> for more
- * information comparing {@link android.view.SurfaceView} and {@link android.view.TextureView}.
+ * See <a
+ * href="https://source.android.com/devices/graphics/arch-tv#surface_or_texture">https://source.android.com/devices/graphics/arch-tv#surface_or_texture</a>
+ * for more information comparing {@link android.view.SurfaceView} and {@link
+ * android.view.TextureView}.
  */
 public class FlutterView extends FrameLayout
     implements MouseCursorPlugin.MouseCursorViewDelegate, KeyboardManager.ViewDelegate {
   private static final String TAG = "FlutterView";
+  private static final String GBOARD_PACKAGE_NAME = "com.google.android.inputmethod.latin";
+
+  // Boolean that gates if view port metrics should be sent.  When the
+  // engine informs the embedder of a resize, it is not necessary to send
+  // the viewport metrics back to the engine.
+  private AtomicBoolean shouldSendViewportMetrics = new AtomicBoolean(true);
+
+  // Maximum size allowed for a content sized view.
+  @VisibleForTesting static final int CONTENT_SIZING_MAX = 2 << 12;
+
+  // Flag to enable content sizing.
+  @VisibleForTesting boolean isContentSizingEnabled = false;
 
   // Internal view hierarchy references.
   @Nullable private FlutterSurfaceView flutterSurfaceView;
   @Nullable private FlutterTextureView flutterTextureView;
   @Nullable private FlutterImageView flutterImageView;
+
   @Nullable @VisibleForTesting /* package */ RenderSurface renderSurface;
   @Nullable private RenderSurface previousRenderSurface;
   private final Set<FlutterUiDisplayListener> flutterUiDisplayListeners = new HashSet<>();
@@ -175,6 +191,33 @@ public class FlutterView extends FrameLayout
         }
       };
 
+  @VisibleForTesting
+  final FlutterUiResizeListener flutterUiResizeListener =
+      new FlutterUiResizeListener() {
+        @Override
+        public void resizeEngineView(int width, int height) {
+          boolean changed = false;
+          if (renderSurface != null) {
+            View flutterEngineView = ((View) renderSurface);
+            ViewGroup.LayoutParams surfaceParams = flutterEngineView.getLayoutParams();
+            if (flutterEngineView.getHeight() != height) {
+              changed = true;
+              surfaceParams.height = height;
+            }
+            if (flutterEngineView.getWidth() != width) {
+              changed = true;
+              surfaceParams.width = width;
+            }
+            if (changed) {
+              shouldSendViewportMetrics.set(false);
+              flutterEngineView.setLayoutParams(surfaceParams);
+            }
+          } else {
+            Log.e(TAG, "Flutter engine view not set.");
+          }
+        }
+      };
+
   private final FlutterUiDisplayListener flutterUiDisplayListener =
       new FlutterUiDisplayListener() {
         @Override
@@ -197,6 +240,8 @@ public class FlutterView extends FrameLayout
       };
 
   private Consumer<WindowLayoutInfo> windowInfoListener;
+  private int widthMode;
+  private int heightMode;
 
   /**
    * Constructs a {@code FlutterView} programmatically, without any XML attributes.
@@ -381,6 +426,8 @@ public class FlutterView extends FrameLayout
       addView(flutterImageView);
     }
 
+    isContentSizingEnabled = ContentSizingFlag.isEnabled(getContext());
+
     // FlutterView needs to be focusable so that the InputMethodManager can interact with it.
     setFocusable(true);
     setFocusableInTouchMode(true);
@@ -439,7 +486,7 @@ public class FlutterView extends FrameLayout
     super.onConfigurationChanged(newConfig);
     // We've observed on Android Q that going to the background, changing
     // orientation, and bringing the app back to foreground results in a sequence
-    // of detatch from flutterEngine, onConfigurationChanged, followed by attach
+    // of detached from flutterEngine, onConfigurationChanged, followed by attach
     // to flutterEngine.
     // No-op here so that we avoid NPE; these channels will get notified once
     // the activity or fragment tell the view to attach to the Flutter engine
@@ -477,7 +524,31 @@ public class FlutterView extends FrameLayout
             + height);
     viewportMetrics.width = width;
     viewportMetrics.height = height;
-    sendViewportMetricsToFlutter();
+
+    if (isContentSizingEnabled && heightMode == MeasureSpec.UNSPECIFIED) {
+      Log.d(TAG, "FlutterView height is set to wrap content - updating viewport metrics to max");
+      viewportMetrics.minHeight = 0;
+      viewportMetrics.maxHeight = CONTENT_SIZING_MAX;
+    } else {
+      viewportMetrics.minHeight = viewportMetrics.height;
+      viewportMetrics.maxHeight = viewportMetrics.height;
+    }
+    if (isContentSizingEnabled && widthMode == MeasureSpec.UNSPECIFIED) {
+      Log.d(TAG, "FlutterView width is set to wrap content - updating viewport metrics to max");
+      viewportMetrics.minWidth = 0;
+      viewportMetrics.maxWidth = CONTENT_SIZING_MAX;
+    } else {
+      viewportMetrics.minWidth = viewportMetrics.width;
+      viewportMetrics.maxWidth = viewportMetrics.width;
+    }
+
+    if (shouldSendViewportMetrics.compareAndSet(false, true)) {
+      Log.d(
+          TAG,
+          "Resize was in response to the engine resizing the view. Not sending viewport metrics.");
+    } else {
+      sendViewportMetricsToFlutter();
+    }
   }
 
   @VisibleForTesting()
@@ -503,6 +574,7 @@ public class FlutterView extends FrameLayout
    * <p>We register for {@link androidx.window.layout.WindowInfoTracker} updates.
    */
   @Override
+  @RequiresApi(API_LEVELS.API_28)
   protected void onAttachedToWindow() {
     super.onAttachedToWindow();
     this.windowInfoRepo = createWindowInfoRepo();
@@ -536,7 +608,7 @@ public class FlutterView extends FrameLayout
    * Refresh {@link androidx.window.layout.WindowInfoTracker} and {@link android.view.DisplayCutout}
    * display features. Fold, hinge and cutout areas are populated here.
    */
-  @TargetApi(API_LEVELS.API_28)
+  @RequiresApi(API_LEVELS.API_28)
   protected void setWindowInfoListenerDisplayFeatures(WindowLayoutInfo layoutInfo) {
     List<DisplayFeature> newDisplayFeatures = layoutInfo.getDisplayFeatures();
     List<FlutterRenderer.DisplayFeature> flutterDisplayFeatures = new ArrayList<>();
@@ -547,7 +619,7 @@ public class FlutterView extends FrameLayout
       Log.v(
           TAG,
           "WindowInfoTracker Display Feature reported with bounds = "
-              + displayFeature.getBounds().toString()
+              + displayFeature.getBounds()
               + " and type = "
               + displayFeature.getClass().getSimpleName());
       if (displayFeature instanceof FoldingFeature) {
@@ -618,7 +690,7 @@ public class FlutterView extends FrameLayout
         return ZeroSides.RIGHT;
       } else if (rotation == Surface.ROTATION_270) {
         // In android API >= 23, the nav bar always appears on the "bottom" (USB) side.
-        return Build.VERSION.SDK_INT >= API_LEVELS.API_23 ? ZeroSides.LEFT : ZeroSides.RIGHT;
+        return ZeroSides.LEFT;
       }
       // Ambiguous orientation due to landscape left/right default. Zero both sides.
       else if (rotation == Surface.ROTATION_0 || rotation == Surface.ROTATION_180) {
@@ -989,9 +1061,7 @@ public class FlutterView extends FrameLayout
     findViewByAccessibilityIdTraversalMethod.setAccessible(true);
     try {
       return (View) findViewByAccessibilityIdTraversalMethod.invoke(this, accessibilityId);
-    } catch (IllegalAccessException exception) {
-      return null;
-    } catch (InvocationTargetException exception) {
+    } catch (IllegalAccessException | InvocationTargetException ignored) {
       return null;
     }
   }
@@ -1016,9 +1086,7 @@ public class FlutterView extends FrameLayout
       if (getAccessibilityViewIdMethod.invoke(currentView).equals(accessibilityId)) {
         return currentView;
       }
-    } catch (IllegalAccessException exception) {
-      return null;
-    } catch (InvocationTargetException exception) {
+    } catch (IllegalAccessException | InvocationTargetException ignored) {
       return null;
     }
     if (currentView instanceof ViewGroup) {
@@ -1047,8 +1115,6 @@ public class FlutterView extends FrameLayout
 
   // -------- Start: Mouse -------
   @Override
-  @TargetApi(API_LEVELS.API_24)
-  @RequiresApi(API_LEVELS.API_24)
   @NonNull
   public PointerIcon getSystemPointerIcon(int type) {
     return PointerIcon.getSystemIcon(getContext(), type);
@@ -1110,19 +1176,23 @@ public class FlutterView extends FrameLayout
     isFlutterUiDisplayed = flutterRenderer.isDisplayingFlutterUi();
     renderSurface.attachToRenderer(flutterRenderer);
     flutterRenderer.addIsDisplayingFlutterUiListener(flutterUiDisplayListener);
+    if (isContentSizingEnabled) {
+      flutterRenderer.addResizingFlutterUiListener(flutterUiResizeListener);
+    }
 
     // Initialize various components that know how to process Android View I/O
     // in a way that Flutter understands.
-    if (Build.VERSION.SDK_INT >= API_LEVELS.API_24) {
-      mouseCursorPlugin = new MouseCursorPlugin(this, this.flutterEngine.getMouseCursorChannel());
-    }
+    mouseCursorPlugin = new MouseCursorPlugin(this, this.flutterEngine.getMouseCursorChannel());
 
     textInputPlugin =
         new TextInputPlugin(
             this,
             this.flutterEngine.getTextInputChannel(),
             this.flutterEngine.getScribeChannel(),
-            this.flutterEngine.getPlatformViewsController());
+            this.flutterEngine
+                .getPlatformViewsController(), // TODO(gmackall): this can be changed to take a pvc
+            // delegator.
+            this.flutterEngine.getPlatformViewsController2());
 
     try {
       textServicesManager =
@@ -1143,13 +1213,14 @@ public class FlutterView extends FrameLayout
     keyboardManager = new KeyboardManager(this);
     androidTouchProcessor =
         new AndroidTouchProcessor(this.flutterEngine.getRenderer(), /*trackMotionEvents=*/ false);
+
     accessibilityBridge =
         new AccessibilityBridge(
             this,
             flutterEngine.getAccessibilityChannel(),
             (AccessibilityManager) getContext().getSystemService(Context.ACCESSIBILITY_SERVICE),
             getContext().getContentResolver(),
-            this.flutterEngine.getPlatformViewsController());
+            flutterEngine.getPlatformViewsControllerDelegator());
     accessibilityBridge.setOnAccessibilityChangeListener(onAccessibilityChangeListener);
     resetWillNotDraw(
         accessibilityBridge.isAccessibilityEnabled(),
@@ -1160,6 +1231,11 @@ public class FlutterView extends FrameLayout
     this.flutterEngine.getPlatformViewsController().attachAccessibilityBridge(accessibilityBridge);
     this.flutterEngine
         .getPlatformViewsController()
+        .attachToFlutterRenderer(this.flutterEngine.getRenderer());
+
+    this.flutterEngine.getPlatformViewsController2().attachAccessibilityBridge(accessibilityBridge);
+    this.flutterEngine
+        .getPlatformViewsController2()
         .attachToFlutterRenderer(this.flutterEngine.getRenderer());
 
     // Inform the Android framework that it should retrieve a new InputConnection
@@ -1179,6 +1255,7 @@ public class FlutterView extends FrameLayout
     sendViewportMetricsToFlutter();
 
     flutterEngine.getPlatformViewsController().attachToView(this);
+    flutterEngine.getPlatformViewsController2().attachToView(this);
 
     // Notify engine attachment listeners of the attachment.
     for (FlutterEngineAttachmentListener listener : flutterEngineAttachmentListeners) {
@@ -1219,9 +1296,11 @@ public class FlutterView extends FrameLayout
     getContext().getContentResolver().unregisterContentObserver(systemSettingsObserver);
 
     flutterEngine.getPlatformViewsController().detachFromView();
+    flutterEngine.getPlatformViewsController2().detachFromView();
 
     // Disconnect the FlutterEngine's PlatformViewsController from the AccessibilityBridge.
     flutterEngine.getPlatformViewsController().detachAccessibilityBridge();
+    flutterEngine.getPlatformViewsController2().detachAccessibilityBridge();
 
     // Disconnect and clean up the AccessibilityBridge.
     accessibilityBridge.release();
@@ -1246,6 +1325,9 @@ public class FlutterView extends FrameLayout
     FlutterRenderer flutterRenderer = flutterEngine.getRenderer();
     isFlutterUiDisplayed = false;
     flutterRenderer.removeIsDisplayingFlutterUiListener(flutterUiDisplayListener);
+    if (isContentSizingEnabled) {
+      flutterRenderer.removeResizingFlutterUiListener(flutterUiResizeListener);
+    }
     flutterRenderer.stopRenderingToSurface();
     flutterRenderer.setSemanticsEnabled(false);
 
@@ -1321,6 +1403,7 @@ public class FlutterView extends FrameLayout
       Log.v(TAG, "Tried to revert the image view, but no previous surface was used.");
       return;
     }
+
     renderSurface = previousRenderSurface;
     previousRenderSurface = null;
 
@@ -1436,13 +1519,14 @@ public class FlutterView extends FrameLayout
       if (Build.VERSION.SDK_INT >= API_LEVELS.API_31) {
         List<SpellCheckerInfo> enabledSpellCheckerInfos =
             textServicesManager.getEnabledSpellCheckerInfos();
-        boolean gboardSpellCheckerEnabled =
-            enabledSpellCheckerInfos.stream()
-                .anyMatch(
-                    spellCheckerInfo ->
-                        spellCheckerInfo
-                            .getPackageName()
-                            .equals("com.google.android.inputmethod.latin"));
+        boolean gboardSpellCheckerEnabled = false;
+
+        for (SpellCheckerInfo spellCheckerInfo : enabledSpellCheckerInfos) {
+          if (spellCheckerInfo.getPackageName().equals(GBOARD_PACKAGE_NAME)) {
+            gboardSpellCheckerEnabled = true;
+            break;
+          }
+        }
 
         // Checks if enabled spell checker is the one that is suppported by Gboard, which is
         // the one Flutter supports by default.
@@ -1475,6 +1559,13 @@ public class FlutterView extends FrameLayout
     this.delegate = delegate;
   }
 
+  @Override
+  protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+    widthMode = MeasureSpec.getMode(widthMeasureSpec);
+    heightMode = MeasureSpec.getMode(heightMeasureSpec);
+    super.onMeasure(widthMeasureSpec, heightMeasureSpec);
+  }
+
   private void sendViewportMetricsToFlutter() {
     if (!isAttachedToFlutterEngine()) {
       Log.w(
@@ -1486,7 +1577,6 @@ public class FlutterView extends FrameLayout
 
     viewportMetrics.devicePixelRatio = getResources().getDisplayMetrics().density;
     viewportMetrics.physicalTouchSlop = ViewConfiguration.get(getContext()).getScaledTouchSlop();
-
     flutterEngine.getRenderer().setViewportMetrics(viewportMetrics);
   }
 

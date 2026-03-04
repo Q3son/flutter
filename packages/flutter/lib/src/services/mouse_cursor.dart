@@ -260,7 +260,7 @@ class _DeferringMouseCursor extends MouseCursor {
 
   /// Returns the first cursor that is not a [MouseCursor.defer].
   static MouseCursor? firstNonDeferred(Iterable<MouseCursor> cursors) {
-    for (final MouseCursor cursor in cursors) {
+    for (final cursor in cursors) {
       if (cursor != MouseCursor.defer) {
         return cursor;
       }
@@ -408,8 +408,7 @@ abstract final class SystemMouseCursors {
   //
   // * Android: shell/platform/android/io/flutter/plugin/mouse/MouseCursorPlugin.java
   // * Web: lib/web_ui/lib/src/engine/mouse_cursor.dart
-  // * Windows: shell/platform/windows/win32_flutter_window_win32.cc
-  // * Windows UWP: shell/platform/windows/win32_flutter_window_winuwp.cc
+  // * Windows: shell/platform/windows/flutter_windows_engine.cc
   // * Linux: shell/platform/linux/fl_mouse_cursor_plugin.cc
   // * macOS: shell/platform/darwin/macos/framework/Source/FlutterMouseCursorPlugin.mm
 

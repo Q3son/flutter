@@ -3,6 +3,7 @@
 // found in the LICENSE file.
 
 import 'package:args/args.dart';
+import 'package:package_config/package_config.dart';
 import 'package:unified_analytics/unified_analytics.dart';
 
 import '../base/common.dart';
@@ -12,21 +13,17 @@ import '../build_info.dart';
 import '../build_system/build_system.dart';
 import '../build_system/targets/localizations.dart';
 import '../cache.dart';
-import '../dart/generate_synthetic_packages.dart';
 import '../dart/package_map.dart';
 import '../dart/pub.dart';
 import '../flutter_plugins.dart';
 import '../globals.dart' as globals;
+import '../package_graph.dart';
 import '../plugins.dart';
 import '../project.dart';
-import '../reporting/reporting.dart';
 import '../runner/flutter_command.dart';
 
-/// The function signature of the [print] function.
-typedef PrintFn = void Function(Object?);
-
 class PackagesCommand extends FlutterCommand {
-  PackagesCommand({PrintFn usagePrintFn = print}) : _usagePrintFn = usagePrintFn {
+  PackagesCommand() {
     addSubcommand(
       PackagesGetCommand('get', "Get the current package's dependencies.", PubContext.pubGet),
     );
@@ -87,25 +84,20 @@ class PackagesCommand extends FlutterCommand {
     addSubcommand(PackagesPassthroughCommand());
   }
 
-  final PrintFn _usagePrintFn;
-
   @override
-  final String name = 'pub';
+  final name = 'pub';
 
   @override
   List<String> get aliases => const <String>['packages'];
 
   @override
-  final String description = 'Commands for managing Flutter packages.';
+  final description = 'Commands for managing Flutter packages.';
 
   @override
   String get category => FlutterCommandCategory.project;
 
   @override
   Future<FlutterCommandResult> runCommand() async => FlutterCommandResult.fail();
-
-  @override
-  void printUsage() => _usagePrintFn(usage);
 }
 
 class PackagesTestCommand extends FlutterCommand {
@@ -169,8 +161,8 @@ class PackagesForwardCommand extends FlutterCommand {
 
   @override
   Future<FlutterCommandResult> runCommand() async {
-    final List<String> subArgs =
-        argResults!.rest.toList()..removeWhere((String arg) => arg == '--');
+    final List<String> subArgs = argResults!.rest.toList()
+      ..removeWhere((String arg) => arg == '--');
     await pub.interactively(
       <String>[_commandName, ...subArgs],
       context: context,
@@ -244,7 +236,7 @@ class PackagesGetCommand extends FlutterCommand {
   ///
   /// commands accept.
   ArgParser get _permissiveArgParser {
-    final ArgParser argParser = ArgParser();
+    final argParser = ArgParser();
     argParser.addOption('directory', abbr: 'C');
     argParser.addFlag('offline');
     argParser.addFlag('dry-run', abbr: 'n');
@@ -252,7 +244,6 @@ class PackagesGetCommand extends FlutterCommand {
     argParser.addFlag('enforce-lockfile');
     argParser.addFlag('precompile');
     argParser.addFlag('major-versions');
-    argParser.addFlag('null-safety');
     argParser.addFlag('example', defaultsTo: true);
     argParser.addOption('sdk');
     argParser.addOption('path');
@@ -268,11 +259,11 @@ class PackagesGetCommand extends FlutterCommand {
   @override
   Future<FlutterCommandResult> runCommand() async {
     final List<String> rest = argResults!.rest;
-    bool isHelp = false;
-    bool example = true;
-    bool exampleWasParsed = false;
+    var isHelp = false;
+    var example = true;
+    var exampleWasParsed = false;
     String? directoryOption;
-    bool dryRun = false;
+    var dryRun = false;
     try {
       final ArgResults results = _permissiveArgParser.parse(rest);
       isHelp = results['help'] as bool;
@@ -298,47 +289,11 @@ class PackagesGetCommand extends FlutterCommand {
 
       rootProject = FlutterProject.fromDirectory(globals.fs.directory(target));
       _rootProject = rootProject;
-
-      final Environment environment = Environment(
-        artifacts: globals.artifacts!,
-        logger: globals.logger,
-        cacheDir: globals.cache.getRoot(),
-        engineVersion: globals.flutterVersion.engineRevision,
-        fileSystem: globals.fs,
-        flutterRootDir: globals.fs.directory(Cache.flutterRoot),
-        outputDir: globals.fs.directory(getBuildDirectory()),
-        processManager: globals.processManager,
-        platform: globals.platform,
-        usage: globals.flutterUsage,
-        analytics: analytics,
-        projectDir: rootProject.directory,
-        packageConfigPath: packageConfigPath(),
-        generateDartPluginRegistry: true,
-      );
-      if (rootProject.manifest.generateLocalizations &&
-          !await generateLocalizationsSyntheticPackage(
-            environment: environment,
-            buildSystem: globals.buildSystem,
-            buildTargets: globals.buildTargets,
-          )) {
-        // If localizations were enabled, but we are not using synthetic packages.
-        final BuildResult result = await globals.buildSystem.build(
-          const GenerateLocalizationsTarget(),
-          environment,
-        );
-        if (result.hasException) {
-          throwToolExit(
-            'Generating synthetic localizations package failed with ${result.exceptions.length} ${pluralize('error', result.exceptions.length)}:'
-            '\n\n'
-            '${result.exceptions.values.map<Object?>((ExceptionMeasurement e) => e.exception).join('\n\n')}',
-          );
-        }
-      }
     }
     final String? relativeTarget = target == null ? null : globals.fs.path.relative(target);
 
     final List<String> subArgs = rest.toList()..removeWhere((String arg) => arg == '--');
-    final Stopwatch timer = Stopwatch()..start();
+    final timer = Stopwatch()..start();
     try {
       await pub.interactively(
         <String>[
@@ -357,7 +312,6 @@ class PackagesGetCommand extends FlutterCommand {
         touchesPackageConfig: !(isHelp || dryRun),
       );
       final Duration elapsedDuration = timer.elapsed;
-      globals.flutterUsage.sendTiming('pub', 'get', elapsedDuration, label: 'success');
       analytics.send(
         Event.timing(
           workflow: 'pub',
@@ -368,9 +322,7 @@ class PackagesGetCommand extends FlutterCommand {
       );
       // Not limiting to catching Exception because the exception is rethrown.
     } catch (_) {
-      // ignore: avoid_catches_without_on_clauses
       final Duration elapsedDuration = timer.elapsed;
-      globals.flutterUsage.sendTiming('pub', 'get', elapsedDuration, label: 'failure');
       analytics.send(
         Event.timing(
           workflow: 'pub',
@@ -383,60 +335,92 @@ class PackagesGetCommand extends FlutterCommand {
     }
 
     if (rootProject != null) {
-      // We need to regenerate the platform specific tooling for both the project
-      // itself and example(if present).
-      await rootProject.regeneratePlatformSpecificTooling();
-      if (example && rootProject.hasExampleApp && rootProject.example.pubspecFile.existsSync()) {
-        final FlutterProject exampleProject = rootProject.example;
-        await exampleProject.regeneratePlatformSpecificTooling();
+      // Walk through all workspace projects,and generate platform specific
+      // tooling if needed.
+      final PackageConfig packageConfig = await loadPackageConfigWithLogging(
+        rootProject.packageConfig,
+        logger: globals.logger,
+      );
+      final PackageGraph graph = PackageGraph.load(rootProject);
+      // Iterate all root packages in the pub workspace to do Flutter specific
+      // generation.
+      for (final String workspaceRootName in graph.roots) {
+        final Package? rootPackage = packageConfig[workspaceRootName];
+        assert(rootPackage != null);
+        final Uri rootUri = rootPackage!.root;
+
+        final FlutterProject project = FlutterProject.fromDirectory(globals.fs.directory(rootUri));
+
+        final environment = Environment(
+          artifacts: globals.artifacts!,
+          logger: globals.logger,
+          cacheDir: globals.cache.getRoot(),
+          engineVersion: globals.flutterVersion.engineRevision,
+          fileSystem: globals.fs,
+          flutterRootDir: globals.fs.directory(Cache.flutterRoot),
+          outputDir: globals.fs.directory(getBuildDirectory()),
+          processManager: globals.processManager,
+          platform: globals.platform,
+          analytics: analytics,
+          projectDir: project.directory,
+          packageConfigPath: packageConfigPath(),
+          generateDartPluginRegistry: true,
+        );
+        if (project.manifest.generateLocalizations) {
+          // If localizations were enabled, but we are not using synthetic packages.
+          final BuildResult result = await globals.buildSystem.build(
+            const GenerateLocalizationsTarget(),
+            environment,
+          );
+          if (result.hasException) {
+            throwToolExit(
+              'Generating synthetic localizations package failed with ${result.exceptions.length} ${pluralize('error', result.exceptions.length)}:'
+              '\n\n'
+              '${result.exceptions.values.map<Object?>((ExceptionMeasurement e) => e.exception).join('\n\n')}',
+            );
+          }
+        }
+
+        // TODO(matanlurey): https://github.com/flutter/flutter/issues/163774.
+        //
+        // `flutter packages get` inherently is neither a debug or release build,
+        // and since a future build (`flutter build apk`) will regenerate tooling
+        // anyway, we assume this is fine.
+        //
+        // It won't be if they do `flutter build --no-pub`, though.
+        const ignoreReleaseModeSinceItsNotABuildAndHopeItWorks = false;
+
+        // We need to regenerate the platform specific tooling for both the project
+        // itself and example(if present).
+        await project.regeneratePlatformSpecificTooling(
+          releaseMode: ignoreReleaseModeSinceItsNotABuildAndHopeItWorks,
+        );
+        if (example && project.hasExampleApp && project.example.pubspecFile.existsSync()) {
+          final FlutterProject exampleProject = project.example;
+          await exampleProject.regeneratePlatformSpecificTooling(
+            releaseMode: ignoreReleaseModeSinceItsNotABuildAndHopeItWorks,
+          );
+        }
       }
     }
 
     return FlutterCommandResult.success();
   }
 
-  late final Future<List<Plugin>> _pluginsFound =
-      (() async {
-        final FlutterProject? rootProject = _rootProject;
-        if (rootProject == null) {
-          return <Plugin>[];
-        }
-
-        return findPlugins(rootProject, throwOnError: false);
-      })();
-
-  late final String? _androidEmbeddingVersion =
-      _rootProject?.android.getEmbeddingVersion().toString().split('.').last;
-
-  /// The pub packages usage values are incorrect since these are calculated/sent
-  /// before pub get completes. This needs to be performed after dependency resolution.
-  @override
-  Future<CustomDimensions> get usageValues async {
+  late final Future<List<Plugin>> _pluginsFound = (() async {
     final FlutterProject? rootProject = _rootProject;
     if (rootProject == null) {
-      return const CustomDimensions();
+      return <Plugin>[];
     }
 
-    int numberPlugins;
-    // Do not send plugin analytics if pub has not run before.
-    final bool hasPlugins =
-        rootProject.flutterPluginsDependenciesFile.existsSync() &&
-        findPackageConfigFile(rootProject.directory) != null;
-    if (hasPlugins) {
-      // Do not fail pub get if package config files are invalid before pub has
-      // had a chance to run.
-      final List<Plugin> plugins = await _pluginsFound;
-      numberPlugins = plugins.length;
-    } else {
-      numberPlugins = 0;
-    }
+    return findPlugins(rootProject, throwOnError: false);
+  })();
 
-    return CustomDimensions(
-      commandPackagesNumberPlugins: numberPlugins,
-      commandPackagesProjectModule: rootProject.isModule,
-      commandPackagesAndroidEmbeddingVersion: _androidEmbeddingVersion,
-    );
-  }
+  late final String? _androidEmbeddingVersion = _rootProject?.android
+      .getEmbeddingVersion()
+      .toString()
+      .split('.')
+      .last;
 
   /// The pub packages usage values are incorrect since these are calculated/sent
   /// before pub get completes. This needs to be performed after dependency resolution.

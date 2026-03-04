@@ -98,6 +98,18 @@ const double _kTopLevelMenuHorizontalMinPadding = 4;
 typedef MenuAnchorChildBuilder =
     Widget Function(BuildContext context, MenuController controller, Widget? child);
 
+class _MenuAnchorScope extends InheritedWidget {
+  const _MenuAnchorScope({required this.state, required super.child});
+
+  final _MenuAnchorState state;
+
+  @override
+  bool updateShouldNotify(_MenuAnchorScope oldWidget) {
+    assert(oldWidget.state == state, 'The state of a MenuAnchor should not change.');
+    return false;
+  }
+}
+
 /// A widget used to mark the "anchor" for a set of submenus, defining the
 /// rectangle used to position the menu, which can be done either with an
 /// explicit location, or with an alignment.
@@ -108,6 +120,11 @@ typedef MenuAnchorChildBuilder =
 /// The [MenuAnchor] is meant to be a slightly lower level interface than
 /// [MenuBar], used in situations where a [MenuBar] isn't appropriate, or to
 /// construct widgets or screen regions that have submenus.
+///
+/// To programmatically control a [MenuAnchor], like opening or closing it, or checking its state,
+/// you can get its associated [MenuController]. Use `MenuController.maybeOf(BuildContext context)`
+/// to retrieve the controller for the closest [MenuAnchor] ancestor of a given [BuildContext].
+/// More detailed usage of [MenuController] is available in its class documentation.
 ///
 /// {@tool dartpad}
 /// This example shows how to use a [MenuAnchor] to wrap a button and open a
@@ -131,6 +148,9 @@ typedef MenuAnchorChildBuilder =
 ///
 /// ** See code in examples/api/lib/material/menu_anchor/menu_anchor.3.dart **
 /// {@end-tool}
+///
+/// The [MenuStyle.visualDensity] setting only affects horizontal padding,
+/// and it will never make it negative. Vertical padding is not affected at all.
 class MenuAnchor extends StatefulWidget {
   /// Creates a const [MenuAnchor].
   ///
@@ -141,6 +161,7 @@ class MenuAnchor extends StatefulWidget {
     this.childFocusNode,
     this.style,
     this.alignmentOffset = Offset.zero,
+    this.reservedPadding,
     this.layerLink,
     this.clipBehavior = Clip.hardEdge,
     @Deprecated(
@@ -152,6 +173,7 @@ class MenuAnchor extends StatefulWidget {
     this.onOpen,
     this.onClose,
     this.crossAxisUnconstrained = true,
+    this.useRootOverlay = false,
     required this.menuChildren,
     this.builder,
     this.child,
@@ -266,6 +288,11 @@ class MenuAnchor extends StatefulWidget {
   /// be constrained in both main axis and cross axis, such as a [DropdownMenu].
   final bool crossAxisUnconstrained;
 
+  /// {@macro flutter.widgets.RawMenuAnchor.useRootOverlay}
+  ///
+  /// Defaults to false.
+  final bool useRootOverlay;
+
   /// A list of children containing the menu items that are the contents of the
   /// menu surrounded by this [MenuAnchor].
   ///
@@ -292,6 +319,11 @@ class MenuAnchor extends StatefulWidget {
   /// to rebuild this child when those change.
   final Widget? child;
 
+  /// The padding between the edge of the safe area and the menu panel.
+  ///
+  /// Defaults to EdgeInsets.all(8).
+  final EdgeInsetsGeometry? reservedPadding;
+
   @override
   State<MenuAnchor> createState() => _MenuAnchorState();
 
@@ -314,215 +346,86 @@ class MenuAnchor extends StatefulWidget {
 }
 
 class _MenuAnchorState extends State<MenuAnchor> {
-  // This is the global key that is used later to determine the bounding rect
-  // for the anchor's region that the CustomSingleChildLayout's delegate
-  // uses to determine where to place the menu on the screen and to avoid the
-  // view's edges.
-  final GlobalKey<_MenuAnchorState> _anchorKey = GlobalKey<_MenuAnchorState>(
-    debugLabel: kReleaseMode ? null : 'MenuAnchor',
-  );
-  _MenuAnchorState? _parent;
-  late final FocusScopeNode _menuScopeNode;
-  MenuController? _internalMenuController;
-  final List<_MenuAnchorState> _anchorChildren = <_MenuAnchorState>[];
-  ScrollPosition? _scrollPosition;
-  Size? _viewSize;
-  final OverlayPortalController _overlayController = OverlayPortalController(
-    debugLabel: kReleaseMode ? null : 'MenuAnchor controller',
-  );
-  Offset? _menuPosition;
   Axis get _orientation => Axis.vertical;
-  bool get _isOpen => _overlayController.isShowing;
-  bool get _isRoot => _parent == null;
   MenuController get _menuController => widget.controller ?? _internalMenuController!;
+  MenuController? _internalMenuController;
+  final FocusScopeNode _menuScopeNode = FocusScopeNode();
+  _MenuAnchorState? get _parent => _MenuAnchorState._maybeOf(context);
 
   @override
   void initState() {
     super.initState();
-    _menuScopeNode = FocusScopeNode(
-      debugLabel: kReleaseMode ? null : '${describeIdentity(this)} Sub Menu',
-    );
     if (widget.controller == null) {
       _internalMenuController = MenuController();
     }
-    _menuController._attach(this);
-  }
-
-  @override
-  void dispose() {
-    assert(_debugMenuInfo('Disposing of $this'));
-    if (_isOpen) {
-      _close(inDispose: true);
-    }
-
-    _parent?._removeChild(this);
-    _parent = null;
-    _anchorChildren.clear();
-    _menuController._detach(this);
-    _internalMenuController = null;
-    _menuScopeNode.dispose();
-    super.dispose();
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    final _MenuAnchorState? newParent = _MenuAnchorState._maybeOf(context);
-    if (newParent != _parent) {
-      _parent?._removeChild(this);
-      _parent = newParent;
-      _parent?._addChild(this);
-    }
-    _scrollPosition?.isScrollingNotifier.removeListener(_handleScroll);
-    _scrollPosition = Scrollable.maybeOf(context)?.position;
-    _scrollPosition?.isScrollingNotifier.addListener(_handleScroll);
-    final Size newSize = MediaQuery.sizeOf(context);
-    if (_viewSize != null && newSize != _viewSize) {
-      // Close the menus if the view changes size.
-      _root._close();
-    }
-    _viewSize = newSize;
   }
 
   @override
   void didUpdateWidget(MenuAnchor oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.controller != widget.controller) {
-      oldWidget.controller?._detach(this);
-      if (widget.controller != null) {
-        _internalMenuController?._detach(this);
-        _internalMenuController = null;
-        widget.controller?._attach(this);
+      if (widget.controller == null) {
+        _internalMenuController = MenuController();
       } else {
-        assert(_internalMenuController == null);
-        _internalMenuController = MenuController().._attach(this);
+        _internalMenuController = null;
       }
     }
-    assert(_menuController._anchor == this);
+  }
+
+  @override
+  void dispose() {
+    assert(_debugMenuInfo('Disposing of $this'));
+    _internalMenuController = null;
+    _menuScopeNode.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    Widget contents = _buildContents(context);
-    if (widget.layerLink != null) {
-      contents = CompositedTransformTarget(link: widget.layerLink!, child: contents);
-    }
-
-    Widget child = OverlayPortal(
-      controller: _overlayController,
-      overlayChildBuilder: (BuildContext context) {
-        return _Submenu(
-          anchor: this,
-          layerLink: widget.layerLink,
-          menuStyle: widget.style,
-          alignmentOffset: widget.alignmentOffset ?? Offset.zero,
-          menuPosition: _menuPosition,
-          clipBehavior: widget.clipBehavior,
-          menuChildren: widget.menuChildren,
-          crossAxisUnconstrained: widget.crossAxisUnconstrained,
-        );
-      },
-      child: contents,
-    );
-
-    if (!widget.anchorTapClosesMenu) {
-      child = TapRegion(
-        groupId: _root,
-        consumeOutsideTaps: _root._isOpen && widget.consumeOutsideTap,
-        onTapOutside: (PointerDownEvent event) {
-          assert(_debugMenuInfo('Tapped Outside ${widget.controller}'));
-          _closeChildren();
-        },
-        child: child,
-      );
-    }
-
-    // This `Shortcuts` is needed so that shortcuts work when the focus is on
-    // MenuAnchor (specifically, the root menu, since submenus have their own
-    // `Shortcuts`).
-    return Shortcuts(
-      shortcuts: _kMenuTraversalShortcuts,
-      // Ignore semantics here and since the same information is typically
-      // also provided by the children.
-      includeSemantics: false,
-      child: _MenuAnchorScope(anchorKey: _anchorKey, anchor: this, isOpen: _isOpen, child: child),
-    );
-  }
-
-  Widget _buildContents(BuildContext context) {
-    return Actions(
-      actions: <Type, Action<Intent>>{
-        DismissIntent: DismissMenuAction(controller: _menuController),
-      },
-      child: Builder(
-        key: _anchorKey,
-        builder: (BuildContext context) {
-          return widget.builder?.call(context, _menuController, widget.child) ??
-              widget.child ??
-              const SizedBox();
-        },
+    final Widget child = _MenuAnchorScope(
+      state: this,
+      child: RawMenuAnchor(
+        useRootOverlay: widget.useRootOverlay,
+        onOpen: widget.onOpen,
+        onClose: widget.onClose,
+        consumeOutsideTaps: widget.consumeOutsideTap,
+        controller: _menuController,
+        childFocusNode: widget.childFocusNode,
+        overlayBuilder: _buildOverlay,
+        builder: widget.builder,
+        child: widget.child,
       ),
     );
-  }
 
-  // Returns the first focusable item in the submenu, where "first" is
-  // determined by the focus traversal policy.
-  FocusNode? get _firstItemFocusNode {
-    if (_menuScopeNode.context == null) {
-      return null;
+    if (widget.layerLink == null) {
+      return child;
     }
-    final FocusTraversalPolicy policy =
-        FocusTraversalGroup.maybeOf(_menuScopeNode.context!) ?? ReadingOrderTraversalPolicy();
-    return policy.findFirstFocus(_menuScopeNode, ignoreCurrentFocus: true);
+
+    return CompositedTransformTarget(link: widget.layerLink!, child: child);
   }
 
-  FocusNode? get _lastItemFocusNode {
-    if (_menuScopeNode.context == null) {
-      return null;
-    }
-    final FocusTraversalPolicy policy =
-        FocusTraversalGroup.maybeOf(_menuScopeNode.context!) ?? ReadingOrderTraversalPolicy();
-    return policy.findLastFocus(_menuScopeNode, ignoreCurrentFocus: true);
-  }
-
-  void _addChild(_MenuAnchorState child) {
-    assert(_isRoot || _debugMenuInfo('Added root child: $child'));
-    assert(!_anchorChildren.contains(child));
-    _anchorChildren.add(child);
-    assert(_debugMenuInfo('Added:\n${child.widget.toStringDeep()}'));
-    assert(_debugMenuInfo('Tree:\n${widget.toStringDeep()}'));
-  }
-
-  void _removeChild(_MenuAnchorState child) {
-    assert(_isRoot || _debugMenuInfo('Removed root child: $child'));
-    assert(_anchorChildren.contains(child));
-    assert(_debugMenuInfo('Removing:\n${child.widget.toStringDeep()}'));
-    _anchorChildren.remove(child);
-    assert(_debugMenuInfo('Tree:\n${widget.toStringDeep()}'));
+  Widget _buildOverlay(BuildContext context, RawMenuOverlayInfo position) {
+    return _Submenu(
+      layerLink: widget.layerLink,
+      consumeOutsideTaps: widget.consumeOutsideTap,
+      menuScopeNode: _menuScopeNode,
+      menuStyle: widget.style,
+      clipBehavior: widget.clipBehavior,
+      menuChildren: widget.menuChildren,
+      crossAxisUnconstrained: widget.crossAxisUnconstrained,
+      menuPosition: position,
+      anchor: this,
+      alignmentOffset: widget.alignmentOffset ?? Offset.zero,
+      reservedPadding: widget.reservedPadding ?? const EdgeInsets.all(_kMenuViewPadding),
+    );
   }
 
   _MenuAnchorState get _root {
-    _MenuAnchorState anchor = this;
+    var anchor = this;
     while (anchor._parent != null) {
       anchor = anchor._parent!;
     }
     return anchor;
-  }
-
-  void _childChangedOpenState() {
-    _parent?._childChangedOpenState();
-    assert(mounted);
-    if (SchedulerBinding.instance.schedulerPhase != SchedulerPhase.persistentCallbacks) {
-      setState(() {
-        // Mark dirty now, but only if not in a build.
-      });
-    } else {
-      SchedulerBinding.instance.addPostFrameCallback((Duration _) {
-        setState(() {
-          // Mark dirty after this frame, but only if in a build.
-        });
-      });
-    }
   }
 
   void _focusButton() {
@@ -533,172 +436,35 @@ class _MenuAnchorState extends State<MenuAnchor> {
     widget.childFocusNode!.requestFocus();
   }
 
-  void _handleScroll() {
-    // If an ancestor scrolls, and we're a root anchor, then close the menus.
-    // Don't just close it on *any* scroll, since we want to be able to scroll
-    // menus themselves if they're too big for the view.
-    if (_isRoot) {
-      _close();
-    }
-  }
-
-  /// Open the menu, optionally at a position relative to the [MenuAnchor].
-  ///
-  /// Call this when the menu should be shown to the user.
-  ///
-  /// The optional `position` argument will specify the location of the menu in
-  /// the local coordinates of the [MenuAnchor], ignoring any
-  /// [MenuStyle.alignment] and/or [MenuAnchor.alignmentOffset] that were
-  /// specified.
-  void _open({Offset? position}) {
-    assert(_menuController._anchor == this);
-    if (_isOpen && position == null) {
-      assert(_debugMenuInfo("Not opening $this because it's already open"));
+  void _focusFirstMenuItem() {
+    if (_menuScopeNode.context?.mounted != true) {
       return;
     }
-    if (_isOpen && position != null) {
-      // The menu is already open, but we need to move to another location, so
-      // close it first.
-      _close();
-    }
-    assert(
-      _debugMenuInfo(
-        'Opening $this at ${position ?? Offset.zero} with alignment offset ${widget.alignmentOffset ?? Offset.zero}',
-      ),
-    );
-    _parent?._closeChildren(); // Close all siblings.
-    assert(!_overlayController.isShowing);
-
-    _parent?._childChangedOpenState();
-    _menuPosition = position;
-    _overlayController.show();
-
-    if (_isRoot) {
-      _focusButton();
-    }
-
-    widget.onOpen?.call();
-    if (mounted && SchedulerBinding.instance.schedulerPhase != SchedulerPhase.persistentCallbacks) {
-      setState(() {
-        // Mark dirty to ensure UI updates
-      });
+    final FocusTraversalPolicy policy =
+        FocusTraversalGroup.maybeOf(_menuScopeNode.context!) ?? ReadingOrderTraversalPolicy();
+    final FocusNode? firstFocus = policy.findFirstFocus(_menuScopeNode, ignoreCurrentFocus: true);
+    if (firstFocus != null) {
+      firstFocus.requestFocus();
     }
   }
 
-  /// Close the menu.
-  ///
-  /// Call this when the menu should be closed. Has no effect if the menu is
-  /// already closed.
-  void _close({bool inDispose = false}) {
-    assert(_debugMenuInfo('Closing $this'));
-    if (!_isOpen) {
+  void _focusLastMenuItem() {
+    if (_menuScopeNode.context?.mounted != true) {
       return;
     }
-    _closeChildren(inDispose: inDispose);
-    // Don't hide if we're in the middle of a build.
-    if (SchedulerBinding.instance.schedulerPhase != SchedulerPhase.persistentCallbacks) {
-      _overlayController.hide();
-    } else if (!inDispose) {
-      SchedulerBinding.instance.addPostFrameCallback((_) {
-        _overlayController.hide();
-      }, debugLabel: 'MenuAnchor.hide');
-    }
-    if (!inDispose) {
-      // Notify that _childIsOpen changed state, but only if not
-      // currently disposing.
-      _parent?._childChangedOpenState();
-      widget.onClose?.call();
-      if (mounted &&
-          SchedulerBinding.instance.schedulerPhase != SchedulerPhase.persistentCallbacks) {
-        setState(() {
-          // Mark dirty, but only if mounted and not in a build.
-        });
-      }
-    }
+    final FocusTraversalPolicy policy =
+        FocusTraversalGroup.maybeOf(_menuScopeNode.context!) ?? ReadingOrderTraversalPolicy();
+    final FocusNode lastFocus = policy.findLastFocus(_menuScopeNode, ignoreCurrentFocus: true);
+    lastFocus.requestFocus();
   }
 
-  void _closeChildren({bool inDispose = false}) {
-    assert(_debugMenuInfo('Closing children of $this${inDispose ? ' (dispose)' : ''}'));
-    for (final _MenuAnchorState child in List<_MenuAnchorState>.from(_anchorChildren)) {
-      child._close(inDispose: inDispose);
-    }
-  }
-
-  // Returns the active anchor in the given context, if any, and creates a
-  // dependency relationship that will rebuild the context when the node
-  // changes.
   static _MenuAnchorState? _maybeOf(BuildContext context) {
-    return context.dependOnInheritedWidgetOfExactType<_MenuAnchorScope>()?.anchor;
+    return context.getInheritedWidgetOfExactType<_MenuAnchorScope>()?.state;
   }
 
   @override
   String toString({DiagnosticLevel minLevel = DiagnosticLevel.debug}) {
     return describeIdentity(this);
-  }
-}
-
-/// A controller to manage a menu created by a [MenuBar] or [MenuAnchor].
-///
-/// A [MenuController] is used to control and interrogate a menu after it has
-/// been created, with methods such as [open] and [close], and state accessors
-/// like [isOpen].
-///
-/// See also:
-///
-/// * [MenuAnchor], a widget that defines a region that has submenu.
-/// * [MenuBar], a widget that creates a menu bar, that can take an optional
-///   [MenuController].
-/// * [SubmenuButton], a widget that has a button that manages a submenu.
-class MenuController {
-  /// The anchor that this controller controls.
-  ///
-  /// This is set automatically when a [MenuController] is given to the anchor
-  /// it controls.
-  _MenuAnchorState? _anchor;
-
-  /// Whether or not the associated menu is currently open.
-  bool get isOpen {
-    return _anchor?._isOpen ?? false;
-  }
-
-  /// Close the menu that this menu controller is associated with.
-  ///
-  /// Associating with a menu is done by passing a [MenuController] to a
-  /// [MenuAnchor]. A [MenuController] is also be received by the
-  /// [MenuAnchor.builder] when invoked.
-  ///
-  /// If the menu's anchor point (either a [MenuBar] or a [MenuAnchor]) is
-  /// scrolled by an ancestor, or the view changes size, then any open menu will
-  /// automatically close.
-  void close() {
-    _anchor?._close();
-  }
-
-  /// Opens the menu that this menu controller is associated with.
-  ///
-  /// If `position` is given, then the menu will open at the position given, in
-  /// the coordinate space of the [MenuAnchor] this controller is attached to.
-  ///
-  /// If given, the `position` will override the [MenuAnchor.alignmentOffset]
-  /// given to the [MenuAnchor].
-  ///
-  /// If the menu's anchor point (either a [MenuBar] or a [MenuAnchor]) is
-  /// scrolled by an ancestor, or the view changes size, then any open menu will
-  /// automatically close.
-  void open({Offset? position}) {
-    assert(_anchor != null);
-    _anchor!._open(position: position);
-  }
-
-  // ignore: use_setters_to_change_properties
-  void _attach(_MenuAnchorState anchor) {
-    _anchor = anchor;
-  }
-
-  void _detach(_MenuAnchorState anchor) {
-    if (_anchor == anchor) {
-      _anchor = null;
-    }
   }
 }
 
@@ -1173,7 +939,7 @@ class _MenuItemButtonState extends State<MenuItemButton> {
       autofocus: widget.enabled && widget.autofocus,
       statesController: widget.statesController,
       clipBehavior: widget.clipBehavior,
-      isSemanticButton: null,
+      isSemanticButton: kIsWeb ? true : null,
       child: _MenuItemLabel(
         leadingIcon: widget.leadingIcon,
         shortcut: widget.shortcut,
@@ -1199,7 +965,7 @@ class _MenuItemButtonState extends State<MenuItemButton> {
   void _handleFocusChange() {
     if (!_focusNode.hasPrimaryFocus) {
       // Close any child menus of this button's menu.
-      _MenuAnchorState._maybeOf(context)?._closeChildren();
+      MenuController.maybeOf(context)?.closeChildren();
     }
   }
 
@@ -1230,7 +996,7 @@ class _MenuItemButtonState extends State<MenuItemButton> {
   void _handleSelect() {
     assert(_debugMenuInfo('Selected ${widget.child} menu'));
     if (widget.closeOnActivate) {
-      _MenuAnchorState._maybeOf(context)?._root._close();
+      _anchor?._root._menuController.close();
     }
     // Delay the call to onPressed until post-frame so that the focus is
     // restored to what it was before the menu was opened before the action is
@@ -1409,19 +1175,18 @@ class CheckboxMenuButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return MenuItemButton(
       key: key,
-      onPressed:
-          onChanged == null
-              ? null
-              : () {
-                switch (value) {
-                  case false:
-                    onChanged!(true);
-                  case true:
-                    onChanged!(tristate ? null : false);
-                  case null:
-                    onChanged!(false);
-                }
-              },
+      onPressed: onChanged == null
+          ? null
+          : () {
+              switch (value) {
+                case false:
+                  onChanged!(true);
+                case true:
+                  onChanged!(tristate ? null : false);
+                case null:
+                  onChanged!(false);
+              }
+            },
       onHover: onHover,
       onFocusChange: onFocusChange,
       focusNode: focusNode,
@@ -1506,8 +1271,8 @@ class RadioMenuButton<T> extends StatelessWidget {
   /// To indicate returning to an indeterminate state, [onChanged] will be
   /// called with null.
   ///
-  /// If true, [onChanged] can be called with [value] when selected while
-  /// [groupValue] != [value], or with null when selected again while
+  /// If true, [onChanged] is called with [value] when selected while
+  /// [groupValue] != [value], and with null when selected again while
   /// [groupValue] == [value].
   ///
   /// If false, [onChanged] will be called with [value] when it is selected
@@ -1608,15 +1373,14 @@ class RadioMenuButton<T> extends StatelessWidget {
   Widget build(BuildContext context) {
     return MenuItemButton(
       key: key,
-      onPressed:
-          onChanged == null
-              ? null
-              : () {
-                if (toggleable && groupValue == value) {
-                  return onChanged!(null);
-                }
-                onChanged!(value);
-              },
+      onPressed: onChanged == null
+          ? null
+          : () {
+              if (toggleable && groupValue == value) {
+                return onChanged!(null);
+              }
+              onChanged!(value);
+            },
       onHover: onHover,
       onFocusChange: onFocusChange,
       focusNode: focusNode,
@@ -1693,6 +1457,7 @@ class SubmenuButton extends StatefulWidget {
     this.leadingIcon,
     this.trailingIcon,
     this.submenuIcon,
+    this.useRootOverlay = false,
     required this.menuChildren,
     required this.child,
   });
@@ -1767,10 +1532,15 @@ class SubmenuButton extends StatefulWidget {
   /// If this is null, then the value of [MenuThemeData.submenuIcon] is used.
   /// If that is also null, then defaults to a right arrow icon with the size
   /// of 24 pixels.
-  final MaterialStateProperty<Widget?>? submenuIcon;
+  final WidgetStateProperty<Widget?>? submenuIcon;
 
   /// An optional icon to display after the [child].
   final Widget? trailingIcon;
+
+  /// {@macro flutter.widgets.RawMenuAnchor.useRootOverlay}
+  ///
+  /// Defaults to false.
+  final bool useRootOverlay;
 
   /// The list of widgets that appear in the menu when it is opened.
   ///
@@ -1928,7 +1698,9 @@ class _SubmenuButtonState extends State<SubmenuButton> {
   MenuController? _internalMenuController;
   MenuController get _menuController => widget.controller ?? _internalMenuController!;
   _MenuAnchorState? get _parent => _MenuAnchorState._maybeOf(context);
+  _MenuAnchorState? get _anchorState => _anchorKey.currentState;
   FocusNode? _internalFocusNode;
+  final GlobalKey<_MenuAnchorState> _anchorKey = GlobalKey<_MenuAnchorState>();
   FocusNode get _buttonFocusNode => widget.focusNode ?? _internalFocusNode!;
   bool get _enabled => widget.menuChildren.isNotEmpty;
   bool _isHovered = false;
@@ -1995,10 +1767,10 @@ class _SubmenuButtonState extends State<SubmenuButton> {
       (Axis.vertical, TextDirection.rtl) => Offset(0, -menuPadding.top),
       (Axis.vertical, TextDirection.ltr) => Offset(0, -menuPadding.top),
     };
-    final Set<MaterialState> states = <MaterialState>{
-      if (!_enabled) MaterialState.disabled,
-      if (_isHovered) MaterialState.hovered,
-      if (_buttonFocusNode.hasFocus) MaterialState.focused,
+    final states = <WidgetState>{
+      if (!_enabled) WidgetState.disabled,
+      if (_isHovered) WidgetState.hovered,
+      if (_buttonFocusNode.hasFocus) WidgetState.focused,
     };
     final Widget submenuIcon =
         widget.submenuIcon?.resolve(states) ??
@@ -2011,6 +1783,7 @@ class _SubmenuButtonState extends State<SubmenuButton> {
     return Actions(
       actions: actions,
       child: MenuAnchor(
+        key: _anchorKey,
         controller: _menuController,
         childFocusNode: _buttonFocusNode,
         alignmentOffset: menuPaddingOffset,
@@ -2018,6 +1791,7 @@ class _SubmenuButtonState extends State<SubmenuButton> {
         onClose: _onClose,
         onOpen: _onOpen,
         style: widget.menuStyle,
+        useRootOverlay: widget.useRootOverlay,
         builder: (BuildContext context, MenuController controller, Widget? child) {
           // Since we don't want to use the theme style or default style from the
           // TextButton, we merge the styles, merging them in the right order when
@@ -2029,7 +1803,7 @@ class _SubmenuButtonState extends State<SubmenuButton> {
           mergedStyle = widget.style?.merge(mergedStyle) ?? mergedStyle;
 
           void toggleShowMenu() {
-            if (controller._anchor == null) {
+            if (!mounted) {
               return;
             }
             if (controller.isOpen) {
@@ -2054,17 +1828,17 @@ class _SubmenuButtonState extends State<SubmenuButton> {
             if (!_isHovered) {
               _isHovered = true;
               widget.onHover?.call(true);
+              final _MenuAnchorState root = _MenuAnchorState._maybeOf(context)!._root;
               // Don't open the root menu bar menus on hover unless something else
               // is already open. This means that the user has to first click to
               // open a menu on the menu bar before hovering allows them to traverse
               // it.
-              if (controller._anchor!._root._orientation == Axis.horizontal &&
-                  !controller._anchor!._root._isOpen) {
+              if (root._orientation == Axis.horizontal && !root._menuController.isOpen) {
                 return;
               }
 
               controller.open();
-              controller._anchor!._focusButton();
+              _buttonFocusNode.requestFocus();
             }
           }
 
@@ -2076,14 +1850,12 @@ class _SubmenuButtonState extends State<SubmenuButton> {
                 focusNode: _buttonFocusNode,
                 onFocusChange: _enabled ? widget.onFocusChange : null,
                 onPressed: _enabled ? toggleShowMenu : null,
-                isSemanticButton: null,
+                isSemanticButton: kIsWeb ? true : null,
                 child: _MenuItemLabel(
                   leadingIcon: widget.leadingIcon,
                   trailingIcon: widget.trailingIcon,
                   hasSubmenu: true,
-                  showDecoration:
-                      (controller._anchor!._parent?._orientation ?? Axis.horizontal) ==
-                      Axis.vertical,
+                  showDecoration: (_parent?._orientation ?? Axis.horizontal) == Axis.vertical,
                   submenuIcon: submenuIcon,
                   child: child,
                 ),
@@ -2132,8 +1904,10 @@ class _SubmenuButtonState extends State<SubmenuButton> {
   void _onOpen() {
     if (!_waitingToFocusMenu) {
       SchedulerBinding.instance.addPostFrameCallback((_) {
-        _menuController._anchor?._focusButton();
-        _waitingToFocusMenu = false;
+        if (mounted) {
+          _buttonFocusNode.requestFocus();
+          _waitingToFocusMenu = false;
+        }
       }, debugLabel: 'MenuAnchor.focus');
       _waitingToFocusMenu = true;
     }
@@ -2144,12 +1918,12 @@ class _SubmenuButtonState extends State<SubmenuButton> {
   }
 
   EdgeInsets _computeMenuPadding(BuildContext context) {
-    final MaterialStateProperty<EdgeInsetsGeometry?> insets =
+    final WidgetStateProperty<EdgeInsetsGeometry?> insets =
         widget.menuStyle?.padding ??
         MenuTheme.of(context).style?.padding ??
         _MenuDefaultsM3(context).padding!;
     return insets
-        .resolve(widget.statesController?.value ?? const <MaterialState>{})!
+        .resolve(widget.statesController?.value ?? const <WidgetState>{})!
         .resolve(Directionality.of(context));
   }
 
@@ -2159,7 +1933,7 @@ class _SubmenuButtonState extends State<SubmenuButton> {
         _menuController.open();
       }
     } else {
-      if (!_menuController._anchor!._menuScopeNode.hasFocus && _menuController.isOpen) {
+      if (!_anchorState!._menuScopeNode.hasFocus && _menuController.isOpen) {
         _menuController.close();
       }
     }
@@ -2170,17 +1944,16 @@ class _SubmenuDirectionalFocusAction extends DirectionalFocusAction {
   _SubmenuDirectionalFocusAction({required this.submenu});
 
   final _SubmenuButtonState submenu;
-
-  _MenuAnchorState get _anchor => submenu._menuController._anchor!;
-  FocusNode get _buttonFocusNode => submenu._buttonFocusNode;
-  _MenuAnchorState? get _parent => _anchor._parent;
-  bool get _isParentRoot => _parent?._isRoot ?? false;
+  _MenuAnchorState? get _parent => submenu._parent;
+  _MenuAnchorState? get _anchorState => submenu._anchorState;
+  MenuController get _controller => submenu._menuController;
 
   /// The orientation of the menu that contains this submenu button.
   Axis? get _orientation => _parent?._orientation;
 
   /// Whether the anchor that intercepted this DirectionalFocusAction is a submenu.
   bool get isSubmenu => submenu._buttonFocusNode.hasPrimaryFocus;
+  FocusNode get _button => submenu._buttonFocusNode;
 
   @override
   void invoke(DirectionalFocusIntent intent) {
@@ -2192,7 +1965,7 @@ class _SubmenuDirectionalFocusAction extends DirectionalFocusAction {
         assert(_debugMenuInfo('Moving to previous $MenuBar item'));
         // Focus this MenuBar SubmenuButton, then move focus to the previous focusable
         // MenuBar item.
-        _buttonFocusNode
+        _button
           ..requestFocus()
           ..previousFocus();
         return;
@@ -2201,7 +1974,7 @@ class _SubmenuDirectionalFocusAction extends DirectionalFocusAction {
         assert(_debugMenuInfo('Moving to next $MenuBar item'));
         // Focus this MenuBar SubmenuButton, then move focus to the next focusable
         // MenuBar item.
-        _buttonFocusNode
+        _button
           ..requestFocus()
           ..nextFocus();
         return;
@@ -2209,10 +1982,7 @@ class _SubmenuDirectionalFocusAction extends DirectionalFocusAction {
         if (isSubmenu) {
           // If this is a top-level (horizontal) button in a menubar, focus the
           // first item in this button's submenu.
-          final FocusNode? firstItem = _anchor._firstItemFocusNode;
-          if (firstItem?.canRequestFocus ?? false) {
-            firstItem!.requestFocus();
-          }
+          _anchorState?._focusFirstMenuItem();
           return;
         }
       case (Axis.horizontal, _, TraversalDirection.up):
@@ -2220,10 +1990,7 @@ class _SubmenuDirectionalFocusAction extends DirectionalFocusAction {
           // If this is a top-level (horizontal) button in a menubar, focus the
           // last item in this button's submenu. This makes navigating into
           // upward-oriented submenus more intuitive.
-          final FocusNode? lastItem = _anchor._lastItemFocusNode;
-          if (lastItem?.canRequestFocus ?? false) {
-            lastItem!.requestFocus();
-          }
+          _anchorState?._focusLastMenuItem();
           return;
         }
       case (Axis.vertical, TextDirection.ltr, TraversalDirection.left):
@@ -2237,23 +2004,22 @@ class _SubmenuDirectionalFocusAction extends DirectionalFocusAction {
             assert(_debugMenuInfo('Exiting submenu'));
             // MenuBar SubmenuButton => SubmenuButton => child
             // Focus the parent SubmenuButton anchor attached to this child.
-            _buttonFocusNode.requestFocus();
+            _anchorState?._focusButton();
           }
         } else {
           if (isSubmenu) {
-            if (_isParentRoot) {
+            if (_parent?._parent == null) {
               // Moving in the closing direction while focused on a
               // SubmenuButton within a root MenuAnchor menu should not close
               // the menu.
               return;
             }
-            _parent
-              ?.._focusButton()
-              .._close();
+            _parent?._focusButton();
+            _parent?._menuController.close();
           } else {
             // If focus is not on a submenu button, closing the anchor this item
             // presides in will close the menu and focus the anchor button.
-            _anchor._close();
+            _controller.close();
           }
           assert(_debugMenuInfo('Exiting submenu'));
         }
@@ -2261,13 +2027,13 @@ class _SubmenuDirectionalFocusAction extends DirectionalFocusAction {
       case (Axis.vertical, TextDirection.ltr, TraversalDirection.right) when isSubmenu:
       case (Axis.vertical, TextDirection.rtl, TraversalDirection.left) when isSubmenu:
         assert(_debugMenuInfo('Entering submenu'));
-        if (_anchor._isOpen) {
-          _anchor._firstItemFocusNode?.requestFocus();
+        if (_controller.isOpen) {
+          _anchorState?._focusFirstMenuItem();
         } else {
-          _anchor._open();
+          _controller.open();
           SchedulerBinding.instance.addPostFrameCallback((Duration timestamp) {
-            if (_anchor._isOpen) {
-              _anchor._firstItemFocusNode?.requestFocus();
+            if (_controller.isOpen) {
+              _anchorState?._focusFirstMenuItem();
             }
           });
         }
@@ -2277,32 +2043,6 @@ class _SubmenuDirectionalFocusAction extends DirectionalFocusAction {
     }
 
     Actions.maybeInvoke(submenu.context, intent);
-  }
-}
-
-/// An action that closes all the menus associated with the given
-/// [MenuController].
-///
-/// See also:
-///
-///  * [MenuAnchor], a widget that hosts a cascading submenu.
-///  * [MenuBar], a widget that defines a menu bar with cascading submenus.
-class DismissMenuAction extends DismissAction {
-  /// Creates a [DismissMenuAction].
-  DismissMenuAction({required this.controller});
-
-  /// The [MenuController] associated with the menus that should be closed.
-  final MenuController controller;
-
-  @override
-  void invoke(DismissIntent intent) {
-    assert(_debugMenuInfo('$runtimeType: Dismissing all open menus.'));
-    controller._anchor!._root._close();
-  }
-
-  @override
-  bool isEnabled(DismissIntent intent) {
-    return controller.isOpen;
   }
 }
 
@@ -2382,7 +2122,7 @@ class _LocalizedShortcutLabeler {
     }
     if (serialized.trigger != null) {
       final LogicalKeyboardKey trigger = serialized.trigger!;
-      final List<String> modifiers = <String>[
+      final modifiers = <String>[
         if (_usesSymbolicModifiers) ...<String>[
           // macOS/iOS platform convention uses this ordering, with ⌘ always last.
           if (serialized.control!) _getModifierLabel(LogicalKeyboardKey.control, localizations),
@@ -2408,8 +2148,9 @@ class _LocalizedShortcutLabeler {
         if (shortcutTrigger == null && logicalKeyId & LogicalKeyboardKey.planeMask == 0x0) {
           // If the trigger is a Unicode-character-producing key, then use the
           // character.
-          shortcutTrigger =
-              String.fromCharCode(logicalKeyId & LogicalKeyboardKey.valueMask).toUpperCase();
+          shortcutTrigger = String.fromCharCode(
+            logicalKeyId & LogicalKeyboardKey.valueMask,
+          ).toUpperCase();
         }
         // Fall back to the key label if all else fails.
         shortcutTrigger ??= trigger.keyLabel;
@@ -2419,7 +2160,7 @@ class _LocalizedShortcutLabeler {
         if (shortcutTrigger != null && shortcutTrigger.isNotEmpty) shortcutTrigger,
       ].join(keySeparator);
     } else if (serialized.character != null) {
-      final List<String> modifiers = <String>[
+      final modifiers = <String>[
         // Character based shortcuts cannot check shifted keys.
         if (_usesSymbolicModifiers) ...<String>[
           // macOS/iOS platform convention uses this ordering, with ⌘ always last.
@@ -2563,26 +2304,6 @@ class _LocalizedShortcutLabeler {
   }
 }
 
-class _MenuAnchorScope extends InheritedWidget {
-  const _MenuAnchorScope({
-    required super.child,
-    required this.anchorKey,
-    required this.anchor,
-    required this.isOpen,
-  });
-
-  final GlobalKey anchorKey;
-  final _MenuAnchorState anchor;
-  final bool isOpen;
-
-  @override
-  bool updateShouldNotify(_MenuAnchorScope oldWidget) {
-    return anchorKey != oldWidget.anchorKey ||
-        anchor != oldWidget.anchor ||
-        isOpen != oldWidget.isOpen;
-  }
-}
-
 /// MenuBar-specific private specialization of [MenuAnchor] so that it can act
 /// differently in regards to orientation, how open works, and what gets built.
 class _MenuBarAnchor extends MenuAnchor {
@@ -2603,50 +2324,40 @@ class _MenuBarAnchorState extends _MenuAnchorState {
   };
 
   @override
-  bool get _isOpen {
-    // If it's a bar, then it's "open" if any of its children are open.
-    for (final _MenuAnchorState child in _anchorChildren) {
-      if (child._isOpen) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  @override
   Axis get _orientation => Axis.horizontal;
 
   @override
-  Widget _buildContents(BuildContext context) {
-    final bool isOpen = _isOpen;
-    return FocusScope(
-      node: _menuScopeNode,
-      skipTraversal: !isOpen,
-      canRequestFocus: isOpen,
-      descendantsAreFocusable: true,
-      child: ExcludeFocus(
-        excluding: !isOpen,
-        child: Shortcuts(
-          shortcuts: _kMenuTraversalShortcuts,
-          child: Actions(
-            actions: actions,
-            child: _MenuPanel(
-              menuStyle: widget.style,
-              clipBehavior: widget.clipBehavior,
-              orientation: Axis.horizontal,
-              children: widget.menuChildren,
-            ),
-          ),
+  Widget build(BuildContext context) {
+    final child = Actions(
+      actions: actions,
+      child: Shortcuts(
+        shortcuts: _kMenuTraversalShortcuts,
+        child: _MenuPanel(
+          menuStyle: widget.style,
+          clipBehavior: widget.clipBehavior,
+          orientation: _orientation,
+          children: widget.menuChildren,
         ),
       ),
     );
-  }
-
-  @override
-  void _open({Offset? position}) {
-    assert(_menuController._anchor == this);
-    // Menu bars can't be opened, because they're already always open.
-    return;
+    return _MenuAnchorScope(
+      state: this,
+      child: RawMenuAnchorGroup(
+        controller: _menuController,
+        child: Builder(
+          builder: (BuildContext context) {
+            final bool isOpen = MenuController.maybeIsOpenOf(context) ?? false;
+            return FocusScope(
+              node: _menuScopeNode,
+              skipTraversal: !isOpen,
+              canRequestFocus: isOpen,
+              descendantsAreFocusable: true,
+              child: ExcludeFocus(excluding: !isOpen, child: child),
+            );
+          },
+        ),
+      ),
+    );
   }
 }
 
@@ -2887,15 +2598,15 @@ class MenuAcceleratorLabel extends StatefulWidget {
   ///
   /// {@macro flutter.material.menu_anchor.menu_accelerator_label.label}
   static String stripAcceleratorMarkers(String label, {void Function(int index)? setIndex}) {
-    int quotedAmpersands = 0;
-    final StringBuffer displayLabel = StringBuffer();
-    int acceleratorIndex = -1;
+    var quotedAmpersands = 0;
+    final displayLabel = StringBuffer();
+    var acceleratorIndex = -1;
     // Use characters so that we don't split up surrogate pairs and interpret
     // them incorrectly.
     final Characters labelChars = label.characters;
     final Characters ampersand = '&'.characters;
-    bool lastWasAmpersand = false;
-    for (int i = 0; i < labelChars.length; i += 1) {
+    var lastWasAmpersand = false;
+    for (var i = 0; i < labelChars.length; i += 1) {
       // Stop looking one before the end, since a single ampersand at the end is
       // just treated as a quoted ampersand.
       final Characters character = labelChars.characterAt(i);
@@ -2948,7 +2659,7 @@ class _MenuAcceleratorLabelState extends State<MenuAcceleratorLabel> {
   late String _displayLabel;
   int _acceleratorIndex = -1;
   MenuAcceleratorCallbackBinding? _binding;
-  _MenuAnchorState? _anchor;
+  MenuController? _menuController;
   ShortcutRegistry? _shortcutRegistry;
   ShortcutRegistryEntry? _shortcutRegistryEntry;
   bool _showAccelerators = false;
@@ -2971,7 +2682,7 @@ class _MenuAcceleratorLabelState extends State<MenuAcceleratorLabel> {
       _shortcutRegistryEntry?.dispose();
       _shortcutRegistryEntry = null;
       _shortcutRegistry = null;
-      _anchor = null;
+      _menuController = null;
       HardwareKeyboard.instance.removeHandler(_listenToKeyEvent);
     }
     super.dispose();
@@ -2984,7 +2695,7 @@ class _MenuAcceleratorLabelState extends State<MenuAcceleratorLabel> {
       return;
     }
     _binding = MenuAcceleratorCallbackBinding.maybeOf(context);
-    _anchor = _MenuAnchorState._maybeOf(context);
+    _menuController = MenuController.maybeOf(context);
     _shortcutRegistry = ShortcutRegistry.maybeOf(context);
     _updateAcceleratorShortcut();
   }
@@ -3032,7 +2743,7 @@ class _MenuAcceleratorLabelState extends State<MenuAcceleratorLabel> {
     if (_showAccelerators &&
         _acceleratorIndex != -1 &&
         _binding?.onInvoke != null &&
-        (!_binding!.hasSubmenu || !(_anchor?._isOpen ?? false))) {
+        (!_binding!.hasSubmenu || !(_menuController?.isOpen ?? false))) {
       final String acceleratorCharacter = _displayLabel[_acceleratorIndex].toLowerCase();
       _shortcutRegistryEntry = _shortcutRegistry?.addAll(<ShortcutActivator, Intent>{
         CharacterActivator(acceleratorCharacter, alt: true): VoidCallbackIntent(
@@ -3128,15 +2839,14 @@ class _MenuItemLabel extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: <Widget>[
-              if (leadingIcon != null) leadingIcon!,
+              ?leadingIcon,
               if (child != null)
                 Expanded(
                   child: ClipRect(
                     child: Padding(
-                      padding:
-                          leadingIcon != null
-                              ? EdgeInsetsDirectional.only(start: horizontalPadding)
-                              : EdgeInsets.zero,
+                      padding: leadingIcon != null
+                          ? EdgeInsetsDirectional.only(start: horizontalPadding)
+                          : EdgeInsets.zero,
                       child: child,
                     ),
                   ),
@@ -3149,13 +2859,12 @@ class _MenuItemLabel extends StatelessWidget {
       leadings = Row(
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
-          if (leadingIcon != null) leadingIcon!,
+          ?leadingIcon,
           if (child != null)
             Padding(
-              padding:
-                  leadingIcon != null
-                      ? EdgeInsetsDirectional.only(start: horizontalPadding)
-                      : EdgeInsets.zero,
+              padding: leadingIcon != null
+                  ? EdgeInsetsDirectional.only(start: horizontalPadding)
+                  : EdgeInsets.zero,
               child: child,
             ),
         ],
@@ -3222,6 +2931,7 @@ class _MenuLayout extends SingleChildLayoutDelegate {
     required this.avoidBounds,
     required this.orientation,
     required this.parentOrientation,
+    required this.reservedPadding,
   });
 
   // Rectangle of underlying button, relative to the overlay's dimensions.
@@ -3253,13 +2963,14 @@ class _MenuLayout extends SingleChildLayoutDelegate {
   // The orientation of this menu's parent.
   final Axis parentOrientation;
 
+  // How close to the edge of the safe area the menu will be placed.
+  final EdgeInsetsGeometry reservedPadding;
+
   @override
   BoxConstraints getConstraintsForChild(BoxConstraints constraints) {
-    // The menu can be at most the size of the overlay minus _kMenuViewPadding
-    // pixels in each direction.
-    return BoxConstraints.loose(
-      constraints.biggest,
-    ).deflate(const EdgeInsets.all(_kMenuViewPadding));
+    // The menu can be at most the size of the overlay minus the view padding
+    // in each direction.
+    return BoxConstraints.loose(constraints.biggest).deflate(reservedPadding);
   }
 
   @override
@@ -3378,12 +3089,13 @@ class _MenuLayout extends SingleChildLayoutDelegate {
         menuPadding != oldDelegate.menuPadding ||
         orientation != oldDelegate.orientation ||
         parentOrientation != oldDelegate.parentOrientation ||
+        reservedPadding != oldDelegate.reservedPadding ||
         !setEquals(avoidBounds, oldDelegate.avoidBounds);
   }
 
   Rect _closestScreen(Iterable<Rect> screens, Offset point) {
     Rect closest = screens.first;
-    for (final Rect screen in screens) {
+    for (final screen in screens) {
       if ((screen.center - point).distance < (closest.center - point).distance) {
         closest = screen;
       }
@@ -3453,9 +3165,9 @@ class _MenuPanelState extends State<_MenuPanel> {
       return getProperty(widgetStyle) ?? getProperty(themeStyle) ?? getProperty(defaultStyle);
     }
 
-    T? resolve<T>(MaterialStateProperty<T>? Function(MenuStyle? style) getProperty) {
+    T? resolve<T>(WidgetStateProperty<T>? Function(MenuStyle? style) getProperty) {
       return effectiveValue((MenuStyle? style) {
-        return getProperty(style)?.resolve(<MaterialState>{});
+        return getProperty(style)?.resolve(<WidgetState>{});
       });
     }
 
@@ -3478,11 +3190,11 @@ class _MenuPanelState extends State<_MenuPanel> {
     // Per the Material Design team: don't allow the VisualDensity
     // adjustment to reduce the width of the left/right padding. If we
     // did, VisualDensity.compact, the default for desktop/web, would
-    // reduce the horizontal padding to zero.
-    final double dy = densityAdjustment.dy;
+    // reduce the horizontal padding to zero. Vertical padding
+    // is not affected at all.
     final double dx = math.max(0, densityAdjustment.dx);
     final EdgeInsetsGeometry resolvedPadding = padding
-        .add(EdgeInsets.symmetric(horizontal: dx, vertical: dy))
+        .add(EdgeInsets.symmetric(horizontal: dx))
         .clamp(EdgeInsets.zero, EdgeInsetsGeometry.infinity);
 
     BoxConstraints effectiveConstraints = visualDensity.effectiveConstraints(
@@ -3514,10 +3226,9 @@ class _MenuPanelState extends State<_MenuPanel> {
     // widest child.
     List<Widget> children = widget.children;
     if (widget.orientation == Axis.horizontal) {
-      children =
-          children.map<Widget>((Widget child) {
-            return IntrinsicWidth(child: child);
-          }).toList();
+      children = children.map<Widget>((Widget child) {
+        return IntrinsicWidth(child: child);
+      }).toList();
     }
 
     Widget menuPanel = _intrinsicCrossSize(
@@ -3587,19 +3298,25 @@ class _Submenu extends StatelessWidget {
     required this.menuStyle,
     required this.menuPosition,
     required this.alignmentOffset,
+    required this.consumeOutsideTaps,
     required this.clipBehavior,
     this.crossAxisUnconstrained = true,
     required this.menuChildren,
+    required this.menuScopeNode,
+    required this.reservedPadding,
   });
 
+  final FocusScopeNode menuScopeNode;
+  final RawMenuOverlayInfo menuPosition;
   final _MenuAnchorState anchor;
   final LayerLink? layerLink;
   final MenuStyle? menuStyle;
-  final Offset? menuPosition;
+  final bool consumeOutsideTaps;
   final Offset alignmentOffset;
   final Clip clipBehavior;
   final bool crossAxisUnconstrained;
   final List<Widget> menuChildren;
+  final EdgeInsetsGeometry reservedPadding;
 
   @override
   Widget build(BuildContext context) {
@@ -3613,14 +3330,14 @@ class _Submenu extends StatelessWidget {
       return getProperty(menuStyle) ?? getProperty(themeStyle) ?? getProperty(defaultStyle);
     }
 
-    T? resolve<T>(MaterialStateProperty<T>? Function(MenuStyle? style) getProperty) {
+    T? resolve<T>(WidgetStateProperty<T>? Function(MenuStyle? style) getProperty) {
       return effectiveValue((MenuStyle? style) {
-        return getProperty(style)?.resolve(<MaterialState>{});
+        return getProperty(style)?.resolve(<WidgetState>{});
       });
     }
 
-    final MaterialStateMouseCursor mouseCursor = _MouseCursor(
-      (Set<MaterialState> states) =>
+    final WidgetStateMouseCursor mouseCursor = _MouseCursor(
+      (Set<WidgetState> states) =>
           effectiveValue((MenuStyle? style) => style?.mouseCursor?.resolve(states)),
     );
 
@@ -3635,66 +3352,44 @@ class _Submenu extends StatelessWidget {
     // adjustment to reduce the width of the left/right padding. If we
     // did, VisualDensity.compact, the default for desktop/web, would
     // reduce the horizontal padding to zero.
-    final double dy = densityAdjustment.dy;
     final double dx = math.max(0, densityAdjustment.dx);
     final EdgeInsetsGeometry resolvedPadding = padding
-        .add(EdgeInsets.fromLTRB(dx, dy, dx, dy))
+        .add(EdgeInsets.fromLTRB(dx, 0, dx, 0))
         .clamp(EdgeInsets.zero, EdgeInsetsGeometry.infinity);
-    final BuildContext anchorContext = anchor._anchorKey.currentContext!;
-    final RenderBox overlay = Overlay.of(anchorContext).context.findRenderObject()! as RenderBox;
 
-    Offset upperLeft = Offset.zero;
-    Offset bottomRight = Offset.zero;
-    if (layerLink == null) {
-      final RenderBox anchorBox = anchorContext.findRenderObject()! as RenderBox;
-      upperLeft = anchorBox.localToGlobal(Offset(dx, -dy), ancestor: overlay);
-      bottomRight = anchorBox.localToGlobal(anchorBox.paintBounds.bottomRight, ancestor: overlay);
-    }
-    final Rect anchorRect = Rect.fromPoints(upperLeft, bottomRight);
+    final Rect anchorRect = layerLink == null
+        ? Rect.fromLTRB(
+            menuPosition.anchorRect.left + dx,
+            menuPosition.anchorRect.top,
+            menuPosition.anchorRect.right,
+            menuPosition.anchorRect.bottom,
+          )
+        : Rect.zero;
 
-    Widget child = Theme(
-      data: Theme.of(context).copyWith(visualDensity: visualDensity),
-      child: ConstrainedBox(
-        constraints: BoxConstraints.loose(overlay.paintBounds.size),
-        child: CustomSingleChildLayout(
-          delegate: _MenuLayout(
-            anchorRect: anchorRect,
-            textDirection: textDirection,
-            avoidBounds: DisplayFeatureSubScreen.avoidBounds(MediaQuery.of(context)).toSet(),
-            menuPadding: resolvedPadding,
-            alignment: alignment,
-            alignmentOffset: alignmentOffset,
-            menuPosition: menuPosition,
-            orientation: anchor._orientation,
-            parentOrientation: anchor._parent?._orientation ?? Axis.horizontal,
-          ),
-          child: TapRegion(
-            groupId: anchor._root,
-            consumeOutsideTaps: anchor._root._isOpen && anchor.widget.consumeOutsideTap,
-            onTapOutside: (PointerDownEvent event) {
-              anchor._close();
+    final Widget menuPanel = TapRegion(
+      groupId: menuPosition.tapRegionGroupId,
+      consumeOutsideTaps: anchor._root._menuController.isOpen && anchor.widget.consumeOutsideTap,
+      onTapOutside: (PointerDownEvent event) {
+        anchor._menuController.close();
+      },
+      child: MouseRegion(
+        cursor: mouseCursor,
+        hitTestBehavior: HitTestBehavior.deferToChild,
+        child: FocusScope(
+          node: anchor._menuScopeNode,
+          skipTraversal: true,
+          child: Actions(
+            actions: <Type, Action<Intent>>{
+              DismissIntent: DismissMenuAction(controller: anchor._menuController),
             },
-            child: MouseRegion(
-              cursor: mouseCursor,
-              hitTestBehavior: HitTestBehavior.deferToChild,
-              child: FocusScope(
-                node: anchor._menuScopeNode,
-                skipTraversal: true,
-                child: Actions(
-                  actions: <Type, Action<Intent>>{
-                    DismissIntent: DismissMenuAction(controller: anchor._menuController),
-                  },
-                  child: Shortcuts(
-                    shortcuts: _kMenuTraversalShortcuts,
-                    child: _MenuPanel(
-                      menuStyle: menuStyle,
-                      clipBehavior: clipBehavior,
-                      orientation: anchor._orientation,
-                      crossAxisUnconstrained: crossAxisUnconstrained,
-                      children: menuChildren,
-                    ),
-                  ),
-                ),
+            child: Shortcuts(
+              shortcuts: _kMenuTraversalShortcuts,
+              child: _MenuPanel(
+                menuStyle: menuStyle,
+                clipBehavior: clipBehavior,
+                orientation: anchor._orientation,
+                crossAxisUnconstrained: crossAxisUnconstrained,
+                children: menuChildren,
               ),
             ),
           ),
@@ -3702,27 +3397,54 @@ class _Submenu extends StatelessWidget {
       ),
     );
 
-    if (layerLink != null) {
-      child = CompositedTransformFollower(
-        link: layerLink!,
-        targetAnchor: Alignment.bottomLeft,
-        child: child,
-      );
+    final Widget layout = Theme(
+      data: Theme.of(context).copyWith(visualDensity: visualDensity),
+      child: ConstrainedBox(
+        constraints: BoxConstraints.loose(menuPosition.overlaySize),
+        child: Builder(
+          builder: (BuildContext context) {
+            final MediaQueryData mediaQuery = MediaQuery.of(context);
+            return CustomSingleChildLayout(
+              delegate: _MenuLayout(
+                anchorRect: anchorRect,
+                textDirection: textDirection,
+                avoidBounds: DisplayFeatureSubScreen.avoidBounds(mediaQuery).toSet(),
+                menuPadding: resolvedPadding,
+                alignment: alignment,
+                alignmentOffset: alignmentOffset,
+                menuPosition: menuPosition.position,
+                orientation: anchor._orientation,
+                parentOrientation: anchor._parent?._orientation ?? Axis.horizontal,
+                reservedPadding: reservedPadding,
+              ),
+              child: menuPanel,
+            );
+          },
+        ),
+      ),
+    );
+
+    if (layerLink == null) {
+      return layout;
     }
 
-    return child;
+    return CompositedTransformFollower(
+      link: layerLink!,
+      targetAnchor: Alignment.bottomLeft,
+      child: layout,
+    );
   }
 }
 
 /// Wraps the [WidgetStateMouseCursor] so that it can default to
 /// [MouseCursor.uncontrolled] if none is set.
-class _MouseCursor extends MaterialStateMouseCursor {
+class _MouseCursor extends WidgetStateMouseCursor {
   const _MouseCursor(this.resolveCallback);
 
-  final MaterialPropertyResolver<MouseCursor?> resolveCallback;
+  final WidgetPropertyResolver<MouseCursor?> resolveCallback;
 
   @override
-  MouseCursor resolve(Set<MaterialState> states) =>
+  MouseCursor resolve(Set<WidgetState> states) =>
       resolveCallback(states) ?? MouseCursor.uncontrolled;
 
   @override
@@ -3809,22 +3531,22 @@ class _MenuBarDefaultsM3 extends MenuStyle {
   late final ColorScheme _colors = Theme.of(context).colorScheme;
 
   @override
-  MaterialStateProperty<Color?> get backgroundColor {
+  WidgetStateProperty<Color?> get backgroundColor {
     return MaterialStatePropertyAll<Color?>(_colors.surfaceContainer);
   }
 
   @override
-  MaterialStateProperty<Color?>? get shadowColor {
+  WidgetStateProperty<Color?>? get shadowColor {
     return MaterialStatePropertyAll<Color?>(_colors.shadow);
   }
 
   @override
-  MaterialStateProperty<Color?>? get surfaceTintColor {
+  WidgetStateProperty<Color?>? get surfaceTintColor {
     return const MaterialStatePropertyAll<Color?>(Colors.transparent);
   }
 
   @override
-  MaterialStateProperty<EdgeInsetsGeometry?>? get padding {
+  WidgetStateProperty<EdgeInsetsGeometry?>? get padding {
     return const MaterialStatePropertyAll<EdgeInsetsGeometry>(
       EdgeInsetsDirectional.symmetric(
         horizontal: _kTopLevelMenuHorizontalMinPadding
@@ -3850,7 +3572,7 @@ class _MenuButtonDefaultsM3 extends ButtonStyle {
   late final TextTheme _textTheme = Theme.of(context).textTheme;
 
   @override
-  MaterialStateProperty<Color?>? get backgroundColor {
+  WidgetStateProperty<Color?>? get backgroundColor {
     return ButtonStyleButton.allOrNull<Color>(Colors.transparent);
   }
 
@@ -3859,23 +3581,23 @@ class _MenuButtonDefaultsM3 extends ButtonStyle {
   // No default surface tint color
 
   @override
-  MaterialStateProperty<double>? get elevation {
+  WidgetStateProperty<double>? get elevation {
     return ButtonStyleButton.allOrNull<double>(0.0);
   }
 
   @override
-  MaterialStateProperty<Color?>? get foregroundColor {
-    return MaterialStateProperty.resolveWith((Set<MaterialState> states) {
-      if (states.contains(MaterialState.disabled)) {
+  WidgetStateProperty<Color?>? get foregroundColor {
+    return WidgetStateProperty.resolveWith((Set<WidgetState> states) {
+      if (states.contains(WidgetState.disabled)) {
         return _colors.onSurface.withOpacity(0.38);
       }
-      if (states.contains(MaterialState.pressed)) {
+      if (states.contains(WidgetState.pressed)) {
         return _colors.onSurface;
       }
-      if (states.contains(MaterialState.hovered)) {
+      if (states.contains(WidgetState.hovered)) {
         return _colors.onSurface;
       }
-      if (states.contains(MaterialState.focused)) {
+      if (states.contains(WidgetState.focused)) {
         return _colors.onSurface;
       }
       return _colors.onSurface;
@@ -3883,18 +3605,18 @@ class _MenuButtonDefaultsM3 extends ButtonStyle {
   }
 
   @override
-  MaterialStateProperty<Color?>? get iconColor {
-    return MaterialStateProperty.resolveWith((Set<MaterialState> states) {
-      if (states.contains(MaterialState.disabled)) {
+  WidgetStateProperty<Color?>? get iconColor {
+    return WidgetStateProperty.resolveWith((Set<WidgetState> states) {
+      if (states.contains(WidgetState.disabled)) {
         return _colors.onSurface.withOpacity(0.38);
       }
-      if (states.contains(MaterialState.pressed)) {
+      if (states.contains(WidgetState.pressed)) {
         return _colors.onSurfaceVariant;
       }
-      if (states.contains(MaterialState.hovered)) {
+      if (states.contains(WidgetState.hovered)) {
         return _colors.onSurfaceVariant;
       }
-      if (states.contains(MaterialState.focused)) {
+      if (states.contains(WidgetState.focused)) {
         return _colors.onSurfaceVariant;
       }
       return _colors.onSurfaceVariant;
@@ -3904,43 +3626,34 @@ class _MenuButtonDefaultsM3 extends ButtonStyle {
   // No default fixedSize
 
   @override
-  MaterialStateProperty<double>? get iconSize {
+  WidgetStateProperty<double>? get iconSize {
     return const MaterialStatePropertyAll<double>(24.0);
   }
 
   @override
-  MaterialStateProperty<Size>? get maximumSize {
+  WidgetStateProperty<Size>? get maximumSize {
     return ButtonStyleButton.allOrNull<Size>(Size.infinite);
   }
 
   @override
-  MaterialStateProperty<Size>? get minimumSize {
+  WidgetStateProperty<Size>? get minimumSize {
     return ButtonStyleButton.allOrNull<Size>(const Size(64.0, 48.0));
   }
 
   @override
-  MaterialStateProperty<MouseCursor?>? get mouseCursor {
-    return MaterialStateProperty.resolveWith(
-      (Set<MaterialState> states) {
-        if (states.contains(MaterialState.disabled)) {
-          return SystemMouseCursors.basic;
-        }
-        return SystemMouseCursors.click;
-      },
-    );
-  }
+  WidgetStateProperty<MouseCursor?>? get mouseCursor => WidgetStateMouseCursor.adaptiveClickable;
 
   @override
-  MaterialStateProperty<Color?>? get overlayColor {
-    return MaterialStateProperty.resolveWith(
-      (Set<MaterialState> states) {
-        if (states.contains(MaterialState.pressed)) {
+  WidgetStateProperty<Color?>? get overlayColor {
+    return WidgetStateProperty.resolveWith(
+      (Set<WidgetState> states) {
+        if (states.contains(WidgetState.pressed)) {
           return _colors.onSurface.withOpacity(0.1);
         }
-        if (states.contains(MaterialState.hovered)) {
+        if (states.contains(WidgetState.hovered)) {
           return _colors.onSurface.withOpacity(0.08);
         }
-        if (states.contains(MaterialState.focused)) {
+        if (states.contains(WidgetState.focused)) {
           return _colors.onSurface.withOpacity(0.1);
         }
         return Colors.transparent;
@@ -3949,14 +3662,14 @@ class _MenuButtonDefaultsM3 extends ButtonStyle {
   }
 
   @override
-  MaterialStateProperty<EdgeInsetsGeometry>? get padding {
+  WidgetStateProperty<EdgeInsetsGeometry>? get padding {
     return ButtonStyleButton.allOrNull<EdgeInsetsGeometry>(_scaledPadding(context));
   }
 
   // No default side
 
   @override
-  MaterialStateProperty<OutlinedBorder>? get shape {
+  WidgetStateProperty<OutlinedBorder>? get shape {
     return ButtonStyleButton.allOrNull<OutlinedBorder>(const RoundedRectangleBorder());
   }
 
@@ -3967,7 +3680,7 @@ class _MenuButtonDefaultsM3 extends ButtonStyle {
   MaterialTapTargetSize? get tapTargetSize => Theme.of(context).materialTapTargetSize;
 
   @override
-  MaterialStateProperty<TextStyle?> get textStyle {
+  WidgetStateProperty<TextStyle?> get textStyle {
     // TODO(tahatesser): This is taken from https://m3.material.io/components/menus/specs
     // Update this when the token is available.
     return MaterialStatePropertyAll<TextStyle?>(_textTheme.labelLarge);
@@ -4023,22 +3736,22 @@ class _MenuDefaultsM3 extends MenuStyle {
   late final ColorScheme _colors = Theme.of(context).colorScheme;
 
   @override
-  MaterialStateProperty<Color?> get backgroundColor {
+  WidgetStateProperty<Color?> get backgroundColor {
     return MaterialStatePropertyAll<Color?>(_colors.surfaceContainer);
   }
 
   @override
-  MaterialStateProperty<Color?>? get surfaceTintColor {
+  WidgetStateProperty<Color?>? get surfaceTintColor {
     return const MaterialStatePropertyAll<Color?>(Colors.transparent);
   }
 
   @override
-  MaterialStateProperty<Color?>? get shadowColor {
+  WidgetStateProperty<Color?>? get shadowColor {
     return MaterialStatePropertyAll<Color?>(_colors.shadow);
   }
 
   @override
-  MaterialStateProperty<EdgeInsetsGeometry?>? get padding {
+  WidgetStateProperty<EdgeInsetsGeometry?>? get padding {
     return const MaterialStatePropertyAll<EdgeInsetsGeometry>(
       EdgeInsetsDirectional.symmetric(vertical: _kMenuVerticalMinPadding),
     );

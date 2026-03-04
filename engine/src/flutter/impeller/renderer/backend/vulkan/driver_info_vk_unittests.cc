@@ -7,6 +7,7 @@
 #include "impeller/renderer/backend/vulkan/driver_info_vk.h"
 #include "impeller/renderer/backend/vulkan/surface_context_vk.h"
 #include "impeller/renderer/backend/vulkan/test/mock_vulkan.h"
+#include "impeller/renderer/backend/vulkan/workarounds_vk.h"
 
 namespace impeller::testing {
 
@@ -163,6 +164,7 @@ TEST(DriverInfoVKTest, DriverParsingAdreno) {
 }
 
 TEST(DriverInfoVKTest, DisabledDevices) {
+<<<<<<< HEAD
   EXPECT_FALSE(IsBadVersionTest("Adreno (TM) 620"));
   EXPECT_FALSE(IsBadVersionTest("Adreno (TM) 610"));
   EXPECT_FALSE(IsBadVersionTest("Adreno (TM) 530"));
@@ -175,6 +177,20 @@ TEST(DriverInfoVKTest, DisabledDevices) {
   EXPECT_FALSE(IsBadVersionTest("Adreno (TM) 630"));
   EXPECT_FALSE(IsBadVersionTest("Adreno (TM) 640"));
   EXPECT_FALSE(IsBadVersionTest("Adreno (TM) 650"));
+=======
+  EXPECT_TRUE(IsBadVersionTest("Adreno (TM) 504"));
+  EXPECT_TRUE(IsBadVersionTest("Adreno (TM) 505"));
+  EXPECT_TRUE(IsBadVersionTest("Adreno (TM) 506"));
+  EXPECT_TRUE(IsBadVersionTest("Adreno (TM) 508"));
+  EXPECT_TRUE(IsBadVersionTest("Adreno (TM) 509"));
+  EXPECT_TRUE(IsBadVersionTest("Adreno (TM) 512"));
+  EXPECT_TRUE(IsBadVersionTest("Adreno (TM) 530"));
+  EXPECT_TRUE(IsBadVersionTest("Adreno (TM) 610"));
+  EXPECT_TRUE(IsBadVersionTest("Adreno (TM) 620"));
+  EXPECT_TRUE(IsBadVersionTest("Adreno (TM) 630"));
+  EXPECT_TRUE(IsBadVersionTest("Adreno (TM) 640"));
+  EXPECT_TRUE(IsBadVersionTest("Adreno (TM) 650"));
+>>>>>>> 48c32af0345e9ad5747f78ddce828c7f795f7159
 }
 
 TEST(DriverInfoVKTest, EnabledDevicesMali) {
@@ -183,14 +199,14 @@ TEST(DriverInfoVKTest, EnabledDevicesMali) {
 }
 
 TEST(DriverInfoVKTest, EnabledDevicesAdreno) {
-  EXPECT_FALSE(IsBadVersionTest("Adreno (TM) 750"));
-  EXPECT_FALSE(IsBadVersionTest("Adreno (TM) 740"));
-  EXPECT_FALSE(IsBadVersionTest("Adreno (TM) 732"));
-  EXPECT_FALSE(IsBadVersionTest("Adreno (TM) 730"));
-  EXPECT_FALSE(IsBadVersionTest("Adreno (TM) 725"));
-  EXPECT_FALSE(IsBadVersionTest("Adreno (TM) 720"));
-  EXPECT_FALSE(IsBadVersionTest("Adreno (TM) 710"));
   EXPECT_FALSE(IsBadVersionTest("Adreno (TM) 702"));
+  EXPECT_FALSE(IsBadVersionTest("Adreno (TM) 710"));
+  EXPECT_FALSE(IsBadVersionTest("Adreno (TM) 720"));
+  EXPECT_FALSE(IsBadVersionTest("Adreno (TM) 725"));
+  EXPECT_FALSE(IsBadVersionTest("Adreno (TM) 730"));
+  EXPECT_FALSE(IsBadVersionTest("Adreno (TM) 732"));
+  EXPECT_FALSE(IsBadVersionTest("Adreno (TM) 740"));
+  EXPECT_FALSE(IsBadVersionTest("Adreno (TM) 750"));
 }
 
 bool CanUseFramebufferFetch(std::string_view driver_name, bool qc = true) {
@@ -250,17 +266,68 @@ TEST(DriverInfoVKTest, DisableOldXclipseDriver) {
   EXPECT_FALSE(context->GetDriverInfo()->IsKnownBadDriver());
 }
 
+<<<<<<< HEAD
 TEST(DriverInfoVKTest, AllPowerVRDisabled) {
   auto const context =
+=======
+TEST(DriverInfoVKTest, OldPowerVRDisabled) {
+  std::shared_ptr<ContextVK> context =
+>>>>>>> 48c32af0345e9ad5747f78ddce828c7f795f7159
       MockVulkanContextBuilder()
           .SetPhysicalPropertiesCallback(
               [](VkPhysicalDevice device, VkPhysicalDeviceProperties* prop) {
                 prop->vendorID = 0x1010;
                 prop->deviceType = VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU;
+<<<<<<< HEAD
+=======
+                std::string name = "PowerVR Rogue GE8320";
+                name.copy(prop->deviceName, name.size());
+>>>>>>> 48c32af0345e9ad5747f78ddce828c7f795f7159
               })
           .Build();
 
   EXPECT_TRUE(context->GetDriverInfo()->IsKnownBadDriver());
+<<<<<<< HEAD
+=======
+  EXPECT_EQ(context->GetDriverInfo()->GetPowerVRGPUInfo(),
+            std::optional<PowerVRGPU>(PowerVRGPU::kUnknown));
+}
+
+TEST(DriverInfoVKTest, NewPowerVREnabled) {
+  std::shared_ptr<ContextVK> context =
+      MockVulkanContextBuilder()
+          .SetPhysicalPropertiesCallback(
+              [](VkPhysicalDevice device, VkPhysicalDeviceProperties* prop) {
+                prop->vendorID = 0x1010;
+                prop->deviceType = VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU;
+                std::string name = "PowerVR DXT 123";
+                name.copy(prop->deviceName, name.size());
+              })
+          .Build();
+
+  EXPECT_FALSE(context->GetDriverInfo()->IsKnownBadDriver());
+  EXPECT_EQ(context->GetDriverInfo()->GetPowerVRGPUInfo(),
+            std::optional<PowerVRGPU>(PowerVRGPU::kDXT));
+  EXPECT_TRUE(GetWorkaroundsFromDriverInfo(*context->GetDriverInfo())
+                  .input_attachment_self_dependency_broken);
+}
+
+TEST(DriverInfoVKTest, PowerVRBSeries) {
+  std::shared_ptr<ContextVK> context =
+      MockVulkanContextBuilder()
+          .SetPhysicalPropertiesCallback(
+              [](VkPhysicalDevice device, VkPhysicalDeviceProperties* prop) {
+                prop->vendorID = 0x1010;
+                prop->deviceType = VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU;
+                std::string name = "PowerVR BXM-8-256";
+                name.copy(prop->deviceName, name.size());
+              })
+          .Build();
+
+  EXPECT_FALSE(context->GetDriverInfo()->IsKnownBadDriver());
+  EXPECT_EQ(context->GetDriverInfo()->GetPowerVRGPUInfo(),
+            std::optional<PowerVRGPU>(PowerVRGPU::kBXM));
+>>>>>>> 48c32af0345e9ad5747f78ddce828c7f795f7159
 }
 
 }  // namespace impeller::testing

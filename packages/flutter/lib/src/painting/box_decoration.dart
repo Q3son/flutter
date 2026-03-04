@@ -28,8 +28,9 @@ import 'image_provider.dart';
 ///
 /// The box has a [border], a body, and may cast a [boxShadow].
 ///
-/// The [shape] of the box can be a circle or a rectangle. If it is a rectangle,
-/// then the [borderRadius] property controls the roundness of the corners.
+/// The [shape] of the box can be [BoxShape.circle] or [BoxShape.rectangle]. If
+/// it is [BoxShape.rectangle], then the [borderRadius] property can be used to
+/// make it a rounded rectangle ([RRect]).
 ///
 /// The body of the box is painted in layers. The bottom-most layer is the
 /// [color], which fills the box. Above that is the [gradient], which also fills
@@ -132,6 +133,7 @@ class BoxDecoration extends Decoration {
   bool debugAssertIsValid() {
     assert(
       shape != BoxShape.circle || borderRadius == null,
+      'A circle cannot have a border radius. Remove either the shape or the borderRadius argument.',
     ); // Can't have a border radius if you're a circle.
     return super.debugAssertIsValid();
   }
@@ -223,7 +225,7 @@ class BoxDecoration extends Decoration {
       case BoxShape.circle:
         final Offset center = rect.center;
         final double radius = rect.shortestSide / 2.0;
-        final Rect square = Rect.fromCircle(center: center, radius: radius);
+        final square = Rect.fromCircle(center: center, radius: radius);
         return Path()..addOval(square);
       case BoxShape.rectangle:
         if (borderRadius != null) {
@@ -407,7 +409,7 @@ class _BoxDecorationPainter extends BoxPainter {
 
     if (_cachedBackgroundPaint == null ||
         (_decoration.gradient != null && _rectForCachedBackgroundPaint != rect)) {
-      final Paint paint = Paint();
+      final paint = Paint();
       if (_decoration.backgroundBlendMode != null) {
         paint.blendMode = _decoration.backgroundBlendMode!;
       }
@@ -427,7 +429,10 @@ class _BoxDecorationPainter extends BoxPainter {
   void _paintBox(Canvas canvas, Rect rect, Paint paint, TextDirection? textDirection) {
     switch (_decoration.shape) {
       case BoxShape.circle:
-        assert(_decoration.borderRadius == null);
+        assert(
+          _decoration.borderRadius == null,
+          'A circle cannot have a border radius. Remove either the shape or the borderRadius argument.',
+        );
         final Offset center = rect.center;
         final double radius = rect.shortestSide / 2.0;
         canvas.drawCircle(center, radius, paint);
@@ -486,7 +491,7 @@ class _BoxDecorationPainter extends BoxPainter {
     }
 
     if (_decoration.border is Border) {
-      final Border border = _decoration.border! as Border;
+      final border = _decoration.border! as Border;
 
       final EdgeInsets insets =
           EdgeInsets.fromLTRB(
@@ -504,7 +509,7 @@ class _BoxDecorationPainter extends BoxPainter {
         rect.bottom - insets.bottom,
       );
     } else if (_decoration.border is BorderDirectional && textDirection != null) {
-      final BorderDirectional border = _decoration.border! as BorderDirectional;
+      final border = _decoration.border! as BorderDirectional;
       final BorderSide leftSide = textDirection == TextDirection.rtl ? border.end : border.start;
       final BorderSide rightSide = textDirection == TextDirection.rtl ? border.start : border.end;
 
@@ -536,17 +541,20 @@ class _BoxDecorationPainter extends BoxPainter {
     Path? clipPath;
     switch (_decoration.shape) {
       case BoxShape.circle:
-        assert(_decoration.borderRadius == null);
+        assert(
+          _decoration.borderRadius == null,
+          'A circle cannot have a border radius. Remove either the shape or the borderRadius argument.',
+        );
         final Offset center = rect.center;
         final double radius = rect.shortestSide / 2.0;
-        final Rect square = Rect.fromCircle(center: center, radius: radius);
+        final square = Rect.fromCircle(center: center, radius: radius);
         clipPath = Path()..addOval(square);
       case BoxShape.rectangle:
         if (_decoration.borderRadius != null) {
-          clipPath =
-              Path()..addRRect(
-                _decoration.borderRadius!.resolve(configuration.textDirection).toRRect(rect),
-              );
+          clipPath = Path()
+            ..addRRect(
+              _decoration.borderRadius!.resolve(configuration.textDirection).toRRect(rect),
+            );
         }
     }
     _imagePainter!.paint(canvas, rect, clipPath, configuration);

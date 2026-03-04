@@ -10,6 +10,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+
 import '../widgets/feedback_tester.dart';
 import '../widgets/semantics_tester.dart';
 
@@ -57,8 +58,8 @@ void main() {
     final Key trailingKey = GlobalKey();
     late bool hasSubtitle;
 
-    const double leftPadding = 10.0;
-    const double rightPadding = 20.0;
+    const leftPadding = 10.0;
+    const rightPadding = 20.0;
     Widget buildFrame({
       bool dense = false,
       bool isTwoLine = false,
@@ -69,7 +70,6 @@ void main() {
       hasSubtitle = isTwoLine || isThreeLine;
       subtitleScaler ??= textScaler;
       return MaterialApp(
-        theme: ThemeData(useMaterial3: true),
         home: MediaQuery(
           data: MediaQueryData(
             padding: const EdgeInsets.only(left: leftPadding, right: rightPadding),
@@ -160,10 +160,7 @@ void main() {
     await tester.pumpWidget(buildFrame(isTwoLine: true, textScaler: const TextScaler.linear(4.0)));
     testChildren();
     testHorizontalGeometry();
-    if (!kIsWeb || isSkiaWeb) {
-      // https://github.com/flutter/flutter/issues/99933
-      testVerticalGeometry(192.0);
-    }
+    testVerticalGeometry(192.0);
 
     // Make sure that the height of a large subtitle is taken into account.
     await tester.pumpWidget(
@@ -175,30 +172,25 @@ void main() {
     );
     testChildren();
     testHorizontalGeometry();
-    if (!kIsWeb || isSkiaWeb) {
-      // https://github.com/flutter/flutter/issues/99933
-      testVerticalGeometry(108.0);
-    }
+    testVerticalGeometry(108.0);
 
     await tester.pumpWidget(
       buildFrame(isThreeLine: true, textScaler: const TextScaler.linear(4.0)),
     );
     testChildren();
     testHorizontalGeometry();
-    if (!kIsWeb || isSkiaWeb) {
-      // https://github.com/flutter/flutter/issues/99933
-      testVerticalGeometry(192.0);
-    }
+    testVerticalGeometry(192.0);
   });
 
   testWidgets('ListTile geometry (RTL)', (WidgetTester tester) async {
-    const double leftPadding = 10.0;
-    const double rightPadding = 20.0;
+    const leftPadding = 10.0;
+    const rightPadding = 20.0;
     await tester.pumpWidget(
-      MaterialApp(
-        theme: ThemeData(useMaterial3: true),
-        home: const MediaQuery(
-          data: MediaQueryData(padding: EdgeInsets.only(left: leftPadding, right: rightPadding)),
+      const MaterialApp(
+        home: MediaQuery(
+          data: MediaQueryData(
+            padding: EdgeInsets.only(left: leftPadding, right: rightPadding),
+          ),
           child: Directionality(
             textDirection: TextDirection.rtl,
             child: Material(
@@ -224,7 +216,7 @@ void main() {
   });
 
   testWidgets('ListTile.divideTiles', (WidgetTester tester) async {
-    final List<String> titles = <String>['first', 'second', 'third'];
+    final titles = <String>['first', 'second', 'third'];
 
     await tester.pumpWidget(
       MaterialApp(
@@ -232,11 +224,10 @@ void main() {
           child: Builder(
             builder: (BuildContext context) {
               return ListView(
-                children:
-                    ListTile.divideTiles(
-                      context: context,
-                      tiles: titles.map<Widget>((String title) => ListTile(title: Text(title))),
-                    ).toList(),
+                children: ListTile.divideTiles(
+                  context: context,
+                  tiles: titles.map<Widget>((String title) => ListTile(title: Text(title))),
+                ).toList(),
               );
             },
           ),
@@ -264,21 +255,23 @@ void main() {
 
   testWidgets('ListTile.divideTiles only runs the generator once', (WidgetTester tester) async {
     // Regression test for https://github.com/flutter/flutter/pull/78879
-    int callCount = 0;
+    var callCount = 0;
     Iterable<Widget> generator() sync* {
       callCount += 1;
       yield const Text('');
       yield const Text('');
     }
 
-    final List<Widget> output =
-        ListTile.divideTiles(tiles: generator(), color: Colors.grey).toList();
+    final List<Widget> output = ListTile.divideTiles(
+      tiles: generator(),
+      color: Colors.grey,
+    ).toList();
     expect(output, hasLength(2));
     expect(callCount, 1);
   });
 
   testWidgets('ListTile semantics', (WidgetTester tester) async {
-    final SemanticsTester semantics = SemanticsTester(tester);
+    final semantics = SemanticsTester(tester);
 
     await tester.pumpWidget(
       Material(
@@ -394,7 +387,6 @@ void main() {
 
     Widget buildFrame(double leadingWidth, TextDirection textDirection) {
       return MaterialApp(
-        theme: ThemeData(useMaterial3: true),
         home: Directionality(
           textDirection: textDirection,
           child: Material(
@@ -462,7 +454,6 @@ void main() {
     // "ONE"-LINE
     await tester.pumpWidget(
       MaterialApp(
-        theme: ThemeData(useMaterial3: true),
         home: Material(
           child: ListView(
             children: const <Widget>[
@@ -514,7 +505,6 @@ void main() {
     // "TWO"-LINE
     await tester.pumpWidget(
       MaterialApp(
-        theme: ThemeData(useMaterial3: true),
         home: Material(
           child: ListView(
             children: const <Widget>[
@@ -536,13 +526,9 @@ void main() {
       ),
     );
 
-    if (kIsWeb && !isSkiaWeb) {
-      // https://github.com/flutter/flutter/issues/99933
-      return;
-    }
     const double height = 300;
-    const double avatarTop = 130.0;
-    const double placeholderTop = 138.0;
+    const avatarTop = 130.0;
+    const placeholderTop = 138.0;
     //                                                                          LEFT                 TOP          WIDTH  HEIGHT
     expect(
       tester.getRect(find.byType(ListTile).at(0)),
@@ -572,7 +558,6 @@ void main() {
     // THREE-LINE
     await tester.pumpWidget(
       MaterialApp(
-        theme: ThemeData(useMaterial3: true),
         home: Material(
           child: ListView(
             children: const <Widget>[
@@ -624,7 +609,6 @@ void main() {
     // "ONE-LINE" with Small Leading Widget
     await tester.pumpWidget(
       MaterialApp(
-        theme: ThemeData(useMaterial3: true),
         home: Material(
           child: ListView(
             children: const <Widget>[
@@ -677,12 +661,11 @@ void main() {
     WidgetTester tester,
   ) async {
     // regression test for https://github.com/flutter/flutter/issues/28765
-    const SizedBox oversizedWidget = SizedBox(height: 80.0, width: 24.0, child: Placeholder());
+    const oversizedWidget = SizedBox(height: 80.0, width: 24.0, child: Placeholder());
 
     // One line
     await tester.pumpWidget(
       MaterialApp(
-        theme: ThemeData(useMaterial3: true),
         home: Material(
           child: ListView(
             children: const <Widget>[
@@ -706,7 +689,6 @@ void main() {
     // Two line
     await tester.pumpWidget(
       MaterialApp(
-        theme: ThemeData(useMaterial3: true),
         home: Material(
           child: ListView(
             children: const <Widget>[
@@ -730,7 +712,6 @@ void main() {
     // Three line
     await tester.pumpWidget(
       MaterialApp(
-        theme: ThemeData(useMaterial3: true),
         home: Material(
           child: ListView(
             children: const <Widget>[
@@ -766,12 +747,11 @@ void main() {
     WidgetTester tester,
   ) async {
     // regression test for https://github.com/flutter/flutter/issues/28765
-    const SizedBox oversizedWidget = SizedBox(height: 80.0, width: 24.0, child: Placeholder());
+    const oversizedWidget = SizedBox(height: 80.0, width: 24.0, child: Placeholder());
 
     // One line
     await tester.pumpWidget(
       MaterialApp(
-        theme: ThemeData(useMaterial3: true),
         home: Material(
           child: ListView(
             children: const <Widget>[
@@ -795,7 +775,6 @@ void main() {
     // Two line
     await tester.pumpWidget(
       MaterialApp(
-        theme: ThemeData(useMaterial3: true),
         home: Material(
           child: ListView(
             children: const <Widget>[
@@ -829,7 +808,6 @@ void main() {
     // Three line
     await tester.pumpWidget(
       MaterialApp(
-        theme: ThemeData(useMaterial3: true),
         home: Material(
           child: ListView(
             children: const <Widget>[
@@ -871,7 +849,11 @@ void main() {
         home: Material(
           child: ListView(
             children: <Widget>[
-              ListTile(title: Text('A', key: childKey), dense: true, onTap: () {}),
+              ListTile(
+                title: Text('A', key: childKey),
+                dense: true,
+                onTap: () {},
+              ),
             ],
           ),
         ),
@@ -890,7 +872,12 @@ void main() {
         home: Material(
           child: ListView(
             children: <Widget>[
-              ListTile(title: Text('A', key: childKey), dense: true, enabled: false, onTap: () {}),
+              ListTile(
+                title: Text('A', key: childKey),
+                dense: true,
+                enabled: false,
+                onTap: () {},
+              ),
             ],
           ),
         ),
@@ -909,7 +896,12 @@ void main() {
         home: Material(
           child: ListView(
             children: <Widget>[
-              ListTile(title: Text('A', key: childKey), dense: true, autofocus: true, onTap: () {}),
+              ListTile(
+                title: Text('A', key: childKey),
+                dense: true,
+                autofocus: true,
+                onTap: () {},
+              ),
             ],
           ),
         ),
@@ -942,7 +934,7 @@ void main() {
   });
 
   testWidgets('ListTile is focusable and has correct focus color', (WidgetTester tester) async {
-    final FocusNode focusNode = FocusNode(debugLabel: 'ListTile');
+    final focusNode = FocusNode(debugLabel: 'ListTile');
     tester.binding.focusManager.highlightStrategy = FocusHighlightStrategy.alwaysTraditional;
     Widget buildApp({bool enabled = true}) {
       return MaterialApp(
@@ -1109,8 +1101,8 @@ void main() {
 
   testWidgets('ListTile can be triggered by keyboard shortcuts', (WidgetTester tester) async {
     tester.binding.focusManager.highlightStrategy = FocusHighlightStrategy.alwaysTraditional;
-    const Key tileKey = Key('ListTile');
-    bool tapped = false;
+    const tileKey = Key('ListTile');
+    var tapped = false;
     Widget buildApp({bool enabled = true}) {
       return MaterialApp(
         home: Material(
@@ -1123,14 +1115,13 @@ void main() {
                   color: Colors.white,
                   child: ListTile(
                     key: tileKey,
-                    onTap:
-                        enabled
-                            ? () {
-                              setState(() {
-                                tapped = true;
-                              });
-                            }
-                            : null,
+                    onTap: enabled
+                        ? () {
+                            setState(() {
+                              tapped = true;
+                            });
+                          }
+                        : null,
                     hoverColor: Colors.orange[500],
                     autofocus: true,
                   ),
@@ -1152,7 +1143,7 @@ void main() {
   });
 
   testWidgets('ListTile responds to density changes.', (WidgetTester tester) async {
-    const Key key = Key('test');
+    const key = Key('test');
     Future<void> buildTest(VisualDensity visualDensity) async {
       return tester.pumpWidget(
         MaterialApp(
@@ -1196,7 +1187,11 @@ void main() {
 
     Widget buildListTile(ShapeBorder shape) {
       return MaterialApp(
-        home: Material(child: Center(child: ListTile(shape: shape, tileColor: tileColor))),
+        home: Material(
+          child: Center(
+            child: ListTile(shape: shape, tileColor: tileColor),
+          ),
+        ),
       );
     }
 
@@ -1256,7 +1251,10 @@ void main() {
       MaterialApp(
         home: Material(
           child: Center(
-            child: MouseRegion(cursor: SystemMouseCursors.forbidden, child: ListTile(onTap: () {})),
+            child: MouseRegion(
+              cursor: SystemMouseCursors.forbidden,
+              child: ListTile(onTap: () {}),
+            ),
           ),
         ),
       ),
@@ -1304,8 +1302,8 @@ void main() {
   });
 
   testWidgets('ListTile onFocusChange callback', (WidgetTester tester) async {
-    final FocusNode node = FocusNode(debugLabel: 'ListTile Focus');
-    bool gotFocus = false;
+    final node = FocusNode(debugLabel: 'ListTile Focus');
+    var gotFocus = false;
     await tester.pumpWidget(
       MaterialApp(
         home: Material(
@@ -1334,7 +1332,7 @@ void main() {
   });
 
   testWidgets('ListTile respects tileColor & selectedTileColor', (WidgetTester tester) async {
-    bool isSelected = false;
+    var isSelected = false;
     final Color tileColor = Colors.green.shade500;
     final Color selectedTileColor = Colors.red.shade500;
 
@@ -1405,8 +1403,8 @@ void main() {
   });
 
   testWidgets('ListTile default tile color', (WidgetTester tester) async {
-    bool isSelected = false;
-    final ThemeData theme = ThemeData(useMaterial3: true);
+    var isSelected = false;
+    final theme = ThemeData();
     const Color defaultColor = Colors.transparent;
 
     await tester.pumpWidget(
@@ -1443,8 +1441,8 @@ void main() {
     WidgetTester tester,
   ) async {
     // This is a regression test for https://github.com/flutter/flutter/issues/117700
-    bool isSelected = false;
-    final ThemeData theme = ThemeData(useMaterial3: true);
+    var isSelected = false;
+    final theme = ThemeData();
     const Color defaultColor = Colors.transparent;
 
     await tester.pumpWidget(
@@ -1496,11 +1494,15 @@ void main() {
 
   testWidgets('ListTile layout at zero size', (WidgetTester tester) async {
     // Regression test for https://github.com/flutter/flutter/issues/66636
-    const Key key = Key('key');
+    const key = Key('key');
 
     await tester.pumpWidget(
       const MaterialApp(
-        home: Scaffold(body: SizedBox.shrink(child: ListTile(key: key, tileColor: Colors.green))),
+        home: Scaffold(
+          body: SizedBox.shrink(
+            child: ListTile(key: key, tileColor: Colors.green),
+          ),
+        ),
       ),
     );
 
@@ -1521,7 +1523,7 @@ void main() {
     });
 
     testWidgets('ListTile with disabled feedback', (WidgetTester tester) async {
-      const bool enableFeedback = false;
+      const enableFeedback = false;
 
       await tester.pumpWidget(
         MaterialApp(
@@ -1542,7 +1544,7 @@ void main() {
     });
 
     testWidgets('ListTile with enabled feedback', (WidgetTester tester) async {
-      const bool enableFeedback = true;
+      const enableFeedback = true;
 
       await tester.pumpWidget(
         MaterialApp(
@@ -1564,7 +1566,11 @@ void main() {
 
     testWidgets('ListTile with enabled feedback by default', (WidgetTester tester) async {
       await tester.pumpWidget(
-        MaterialApp(home: Material(child: ListTile(title: const Text('Title'), onTap: () {}))),
+        MaterialApp(
+          home: Material(
+            child: ListTile(title: const Text('Title'), onTap: () {}),
+          ),
+        ),
       );
 
       await tester.tap(find.byType(ListTile));
@@ -1574,7 +1580,7 @@ void main() {
     });
 
     testWidgets('ListTile with disabled feedback using ListTileTheme', (WidgetTester tester) async {
-      const bool enableFeedbackTheme = false;
+      const enableFeedbackTheme = false;
 
       await tester.pumpWidget(
         MaterialApp(
@@ -1596,8 +1602,8 @@ void main() {
     testWidgets('ListTile.enableFeedback overrides ListTileTheme.enableFeedback', (
       WidgetTester tester,
     ) async {
-      const bool enableFeedbackTheme = false;
-      const bool enableFeedback = true;
+      const enableFeedbackTheme = false;
+      const enableFeedback = true;
 
       await tester.pumpWidget(
         MaterialApp(
@@ -1629,10 +1635,10 @@ void main() {
         MaterialApp(
           home: Material(
             child: ListTileTheme(
-              data: const ListTileThemeData(mouseCursor: MaterialStateMouseCursor.clickable),
+              data: const ListTileThemeData(mouseCursor: WidgetStateMouseCursor.clickable),
               child: ListTile(
                 key: tileKey,
-                mouseCursor: MaterialStateMouseCursor.textable,
+                mouseCursor: WidgetStateMouseCursor.textable,
                 title: const Text('Title'),
                 onTap: () {},
               ),
@@ -1660,7 +1666,6 @@ void main() {
       double? widgetHorizontalTitleGap,
     }) {
       return MaterialApp(
-        theme: ThemeData(useMaterial3: true),
         home: Directionality(
           textDirection: textDirection,
           child: Material(
@@ -1718,7 +1723,6 @@ void main() {
   ) async {
     Widget buildFrame(TextDirection textDirection) {
       return MaterialApp(
-        theme: ThemeData(useMaterial3: true),
         home: Directionality(
           textDirection: textDirection,
           child: Material(
@@ -1750,7 +1754,6 @@ void main() {
   testWidgets('ListTile horizontalTitleGap with visualDensity', (WidgetTester tester) async {
     Widget buildFrame({double? horizontalTitleGap, VisualDensity? visualDensity}) {
       return MaterialApp(
-        theme: ThemeData(useMaterial3: true),
         home: Directionality(
           textDirection: TextDirection.ltr,
           child: Material(
@@ -1800,7 +1803,6 @@ void main() {
       double? widgetMinVerticalPadding,
     }) {
       return MaterialApp(
-        theme: ThemeData(useMaterial3: true),
         home: Directionality(
           textDirection: textDirection,
           child: Material(
@@ -1936,6 +1938,38 @@ void main() {
     expect(tester.getSize(find.byType(ListTile)), const Size(800.0, 60.0));
   });
 
+  testWidgets('ListTile computeMinIntrinsicHeight respects minTileHeight and padding', (
+    WidgetTester tester,
+  ) async {
+    Widget buildFrame({double? minTileHeight}) {
+      return MaterialApp(
+        theme: ThemeData(listTileTheme: ListTileThemeData(minTileHeight: minTileHeight)),
+        home: const Material(
+          type: MaterialType.transparency,
+          child: Column(
+            children: [
+              IntrinsicHeight(
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(children: [ListTile(title: Text('item.label'))]),
+                    ),
+                    Expanded(
+                      child: Column(children: [ListTile(title: Text('item.label'))]),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    await tester.pumpWidget(buildFrame(minTileHeight: 30));
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('colors are applied to leading and trailing text widgets', (
     WidgetTester tester,
   ) async {
@@ -1988,7 +2022,7 @@ void main() {
   });
 
   testWidgets('selected, enabled ListTile default icon color', (WidgetTester tester) async {
-    final ThemeData theme = ThemeData(useMaterial3: true);
+    final theme = ThemeData();
     final ColorScheme colorScheme = theme.colorScheme;
     final Key leadingKey = UniqueKey();
     final Key titleKey = UniqueKey();
@@ -2030,7 +2064,6 @@ void main() {
   testWidgets('ListTile font size', (WidgetTester tester) async {
     Widget buildFrame() {
       return MaterialApp(
-        theme: ThemeData(useMaterial3: true),
         home: Material(
           child: Center(
             child: Builder(
@@ -2063,7 +2096,6 @@ void main() {
   testWidgets('ListTile text color', (WidgetTester tester) async {
     Widget buildFrame() {
       return MaterialApp(
-        theme: ThemeData(useMaterial3: true),
         home: Material(
           child: Center(
             child: Builder(
@@ -2081,7 +2113,7 @@ void main() {
       );
     }
 
-    final ThemeData theme = ThemeData(useMaterial3: true);
+    final theme = ThemeData();
 
     // ListTile default text colors.
     await tester.pumpWidget(buildFrame());
@@ -2096,20 +2128,19 @@ void main() {
   });
 
   testWidgets('Default ListTile debugFillProperties', (WidgetTester tester) async {
-    final DiagnosticPropertiesBuilder builder = DiagnosticPropertiesBuilder();
+    final builder = DiagnosticPropertiesBuilder();
     const ListTile().debugFillProperties(builder);
 
-    final List<String> description =
-        builder.properties
-            .where((DiagnosticsNode node) => !node.isFiltered(DiagnosticLevel.info))
-            .map((DiagnosticsNode node) => node.toString())
-            .toList();
+    final List<String> description = builder.properties
+        .where((DiagnosticsNode node) => !node.isFiltered(DiagnosticLevel.info))
+        .map((DiagnosticsNode node) => node.toString())
+        .toList();
 
     expect(description, <String>[]);
   });
 
   testWidgets('ListTile implements debugFillProperties', (WidgetTester tester) async {
-    final DiagnosticPropertiesBuilder builder = DiagnosticPropertiesBuilder();
+    final builder = DiagnosticPropertiesBuilder();
     const ListTile(
       leading: Text('leading'),
       title: Text('title'),
@@ -2141,11 +2172,10 @@ void main() {
       titleAlignment: ListTileTitleAlignment.bottom,
     ).debugFillProperties(builder);
 
-    final List<String> description =
-        builder.properties
-            .where((DiagnosticsNode node) => !node.isFiltered(DiagnosticLevel.info))
-            .map((DiagnosticsNode node) => node.toString())
-            .toList();
+    final List<String> description = builder.properties
+        .where((DiagnosticsNode node) => !node.isFiltered(DiagnosticLevel.info))
+        .map((DiagnosticsNode node) => node.toString())
+        .toList();
 
     expect(
       description,
@@ -2178,16 +2208,15 @@ void main() {
     );
   });
 
-  testWidgets('ListTile.textColor respects MaterialStateColor', (WidgetTester tester) async {
-    bool enabled = false;
-    bool selected = false;
+  testWidgets('ListTile.textColor respects WidgetStateColor', (WidgetTester tester) async {
+    var enabled = false;
+    var selected = false;
     const Color defaultColor = Colors.blue;
     const Color selectedColor = Colors.green;
     const Color disabledColor = Colors.red;
 
     Widget buildFrame() {
       return MaterialApp(
-        theme: ThemeData(useMaterial3: true),
         home: Material(
           child: Center(
             child: Builder(
@@ -2195,11 +2224,11 @@ void main() {
                 return ListTile(
                   enabled: enabled,
                   selected: selected,
-                  textColor: MaterialStateColor.resolveWith((Set<MaterialState> states) {
-                    if (states.contains(MaterialState.disabled)) {
+                  textColor: WidgetStateColor.resolveWith((Set<WidgetState> states) {
+                    if (states.contains(WidgetState.disabled)) {
                       return disabledColor;
                     }
-                    if (states.contains(MaterialState.selected)) {
+                    if (states.contains(WidgetState.selected)) {
                       return selectedColor;
                     }
                     return defaultColor;
@@ -2234,9 +2263,9 @@ void main() {
     expect(title.text.style!.color, selectedColor);
   });
 
-  testWidgets('ListTile.iconColor respects MaterialStateColor', (WidgetTester tester) async {
-    bool enabled = false;
-    bool selected = false;
+  testWidgets('ListTile.iconColor respects WidgetStateColor', (WidgetTester tester) async {
+    var enabled = false;
+    var selected = false;
     const Color defaultColor = Colors.blue;
     const Color selectedColor = Colors.green;
     const Color disabledColor = Colors.red;
@@ -2244,7 +2273,6 @@ void main() {
 
     Widget buildFrame() {
       return MaterialApp(
-        theme: ThemeData(useMaterial3: true),
         home: Material(
           child: Center(
             child: Builder(
@@ -2252,11 +2280,11 @@ void main() {
                 return ListTile(
                   enabled: enabled,
                   selected: selected,
-                  iconColor: MaterialStateColor.resolveWith((Set<MaterialState> states) {
-                    if (states.contains(MaterialState.disabled)) {
+                  iconColor: WidgetStateColor.resolveWith((Set<WidgetState> states) {
+                    if (states.contains(WidgetState.disabled)) {
                       return disabledColor;
                     }
-                    if (states.contains(MaterialState.selected)) {
+                    if (states.contains(WidgetState.selected)) {
                       return selectedColor;
                     }
                     return defaultColor;
@@ -2294,13 +2322,12 @@ void main() {
     (WidgetTester tester) async {
       const Color iconButtonThemeColor = Colors.blue;
       const Color listTileIconColor = Colors.green;
-      const Icon leadingIcon = Icon(Icons.favorite);
-      const Icon trailingIcon = Icon(Icons.close);
+      const leadingIcon = Icon(Icons.favorite);
+      const trailingIcon = Icon(Icons.close);
 
       Widget buildFrame() {
         return MaterialApp(
           theme: ThemeData(
-            useMaterial3: true,
             iconButtonTheme: IconButtonThemeData(
               style: IconButton.styleFrom(foregroundColor: iconButtonThemeColor),
             ),
@@ -2321,19 +2348,116 @@ void main() {
         );
       }
 
-      TextStyle? getIconStyle(WidgetTester tester, IconData icon) =>
-          tester
-              .widget<RichText>(
-                find.descendant(of: find.byIcon(icon), matching: find.byType(RichText)),
-              )
-              .text
-              .style;
+      TextStyle? getIconStyle(WidgetTester tester, IconData icon) => tester
+          .widget<RichText>(find.descendant(of: find.byIcon(icon), matching: find.byType(RichText)))
+          .text
+          .style;
 
       await tester.pumpWidget(buildFrame());
       expect(getIconStyle(tester, leadingIcon.icon!)?.color, listTileIconColor);
       expect(getIconStyle(tester, trailingIcon.icon!)?.color, listTileIconColor);
     },
   );
+
+  testWidgets(
+    'IconButtonTheme.style.foregroundColor is preserved in ListTile in non-overriding scenario',
+    (WidgetTester tester) async {
+      const Color iconButtonThemeColor = Colors.blue;
+      const leadingIcon = Icon(Icons.favorite);
+      const trailingIcon = Icon(Icons.close);
+
+      Widget buildFrame() {
+        return MaterialApp(
+          theme: ThemeData(
+            iconButtonTheme: IconButtonThemeData(
+              style: IconButton.styleFrom(foregroundColor: iconButtonThemeColor),
+            ),
+          ),
+          home: Material(
+            child: Center(
+              child: Builder(
+                builder: (BuildContext context) {
+                  return ListTile(
+                    leading: IconButton(icon: leadingIcon, onPressed: () {}),
+                    trailing: IconButton(icon: trailingIcon, onPressed: () {}),
+                  );
+                },
+              ),
+            ),
+          ),
+        );
+      }
+
+      TextStyle? getIconStyle(WidgetTester tester, IconData icon) => tester
+          .widget<RichText>(find.descendant(of: find.byIcon(icon), matching: find.byType(RichText)))
+          .text
+          .style;
+
+      await tester.pumpWidget(buildFrame());
+      expect(getIconStyle(tester, leadingIcon.icon!)?.color, iconButtonThemeColor);
+      expect(getIconStyle(tester, trailingIcon.icon!)?.color, iconButtonThemeColor);
+    },
+  );
+
+  testWidgets('ListTile respects and combines parent IconButtonThemeData style', (
+    WidgetTester tester,
+  ) async {
+    const Color customIconColor = Colors.green;
+    const leadingIcon = Icon(Icons.favorite);
+    const trailingIcon = Icon(Icons.close);
+    const WidgetStateProperty<OutlinedBorder> customShape = WidgetStatePropertyAll<OutlinedBorder>(
+      RoundedRectangleBorder(side: BorderSide()),
+    );
+    // Specially treated in ButtonStyle.merge, thus check these, too.
+    const WidgetStateProperty<Color> overlayColor = WidgetStatePropertyAll<Color>(Colors.purple);
+    const WidgetStateProperty<MouseCursor> mouseCursor = WidgetStatePropertyAll<MouseCursor>(
+      SystemMouseCursors.resizeUpRightDownLeft,
+    );
+
+    Widget buildFrame() {
+      return MaterialApp(
+        theme: ThemeData(
+          iconButtonTheme: const IconButtonThemeData(
+            style: ButtonStyle(
+              overlayColor: overlayColor,
+              mouseCursor: mouseCursor,
+              shape: customShape,
+            ),
+          ),
+        ),
+        home: Scaffold(
+          body: Center(
+            child: ListTile(
+              iconColor: customIconColor,
+              leading: IconButton(icon: leadingIcon, onPressed: () {}),
+              trailing: IconButton(icon: trailingIcon, onPressed: () {}),
+            ),
+          ),
+        ),
+      );
+    }
+
+    await tester.pumpWidget(buildFrame());
+
+    // Verify that the merged theme retains the parent shape and other critical fields.
+    for (final BuildContext iconButtonContext in find.byType(IconButton).evaluate()) {
+      final IconButtonThemeData mergedTheme = IconButtonTheme.of(iconButtonContext);
+      expect(mergedTheme.style?.shape, customShape);
+      expect(mergedTheme.style?.overlayColor, overlayColor);
+      expect(mergedTheme.style?.mouseCursor, mouseCursor);
+    }
+
+    // Verify that ListTile's iconColor overrides the inherited color.
+    Color? getIconColor(IconData iconData) {
+      final RichText richText = tester.widget<RichText>(
+        find.descendant(of: find.byIcon(iconData), matching: find.byType(RichText)),
+      );
+      return richText.text.style?.color;
+    }
+
+    expect(getIconColor(leadingIcon.icon!), customIconColor);
+    expect(getIconColor(trailingIcon.icon!), customIconColor);
+  });
 
   testWidgets('ListTile.dense does not throw assertion', (WidgetTester tester) async {
     // This is a regression test for https://github.com/flutter/flutter/pull/116908
@@ -2363,15 +2487,14 @@ void main() {
   testWidgets('titleAlignment position with title widget', (WidgetTester tester) async {
     final Key leadingKey = GlobalKey();
     final Key trailingKey = GlobalKey();
-    const double leadingHeight = 24.0;
-    const double titleHeight = 50.0;
-    const double trailingHeight = 24.0;
-    const double minVerticalPadding = 10.0;
+    const leadingHeight = 24.0;
+    const titleHeight = 50.0;
+    const trailingHeight = 24.0;
+    const minVerticalPadding = 10.0;
     const double tileHeight = minVerticalPadding * 2 + titleHeight;
 
     Widget buildFrame({ListTileTitleAlignment? titleAlignment}) {
       return MaterialApp(
-        theme: ThemeData(useMaterial3: true),
         home: Material(
           child: Center(
             child: ListTile(
@@ -2420,7 +2543,7 @@ void main() {
     // If the tile height is less than 72.0 pixels, the leading widget is placed
     // 16.0 pixels below the top of the title widget, and the trailing is centered
     // vertically in the tile.
-    const double titlePosition = 16.0;
+    const titlePosition = 16.0;
     expect(leadingOffset.dy - tileOffset.dy, titlePosition);
     expect(trailingOffset.dy - tileOffset.dy, centerPosition);
 
@@ -2432,7 +2555,7 @@ void main() {
 
     // Leading and trailing widgets are placed minVerticalPadding below
     // the top of the title widget.
-    const double topPosition = minVerticalPadding;
+    const topPosition = minVerticalPadding;
     expect(leadingOffset.dy - tileOffset.dy, topPosition);
     expect(trailingOffset.dy - tileOffset.dy, topPosition);
 
@@ -2464,16 +2587,15 @@ void main() {
   ) async {
     final Key leadingKey = GlobalKey();
     final Key trailingKey = GlobalKey();
-    const double leadingHeight = 24.0;
-    const double titleHeight = 50.0;
-    const double subtitleHeight = 50.0;
-    const double trailingHeight = 24.0;
-    const double minVerticalPadding = 10.0;
+    const leadingHeight = 24.0;
+    const titleHeight = 50.0;
+    const subtitleHeight = 50.0;
+    const trailingHeight = 24.0;
+    const minVerticalPadding = 10.0;
     const double tileHeight = minVerticalPadding * 2 + titleHeight + subtitleHeight;
 
     Widget buildFrame({ListTileTitleAlignment? titleAlignment}) {
       return MaterialApp(
-        theme: ThemeData(useMaterial3: true),
         home: Material(
           child: Center(
             child: ListTile(
@@ -2522,7 +2644,7 @@ void main() {
 
     // Leading and trailing widgets are positioned 16.0 pixels below the
     // top of the title widget.
-    const double titlePosition = 16.0;
+    const titlePosition = 16.0;
     expect(leadingOffset.dy - tileOffset.dy, titlePosition);
     expect(trailingOffset.dy - tileOffset.dy, titlePosition);
 
@@ -2534,7 +2656,7 @@ void main() {
 
     // Leading and trailing widgets are placed minVerticalPadding below
     // the top of the title widget.
-    const double topPosition = minVerticalPadding;
+    const topPosition = minVerticalPadding;
     expect(leadingOffset.dy - tileOffset.dy, topPosition);
     expect(trailingOffset.dy - tileOffset.dy, topPosition);
 
@@ -2566,16 +2688,15 @@ void main() {
   ) async {
     final Key leadingKey = GlobalKey();
     final Key trailingKey = GlobalKey();
-    const double leadingHeight = 24.0;
-    const double titleHeight = 50.0;
-    const double subtitleHeight = 50.0;
-    const double trailingHeight = 24.0;
-    const double minVerticalPadding = 10.0;
+    const leadingHeight = 24.0;
+    const titleHeight = 50.0;
+    const subtitleHeight = 50.0;
+    const trailingHeight = 24.0;
+    const minVerticalPadding = 10.0;
     const double tileHeight = minVerticalPadding * 2 + titleHeight + subtitleHeight;
 
     Widget buildFrame({ListTileTitleAlignment? titleAlignment, bool isThreeLine = false}) {
       return MaterialApp(
-        theme: ThemeData(useMaterial3: true),
         home: Material(
           child: Center(
             child: ListTile(
@@ -2613,39 +2734,83 @@ void main() {
 
     // The leading and trailing widgets are placed minVerticalPadding
     // to the top of the tile widget.
-    const double topPosition = minVerticalPadding;
+    const topPosition = minVerticalPadding;
     expect(leadingOffset.dy - tileOffset.dy, topPosition);
     expect(trailingOffset.dy - tileOffset.dy, topPosition);
   });
 
-  testWidgets('Leading/Trailing exceeding list tile width throws exception', (
-    WidgetTester tester,
-  ) async {
+  group('Leading/Trailing exceeding list tile width throws exception', () {
+    final exceptions = <Object>[];
+    final FlutterExceptionHandler? oldHandler = FlutterError.onError;
+    tearDown(exceptions.clear);
+
+    void onError(FlutterErrorDetails details) => exceptions.add(details.exception);
     Widget buildListTile({Widget? leading, Widget? trailing}) {
       return MaterialApp(
         home: Material(
           child: Center(
-            child: SizedBox(width: 100, child: ListTile(leading: leading, trailing: trailing)),
+            child: SizedBox(
+              width: 100,
+              child: ListTile(leading: leading, trailing: trailing),
+            ),
           ),
         ),
       );
     }
 
-    // Test a trailing widget that exceeds the list tile width.
-    // 16 (content padding) + 61 (leading width) + 24 (content padding) = 101.
-    // List tile width is 100 as a result, an exception should be thrown.
-    await tester.pumpWidget(buildListTile(leading: const SizedBox(width: 61)));
+    testWidgets('leading', (WidgetTester tester) async {
+      // Test a leading widget that exceeds the list tile width.
+      // 16 (content padding) + 61 (leading width) + 24 (content padding) = 101.
+      // List tile width is 100 as a result, an exception should be thrown.
+      FlutterError.onError = onError;
+      await tester.pumpWidget(buildListTile(leading: const SizedBox(width: 61)));
+      FlutterError.onError = oldHandler;
 
-    // Error message cannot be tested as there too many errors thrown.
-    expect(tester.takeException(), isNotNull);
+      final error = exceptions.first as FlutterError;
+      expect(error.diagnostics.length, 3);
+      expect(
+        error.diagnostics[0].toStringDeep(),
+        'Leading widget consumes the entire tile width (including\nListTile.contentPadding).\n',
+      );
+      expect(
+        error.diagnostics[1].toStringDeep(),
+        'Either resize the tile width so that the leading widget plus any\n'
+        'content padding do not exceed the tile width, or use a sized\n'
+        'widget, or consider replacing ListTile with a custom widget.\n',
+      );
+      expect(
+        error.diagnostics[2].toStringDeep(),
+        'See also:\n'
+        'https://api.flutter.dev/flutter/material/ListTile-class.html#material.ListTile.4\n',
+      );
+    });
 
-    // Test a trailing widget that exceeds the list tile width.
-    // 16 (content padding) + 61 (trailing width) + 24 (content padding) = 101.
-    // List tile width is 100 as a result, an exception should be thrown.
-    await tester.pumpWidget(buildListTile(trailing: const SizedBox(width: 61)));
+    testWidgets('trailing', (WidgetTester tester) async {
+      // Test a trailing widget that exceeds the list tile width.
+      // 16 (content padding) + 61 (trailing width) + 24 (content padding) = 101.
+      // List tile width is 100 as a result, an exception should be thrown.
+      FlutterError.onError = onError;
+      await tester.pumpWidget(buildListTile(trailing: const SizedBox(width: 61)));
+      FlutterError.onError = oldHandler;
 
-    // Error message cannot tested be as there too many errors thrown.
-    expect(tester.takeException(), isNotNull);
+      final error = exceptions.first as FlutterError;
+      expect(error.diagnostics.length, 3);
+      expect(
+        error.diagnostics[0].toStringDeep(),
+        'Trailing widget consumes the entire tile width (including\nListTile.contentPadding).\n',
+      );
+      expect(
+        error.diagnostics[1].toStringDeep(),
+        'Either resize the tile width so that the trailing widget plus any\n'
+        'content padding do not exceed the tile width, or use a sized\n'
+        'widget, or consider replacing ListTile with a custom widget.\n',
+      );
+      expect(
+        error.diagnostics[2].toStringDeep(),
+        'See also:\n'
+        'https://api.flutter.dev/flutter/material/ListTile-class.html#material.ListTile.4\n',
+      );
+    });
   });
 
   group('Material 2', () {
@@ -2660,8 +2825,8 @@ void main() {
       final Key trailingKey = GlobalKey();
       late bool hasSubtitle;
 
-      const double leftPadding = 10.0;
-      const double rightPadding = 20.0;
+      const leftPadding = 10.0;
+      const rightPadding = 20.0;
       Widget buildFrame({
         bool dense = false,
         bool isTwoLine = false,
@@ -2822,13 +2987,15 @@ void main() {
     });
 
     testWidgets('ListTile geometry (RTL)', (WidgetTester tester) async {
-      const double leftPadding = 10.0;
-      const double rightPadding = 20.0;
+      const leftPadding = 10.0;
+      const rightPadding = 20.0;
       await tester.pumpWidget(
         MaterialApp(
           theme: ThemeData(useMaterial3: false),
           home: const MediaQuery(
-            data: MediaQueryData(padding: EdgeInsets.only(left: leftPadding, right: rightPadding)),
+            data: MediaQueryData(
+              padding: EdgeInsets.only(left: leftPadding, right: rightPadding),
+            ),
             child: Directionality(
               textDirection: TextDirection.rtl,
               child: Material(
@@ -3222,7 +3389,7 @@ void main() {
       WidgetTester tester,
     ) async {
       // regression test for https://github.com/flutter/flutter/issues/28765
-      const SizedBox oversizedWidget = SizedBox(height: 80.0, width: 24.0, child: Placeholder());
+      const oversizedWidget = SizedBox(height: 80.0, width: 24.0, child: Placeholder());
 
       // Dense One line
       await tester.pumpWidget(
@@ -3417,7 +3584,7 @@ void main() {
       WidgetTester tester,
     ) async {
       // regression test for https://github.com/flutter/flutter/issues/28765
-      const SizedBox oversizedWidget = SizedBox(height: 80.0, width: 24.0, child: Placeholder());
+      const oversizedWidget = SizedBox(height: 80.0, width: 24.0, child: Placeholder());
 
       // Dense One line
       await tester.pumpWidget(
@@ -3949,7 +4116,7 @@ void main() {
     });
 
     testWidgets('ListTile text color', (WidgetTester tester) async {
-      final ThemeData theme = ThemeData(useMaterial3: false);
+      final theme = ThemeData(useMaterial3: false);
       Widget buildFrame({
         bool dense = false,
         bool enabled = true,
@@ -4008,18 +4175,17 @@ void main() {
     ) async {
       // Regression test for https://github.com/flutter/flutter/pull/77004
 
-      const ColorScheme lightColorScheme = ColorScheme.light();
-      const ColorScheme darkColorScheme = ColorScheme.dark();
+      const lightColorScheme = ColorScheme.light();
+      const darkColorScheme = ColorScheme.dark();
       final Key leadingKey = UniqueKey();
       final Key titleKey = UniqueKey();
       final Key subtitleKey = UniqueKey();
       final Key trailingKey = UniqueKey();
 
       Widget buildFrame({required Brightness brightness, required bool selected}) {
-        final ThemeData theme =
-            brightness == Brightness.light
-                ? ThemeData.from(colorScheme: const ColorScheme.light(), useMaterial3: false)
-                : ThemeData.from(colorScheme: const ColorScheme.dark(), useMaterial3: false);
+        final theme = brightness == Brightness.light
+            ? ThemeData.from(colorScheme: const ColorScheme.light(), useMaterial3: false)
+            : ThemeData.from(colorScheme: const ColorScheme.dark(), useMaterial3: false);
         return MaterialApp(
           theme: theme,
           home: Material(
@@ -4067,7 +4233,7 @@ void main() {
     });
 
     testWidgets('ListTile default tile color', (WidgetTester tester) async {
-      bool isSelected = false;
+      var isSelected = false;
       const Color defaultColor = Colors.transparent;
 
       await tester.pumpWidget(
@@ -4103,10 +4269,10 @@ void main() {
     testWidgets('titleAlignment position with title widget', (WidgetTester tester) async {
       final Key leadingKey = GlobalKey();
       final Key trailingKey = GlobalKey();
-      const double leadingHeight = 24.0;
-      const double titleHeight = 50.0;
-      const double trailingHeight = 24.0;
-      const double minVerticalPadding = 10.0;
+      const leadingHeight = 24.0;
+      const titleHeight = 50.0;
+      const trailingHeight = 24.0;
+      const minVerticalPadding = 10.0;
       const double tileHeight = minVerticalPadding * 2 + titleHeight;
 
       Widget buildFrame({ListTileTitleAlignment? titleAlignment}) {
@@ -4136,7 +4302,7 @@ void main() {
       Offset trailingOffset = tester.getTopRight(find.byKey(trailingKey));
 
       // Leading and trailing widgets are centered vertically in the tile.
-      const double titlePosition = 16.0;
+      const titlePosition = 16.0;
       const double centerPosition = (tileHeight / 2) - (leadingHeight / 2);
       expect(leadingOffset.dy - tileOffset.dy, titlePosition);
       expect(trailingOffset.dy - tileOffset.dy, centerPosition);
@@ -4172,7 +4338,7 @@ void main() {
 
       // Leading and trailing widgets are placed minVerticalPadding below
       // the top of the title widget.
-      const double topPosition = minVerticalPadding;
+      const topPosition = minVerticalPadding;
       expect(leadingOffset.dy - tileOffset.dy, topPosition);
       expect(trailingOffset.dy - tileOffset.dy, topPosition);
 
@@ -4204,11 +4370,11 @@ void main() {
     ) async {
       final Key leadingKey = GlobalKey();
       final Key trailingKey = GlobalKey();
-      const double leadingHeight = 24.0;
-      const double titleHeight = 50.0;
-      const double subtitleHeight = 50.0;
-      const double trailingHeight = 24.0;
-      const double minVerticalPadding = 10.0;
+      const leadingHeight = 24.0;
+      const titleHeight = 50.0;
+      const subtitleHeight = 50.0;
+      const trailingHeight = 24.0;
+      const minVerticalPadding = 10.0;
       const double tileHeight = minVerticalPadding * 2 + titleHeight + subtitleHeight;
 
       Widget buildFrame({ListTileTitleAlignment? titleAlignment}) {
@@ -4239,7 +4405,7 @@ void main() {
 
       // Leading and trailing widgets are positioned 16.0 pixels below the
       // top of the tile widget.
-      const double titlePosition = 16.0;
+      const titlePosition = 16.0;
       expect(leadingOffset.dy - tileOffset.dy, titlePosition);
       expect(trailingOffset.dy - tileOffset.dy, titlePosition);
 
@@ -4274,7 +4440,7 @@ void main() {
 
       // Leading and trailing widgets are placed minVerticalPadding below
       // the top of the tile widget.
-      const double topPosition = minVerticalPadding;
+      const topPosition = minVerticalPadding;
       expect(leadingOffset.dy - tileOffset.dy, topPosition);
       expect(trailingOffset.dy - tileOffset.dy, topPosition);
 
@@ -4306,11 +4472,11 @@ void main() {
     ) async {
       final Key leadingKey = GlobalKey();
       final Key trailingKey = GlobalKey();
-      const double leadingHeight = 24.0;
-      const double titleHeight = 50.0;
-      const double subtitleHeight = 50.0;
-      const double trailingHeight = 24.0;
-      const double minVerticalPadding = 10.0;
+      const leadingHeight = 24.0;
+      const titleHeight = 50.0;
+      const subtitleHeight = 50.0;
+      const trailingHeight = 24.0;
+      const minVerticalPadding = 10.0;
       const double tileHeight = minVerticalPadding * 2 + titleHeight + subtitleHeight;
 
       Widget buildFrame({ListTileTitleAlignment? titleAlignment, bool isThreeLine = false}) {
@@ -4357,6 +4523,246 @@ void main() {
       expect(leadingOffset.dy - tileOffset.dy, minVerticalPadding);
       expect(trailingOffset.dy - tileOffset.dy, minVerticalPadding);
     });
+  });
+
+  // Regression test for https://github.com/flutter/flutter/issues/165453
+  testWidgets('ListTile isThreeLine', (WidgetTester tester) async {
+    const double height = 300;
+    const avatarTop = 130.0;
+    const placeholderTop = 138.0;
+
+    Widget buildFrame({bool? themeDataIsThreeLine, bool? themeIsThreeLine, bool? isThreeLine}) {
+      return MaterialApp(
+        key: UniqueKey(),
+        theme: themeDataIsThreeLine != null
+            ? ThemeData(listTileTheme: ListTileThemeData(isThreeLine: themeDataIsThreeLine))
+            : null,
+        home: Material(
+          child: ListTileTheme(
+            data: themeIsThreeLine != null
+                ? ListTileThemeData(isThreeLine: themeIsThreeLine)
+                : null,
+            child: ListView(
+              children: <Widget>[
+                ListTile(
+                  isThreeLine: isThreeLine,
+                  leading: const CircleAvatar(),
+                  trailing: const SizedBox(height: 24.0, width: 24.0, child: Placeholder()),
+                  title: const Text('A'),
+                  subtitle: const Text('A\nB\nC\nD\nE\nF\nG\nH\nI\nJ\nK\nL\nM'),
+                ),
+                ListTile(
+                  isThreeLine: isThreeLine,
+                  leading: const CircleAvatar(),
+                  trailing: const SizedBox(height: 24.0, width: 24.0, child: Placeholder()),
+                  title: const Text('A'),
+                  subtitle: const Text('A'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    void expectTwoLine() {
+      expect(
+        tester.getRect(find.byType(ListTile).at(0)),
+        const Rect.fromLTWH(0.0, 0.0, 800.0, height),
+      );
+      expect(
+        tester.getRect(find.byType(CircleAvatar).at(0)),
+        const Rect.fromLTWH(16.0, avatarTop, 40.0, 40.0),
+      );
+      expect(
+        tester.getRect(find.byType(Placeholder).at(0)),
+        const Rect.fromLTWH(800.0 - 24.0 - 24.0, placeholderTop, 24.0, 24.0),
+      );
+      expect(
+        tester.getRect(find.byType(ListTile).at(1)),
+        const Rect.fromLTWH(0.0, height, 800.0, 72.0),
+      );
+      expect(
+        tester.getRect(find.byType(CircleAvatar).at(1)),
+        const Rect.fromLTWH(16.0, height + 16.0, 40.0, 40.0),
+      );
+      expect(
+        tester.getRect(find.byType(Placeholder).at(1)),
+        const Rect.fromLTWH(800.0 - 24.0 - 24.0, height + 24.0, 24.0, 24.0),
+      );
+    }
+
+    void expectThreeLine() {
+      expect(
+        tester.getRect(find.byType(ListTile).at(0)),
+        const Rect.fromLTWH(0.0, 0.0, 800.0, height),
+      );
+      expect(
+        tester.getRect(find.byType(CircleAvatar).at(0)),
+        const Rect.fromLTWH(16.0, 8.0, 40.0, 40.0),
+      );
+      expect(
+        tester.getRect(find.byType(Placeholder).at(0)),
+        const Rect.fromLTWH(800.0 - 24.0 - 24.0, 8.0, 24.0, 24.0),
+      );
+      expect(
+        tester.getRect(find.byType(ListTile).at(1)),
+        const Rect.fromLTWH(0.0, height, 800.0, 88.0),
+      );
+      expect(
+        tester.getRect(find.byType(CircleAvatar).at(1)),
+        const Rect.fromLTWH(16.0, height + 8.0, 40.0, 40.0),
+      );
+      expect(
+        tester.getRect(find.byType(Placeholder).at(1)),
+        const Rect.fromLTWH(800.0 - 24.0 - 24.0, height + 8.0, 24.0, 24.0),
+      );
+    }
+
+    await tester.pumpWidget(buildFrame());
+    expectTwoLine();
+
+    await tester.pumpWidget(buildFrame(themeDataIsThreeLine: true));
+    expectThreeLine();
+
+    await tester.pumpWidget(buildFrame(themeDataIsThreeLine: false, themeIsThreeLine: true));
+    expectThreeLine();
+
+    await tester.pumpWidget(buildFrame(themeDataIsThreeLine: true, themeIsThreeLine: false));
+    expectTwoLine();
+
+    await tester.pumpWidget(buildFrame(isThreeLine: true));
+    expectThreeLine();
+
+    await tester.pumpWidget(buildFrame(themeIsThreeLine: true, isThreeLine: false));
+    expectTwoLine();
+
+    await tester.pumpWidget(buildFrame(themeDataIsThreeLine: true, isThreeLine: false));
+    expectTwoLine();
+
+    await tester.pumpWidget(
+      buildFrame(themeDataIsThreeLine: true, themeIsThreeLine: true, isThreeLine: false),
+    );
+    expectTwoLine();
+
+    await tester.pumpWidget(buildFrame(themeIsThreeLine: false, isThreeLine: true));
+    expectThreeLine();
+
+    await tester.pumpWidget(buildFrame(themeDataIsThreeLine: false, isThreeLine: true));
+    expectThreeLine();
+
+    await tester.pumpWidget(
+      buildFrame(themeDataIsThreeLine: false, themeIsThreeLine: false, isThreeLine: true),
+    );
+    expectThreeLine();
+  });
+
+  testWidgets('ListTile statesController', (WidgetTester tester) async {
+    var count = 0;
+    void valueChanged() {
+      count += 1;
+    }
+
+    final controller = MaterialStatesController();
+    addTearDown(controller.dispose);
+    controller.addListener(valueChanged);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: ListTile(statesController: controller, onTap: () {}, title: const Text('title')),
+          ),
+        ),
+      ),
+    );
+
+    expect(controller.value, <WidgetState>{});
+    expect(count, 0);
+
+    final Offset center = tester.getCenter(find.byType(Text));
+    final TestGesture gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await gesture.addPointer();
+    await gesture.moveTo(center);
+    await tester.pumpAndSettle();
+
+    expect(controller.value, <WidgetState>{WidgetState.hovered});
+    expect(count, 1);
+
+    await gesture.moveTo(Offset.zero);
+    await tester.pumpAndSettle();
+
+    expect(controller.value, <WidgetState>{});
+    expect(count, 2);
+
+    await gesture.moveTo(center);
+    await tester.pumpAndSettle();
+
+    expect(controller.value, <WidgetState>{WidgetState.hovered});
+    expect(count, 3);
+
+    await gesture.down(center);
+    await tester.pumpAndSettle();
+
+    expect(controller.value, <WidgetState>{WidgetState.hovered, WidgetState.pressed});
+    expect(count, 4);
+
+    await gesture.up();
+    await tester.pumpAndSettle();
+
+    expect(controller.value, <WidgetState>{WidgetState.hovered});
+    expect(count, 5);
+
+    await gesture.moveTo(Offset.zero);
+    await tester.pumpAndSettle();
+
+    expect(controller.value, <WidgetState>{});
+    expect(count, 6);
+
+    await gesture.down(center);
+    await tester.pumpAndSettle();
+    expect(controller.value, <WidgetState>{WidgetState.hovered, WidgetState.pressed});
+    expect(count, 8); // adds hovered and pressed - two changes
+
+    // If the button is rebuilt disabled, then the pressed state is
+    // removed.
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: ListTile(statesController: controller, title: const Text('title')),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(controller.value, <WidgetState>{WidgetState.hovered, WidgetState.disabled});
+    expect(count, 10); // removes pressed and adds disabled - two changes
+    await gesture.moveTo(Offset.zero);
+    await tester.pumpAndSettle();
+    expect(controller.value, <WidgetState>{WidgetState.disabled});
+    expect(count, 11);
+    await gesture.removePointer();
+  });
+
+  testWidgets('ListTile does not crash at zero area', (WidgetTester tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: SizedBox.shrink(
+              child: ListTile(
+                title: Text('title'),
+                leading: Icon(Icons.add),
+                trailing: Icon(Icons.remove),
+                subtitle: Text('subTitle'),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    expect(tester.getSize(find.byType(ListTile)), Size.zero);
   });
 }
 

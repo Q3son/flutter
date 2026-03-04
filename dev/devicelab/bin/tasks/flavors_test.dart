@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import 'dart:io' show File;
+import 'dart:io' show File, Platform;
 import 'dart:typed_data';
 
 import 'package:collection/collection.dart';
@@ -20,9 +20,9 @@ Future<void> main() async {
     await createFlavorsTest().call();
     await createIntegrationTestFlavorsTest().call();
 
-    final String projectPath = '${flutterDirectory.path}/dev/integration_tests/flavors';
+    final projectPath = '${flutterDirectory.path}/dev/integration_tests/flavors';
     final TaskResult installTestsResult = await inDirectory(projectPath, () async {
-      final List<TaskResult> testResults = <TaskResult>[
+      final testResults = <TaskResult>[
         await _testInstallDebugPaidFlavor(projectPath),
         await _testInstallBogusFlavor(),
       ];
@@ -34,6 +34,8 @@ Future<void> main() async {
       return firstInstallFailure ?? TaskResult.success(null);
     });
 
+    await _testFlavorsWhenBuildStartsWithGradle(projectPath);
+
     return installTestsResult;
   });
 }
@@ -42,22 +44,21 @@ Future<void> main() async {
 Future<TaskResult> _testInstallDebugPaidFlavor(String projectDir) async {
   await evalFlutter('install', options: <String>['--debug', '--flavor', 'paid']);
 
-  final Uint8List assetManifestFileData =
-      File(
-        path.join(
-          projectDir,
-          'build',
-          'app',
-          'intermediates',
-          'assets',
-          'paidDebug',
-          'mergePaidDebugAssets',
-          'flutter_assets',
-          'AssetManifest.bin',
-        ),
-      ).readAsBytesSync();
+  final Uint8List assetManifestFileData = File(
+    path.join(
+      projectDir,
+      'build',
+      'app',
+      'intermediates',
+      'assets',
+      'paidDebug',
+      'mergePaidDebugAssets',
+      'flutter_assets',
+      'AssetManifest.bin',
+    ),
+  ).readAsBytesSync();
 
-  final Map<Object?, Object?> assetManifest =
+  final assetManifest =
       const StandardMessageCodec().decodeMessage(ByteData.sublistView(assetManifestFileData))
           as Map<Object?, Object?>;
 
@@ -83,7 +84,7 @@ Future<TaskResult> _testInstallDebugPaidFlavor(String projectDir) async {
 }
 
 Future<TaskResult> _testInstallBogusFlavor() async {
-  final StringBuffer stderr = StringBuffer();
+  final stderr = StringBuffer();
   await evalFlutter(
     'install',
     canFail: true,
@@ -91,7 +92,7 @@ Future<TaskResult> _testInstallBogusFlavor() async {
     options: <String>['--flavor', 'bogus'],
   );
 
-  final String stderrString = stderr.toString();
+  final stderrString = stderr.toString();
   final String expectedApkPath = path.join(
     'build',
     'app',
@@ -105,4 +106,41 @@ Future<TaskResult> _testInstallBogusFlavor() async {
   }
 
   return TaskResult.success(null);
+}
+
+Future<TaskResult> _testFlavorsWhenBuildStartsWithGradle(String projectDir) async {
+  final gradlew = Platform.isWindows ? 'gradlew.bat' : 'gradlew';
+  final gradlewExecutable = Platform.isWindows ? '.\\$gradlew' : './$gradlew';
+
+  final androidDirPath = '$projectDir/android';
+  final stdout = StringBuffer();
+
+  // Prebuild the project to generate the Android gradle wrapper files.
+  await inDirectory(projectDir, () async {
+    await flutter('build', options: <String>['apk', '--config-only']);
+  });
+
+  await inDirectory(androidDirPath, () async {
+    await exec(gradlewExecutable, <String>['clean']);
+    await exec(gradlewExecutable, <String>[':app:assemblePaidDebug', '--info'], output: stdout);
+  });
+
+  final stdoutString = stdout.toString();
+
+  if (!stdoutString.contains('-dFlavor=paid')) {
+    return TaskResult.failure('Expected to see -dFlavor=paid in the gradle verbose output');
+  }
+
+  final String appPath = path.join(
+    projectDir,
+    'build',
+    'app',
+    'outputs',
+    'flutter-apk',
+    'app-paid-debug.apk',
+  );
+
+  return createFlavorsTest(
+    extraOptions: <String>['--flavor', 'paid', '--use-application-binary=$appPath'],
+  ).call();
 }

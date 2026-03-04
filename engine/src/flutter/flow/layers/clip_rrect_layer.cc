@@ -15,7 +15,17 @@ const DlRect ClipRRectLayer::clip_shape_bounds() const {
 }
 
 void ClipRRectLayer::ApplyClip(LayerStateStack::MutatorContext& mutator) const {
-  mutator.clipRRect(clip_shape(), clip_behavior() != Clip::kHardEdge);
+  bool is_aa = clip_behavior() != Clip::kHardEdge;
+  if (clip_shape().IsRect()) {
+    mutator.clipRect(clip_shape().GetBounds(), is_aa);
+  } else {
+    mutator.clipRRect(clip_shape(), is_aa);
+  }
+}
+
+void ClipRRectLayer::PushClipToEmbeddedNativeViewMutatorStack(
+    ExternalViewEmbedder* view_embedder) const {
+  view_embedder->PushClipRRectToVisitedPlatformViews(clip_shape());
 }
 
 }  // namespace flutter

@@ -11,7 +11,6 @@ import 'package:flutter_tools/src/build_info.dart';
 import 'package:flutter_tools/src/build_system/build_system.dart';
 import 'package:flutter_tools/src/build_system/targets/common.dart';
 import 'package:flutter_tools/src/build_system/targets/linux.dart';
-import 'package:flutter_tools/src/convert.dart';
 
 import '../../../src/common.dart';
 import '../../../src/context.dart';
@@ -21,10 +20,10 @@ void main() {
     'Copies files to correct cache directory, excluding unrelated code on a x64 host',
     () async {
       final FileSystem fileSystem = MemoryFileSystem.test();
-      final Artifacts artifacts = Artifacts.test();
+      final artifacts = Artifacts.test();
       setUpCacheDirectory(fileSystem, artifacts);
 
-      final Environment testEnvironment = Environment.test(
+      final testEnvironment = Environment.test(
         fileSystem.currentDirectory,
         defines: <String, String>{kBuildMode: 'debug'},
         artifacts: artifacts,
@@ -72,10 +71,10 @@ void main() {
     'Copies files to correct cache directory, excluding unrelated code on a arm64 host',
     () async {
       final FileSystem fileSystem = MemoryFileSystem.test();
-      final Artifacts artifacts = Artifacts.test();
+      final artifacts = Artifacts.test();
       setUpCacheDirectory(fileSystem, artifacts);
 
-      final Environment testEnvironment = Environment.test(
+      final testEnvironment = Environment.test(
         fileSystem.currentDirectory,
         defines: <String, String>{kBuildMode: 'debug'},
         artifacts: artifacts,
@@ -127,10 +126,9 @@ void main() {
   testUsingContext(
     'DebugBundleLinuxAssets copies artifacts to out directory',
     () async {
-      final Environment testEnvironment = Environment.test(
+      final testEnvironment = Environment.test(
         fileSystem.currentDirectory,
         defines: <String, String>{kBuildMode: 'debug', kBuildName: '2.0.0', kBuildNumber: '22'},
-        inputs: <String, String>{kBundleSkSLPath: 'bundle.sksl'},
         artifacts: Artifacts.test(),
         processManager: FakeProcessManager.any(),
         fileSystem: fileSystem,
@@ -143,29 +141,16 @@ void main() {
       // Create input files.
       testEnvironment.buildDir.childFile('app.dill').createSync();
       testEnvironment.buildDir.childFile('native_assets.json').createSync();
-      fileSystem
-          .file('bundle.sksl')
-          .writeAsStringSync(
-            json.encode(<String, Object>{
-              'engineRevision': '2',
-              'platform': 'ios',
-              'data': <String, Object>{'A': 'B'},
-            }),
-          );
 
       await const DebugBundleLinuxAssets(TargetPlatform.linux_x64).build(testEnvironment);
 
       final Directory output = testEnvironment.outputDir.childDirectory('flutter_assets');
 
       expect(output.childFile('kernel_blob.bin'), exists);
-      expect(output.childFile('AssetManifest.json'), exists);
       expect(output.childFile('version.json'), exists);
       final String versionFile = output.childFile('version.json').readAsStringSync();
       expect(versionFile, contains('"version":"2.0.0"'));
       expect(versionFile, contains('"build_number":"22"'));
-      // SkSL
-      expect(output.childFile('io.flutter.shaders.json'), exists);
-      expect(output.childFile('io.flutter.shaders.json').readAsStringSync(), '{"data":{"A":"B"}}');
 
       // No bundled fonts
       expect(output.childFile('FontManifest.json'), isNot(exists));
@@ -190,7 +175,7 @@ void main() {
   testUsingContext(
     'ProfileBundleLinuxAssets copies artifacts to out directory',
     () async {
-      final Environment testEnvironment = Environment.test(
+      final testEnvironment = Environment.test(
         fileSystem.currentDirectory,
         defines: <String, String>{kBuildMode: 'profile'},
         artifacts: Artifacts.test(),
@@ -211,7 +196,6 @@ void main() {
       final Directory assetsDir = testEnvironment.outputDir.childDirectory('flutter_assets');
 
       expect(libDir.childFile('libapp.so'), exists);
-      expect(assetsDir.childFile('AssetManifest.json'), exists);
       expect(assetsDir.childFile('version.json'), exists);
       // No bundled fonts
       expect(assetsDir.childFile('FontManifest.json'), isNot(exists));
@@ -236,7 +220,7 @@ void main() {
   testUsingContext(
     'ReleaseBundleLinuxAssets copies artifacts to out directory',
     () async {
-      final Environment testEnvironment = Environment.test(
+      final testEnvironment = Environment.test(
         fileSystem.currentDirectory,
         defines: <String, String>{kBuildMode: 'release'},
         artifacts: Artifacts.test(),
@@ -257,7 +241,6 @@ void main() {
       final Directory assetsDir = testEnvironment.outputDir.childDirectory('flutter_assets');
 
       expect(libDir.childFile('libapp.so'), exists);
-      expect(assetsDir.childFile('AssetManifest.json'), exists);
       expect(assetsDir.childFile('version.json'), exists);
       // No bundled fonts
       expect(assetsDir.childFile('FontManifest.json'), isNot(exists));

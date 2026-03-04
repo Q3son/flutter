@@ -4,6 +4,7 @@
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -31,7 +32,7 @@ class TestMaterialLocalizationsDelegate extends LocalizationsDelegate<MaterialLo
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  final MockClipboard mockClipboard = MockClipboard();
+  final mockClipboard = MockClipboard();
 
   Widget inputDatePickerField({
     Key? key,
@@ -96,8 +97,8 @@ void main() {
 
   group('InputDatePickerFormField', () {
     testWidgets('Initial date is the default', (WidgetTester tester) async {
-      final GlobalKey<FormState> formKey = GlobalKey<FormState>();
-      final DateTime initialDate = DateTime(2016, DateTime.february, 21);
+      final formKey = GlobalKey<FormState>();
+      final initialDate = DateTime(2016, DateTime.february, 21);
       DateTime? inputDate;
       await tester.pumpWidget(
         inputDatePickerField(
@@ -112,8 +113,8 @@ void main() {
     });
 
     testWidgets('Changing initial date is reflected in text value', (WidgetTester tester) async {
-      final DateTime initialDate = DateTime(2016, DateTime.february, 21);
-      final DateTime updatedInitialDate = DateTime(2016, DateTime.february, 23);
+      final initialDate = DateTime(2016, DateTime.february, 21);
+      final updatedInitialDate = DateTime(2016, DateTime.february, 23);
       await tester.pumpWidget(inputDatePickerField(initialDate: initialDate));
       expect(textFieldController(tester).value.text, equals('02/21/2016'));
 
@@ -123,7 +124,7 @@ void main() {
     });
 
     testWidgets('Valid date entry', (WidgetTester tester) async {
-      final GlobalKey<FormState> formKey = GlobalKey<FormState>();
+      final formKey = GlobalKey<FormState>();
       DateTime? inputDate;
       await tester.pumpWidget(
         inputDatePickerField(onDateSaved: (DateTime date) => inputDate = date, formKey: formKey),
@@ -135,7 +136,7 @@ void main() {
     });
 
     testWidgets('Invalid text entry shows errorFormat text', (WidgetTester tester) async {
-      final GlobalKey<FormState> formKey = GlobalKey<FormState>();
+      final formKey = GlobalKey<FormState>();
       DateTime? inputDate;
       await tester.pumpWidget(
         inputDatePickerField(onDateSaved: (DateTime date) => inputDate = date, formKey: formKey),
@@ -165,7 +166,7 @@ void main() {
     testWidgets(
       'Valid text entry, but date outside first or last date shows bounds shows errorInvalid text',
       (WidgetTester tester) async {
-        final GlobalKey<FormState> formKey = GlobalKey<FormState>();
+        final formKey = GlobalKey<FormState>();
         DateTime? inputDate;
         await tester.pumpWidget(
           inputDatePickerField(
@@ -207,7 +208,7 @@ void main() {
     testWidgets(
       'selectableDatePredicate will be used to show errorInvalid if date is not selectable',
       (WidgetTester tester) async {
-        final GlobalKey<FormState> formKey = GlobalKey<FormState>();
+        final formKey = GlobalKey<FormState>();
         DateTime? inputDate;
         await tester.pumpWidget(
           inputDatePickerField(
@@ -293,6 +294,7 @@ void main() {
         matchesSemantics(
           label: 'Enter Date',
           isTextField: true,
+          isFocusable: true,
           hasEnabledState: true,
           isEnabled: true,
           isFocused: true,
@@ -306,18 +308,19 @@ void main() {
           hasPasteAction: true,
           hasMoveCursorBackwardByCharacterAction: true,
           hasMoveCursorBackwardByWordAction: true,
+          validationResult: SemanticsValidationResult.valid,
         ),
       );
       semantics.dispose();
     });
 
-    testWidgets('InputDecorationTheme is honored', (WidgetTester tester) async {
+    testWidgets('ThemeData.inputDecorationTheme is honored', (WidgetTester tester) async {
       const InputBorder border = InputBorder.none;
       await tester.pumpWidget(
         inputDatePickerField(
           theme: ThemeData.from(
             colorScheme: const ColorScheme.light(),
-          ).copyWith(inputDecorationTheme: const InputDecorationTheme(border: border)),
+          ).copyWith(inputDecorationTheme: const InputDecorationThemeData(border: border)),
         ),
       );
       await tester.pumpAndSettle();
@@ -334,11 +337,11 @@ void main() {
       // ignore: avoid_dynamic_calls
       final dynamic /*_InputBorderTween*/ inputBorderTween = inputBorderPainter.border;
       // ignore: avoid_dynamic_calls
-      final Animation<double> animation = inputBorderPainter.borderAnimation as Animation<double>;
+      final animation = inputBorderPainter.borderAnimation as Animation<double>;
       // ignore: avoid_dynamic_calls
-      final InputBorder actualBorder = inputBorderTween.evaluate(animation) as InputBorder;
+      final actualBorder = inputBorderTween.evaluate(animation) as InputBorder;
       // ignore: avoid_dynamic_calls
-      final Color containerColor = inputBorderPainter.blendedColor as Color;
+      final containerColor = inputBorderPainter.blendedColor as Color;
 
       // Border should match
       expect(actualBorder, equals(border));
@@ -366,8 +369,8 @@ void main() {
     testWidgets(
       'when an empty date is entered and acceptEmptyDate is true, then errorFormatText is not shown',
       (WidgetTester tester) async {
-        final GlobalKey<FormState> formKey = GlobalKey<FormState>();
-        const String errorFormatText = 'That is not a date.';
+        final formKey = GlobalKey<FormState>();
+        const errorFormatText = 'That is not a date.';
         await tester.pumpWidget(
           inputDatePickerField(
             errorFormatText: errorFormatText,
@@ -386,8 +389,8 @@ void main() {
     testWidgets(
       'when an empty date is entered and acceptEmptyDate is false, then errorFormatText is shown',
       (WidgetTester tester) async {
-        final GlobalKey<FormState> formKey = GlobalKey<FormState>();
-        const String errorFormatText = 'That is not a date.';
+        final formKey = GlobalKey<FormState>();
+        const errorFormatText = 'That is not a date.';
         await tester.pumpWidget(
           inputDatePickerField(errorFormatText: errorFormatText, formKey: formKey),
         );
@@ -401,7 +404,7 @@ void main() {
   });
 
   testWidgets('FocusNode can request focus', (WidgetTester tester) async {
-    final FocusNode focusNode = FocusNode();
+    final focusNode = FocusNode();
     addTearDown(focusNode.dispose);
     await tester.pumpWidget(inputDatePickerField(focusNode: focusNode));
     expect((tester.widget(find.byType(TextField)) as TextField).focusNode, focusNode);
@@ -413,4 +416,158 @@ void main() {
     await tester.pumpAndSettle();
     expect(focusNode.hasFocus, isFalse);
   });
+
+  group('Calendar Delegate', () {
+    testWidgets('Defaults to Gregorian calendar system', (WidgetTester tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Material(
+            child: InputDatePickerFormField(
+              initialDate: DateTime(2025, DateTime.february, 26),
+              firstDate: DateTime(2025, DateTime.february),
+              lastDate: DateTime(2026, DateTime.may),
+            ),
+          ),
+        ),
+      );
+
+      final InputDatePickerFormField inputDatePickerField = tester.widget(
+        find.byType(InputDatePickerFormField),
+      );
+      expect(inputDatePickerField.calendarDelegate, isA<GregorianCalendarDelegate>());
+    });
+
+    testWidgets('Using custom calendar delegate implementation', (WidgetTester tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Material(
+            child: InputDatePickerFormField(
+              initialDate: DateTime(2025, DateTime.february, 26),
+              firstDate: DateTime(2025, DateTime.february),
+              lastDate: DateTime(2026, DateTime.may),
+              calendarDelegate: const TestCalendarDelegate(),
+            ),
+          ),
+        ),
+      );
+
+      final InputDatePickerFormField inputDatePickerField = tester.widget(
+        find.byType(InputDatePickerFormField),
+      );
+      expect(inputDatePickerField.calendarDelegate, isA<TestCalendarDelegate>());
+    });
+
+    testWidgets('Displays calendar based on the calendar delegate', (WidgetTester tester) async {
+      DateTime? selectedDate;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Material(
+            child: InputDatePickerFormField(
+              initialDate: DateTime(2025, DateTime.february, 26),
+              firstDate: DateTime(2025, DateTime.february),
+              lastDate: DateTime(2026, DateTime.may),
+              onDateSubmitted: (DateTime value) {
+                selectedDate = value;
+              },
+              calendarDelegate: const TestCalendarDelegate(),
+            ),
+          ),
+        ),
+      );
+
+      final Finder dateInput1 = find.descendant(
+        of: find.byType(TextField),
+        matching: find.text('2025..2..26'),
+      );
+      expect(dateInput1, findsOneWidget);
+
+      await tester.tap(dateInput1);
+      await tester.pumpAndSettle();
+
+      await tester.enterText(dateInput1, '2025..3..10');
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pumpAndSettle();
+
+      expect(selectedDate, DateTime(2025, DateTime.march, 10));
+
+      final Finder dateInput2 = find.descendant(
+        of: find.byType(TextField),
+        matching: find.text('2025..3..10'),
+      );
+      expect(dateInput2, findsOneWidget);
+
+      await tester.tap(dateInput2);
+      await tester.pumpAndSettle();
+
+      await tester.enterText(dateInput2, '2025..4..21');
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pumpAndSettle();
+
+      expect(selectedDate, DateTime(2025, DateTime.april, 21));
+    });
+  });
+
+  testWidgets('InputDatePickerFormField does not crash at zero area', (WidgetTester tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: SizedBox.shrink(
+              child: InputDatePickerFormField(firstDate: DateTime(2020), lastDate: DateTime(2030)),
+            ),
+          ),
+        ),
+      ),
+    );
+    expect(tester.getSize(find.byType(InputDatePickerFormField)), Size.zero);
+  });
+
+  // Regression test for https://github.com/flutter/flutter/issues/177088.
+  testWidgets('Local InputDecorationTheme is honored', (WidgetTester tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Material(
+          child: Center(
+            child: InputDecorationTheme(
+              data: const InputDecorationThemeData(filled: true),
+              child: InputDatePickerFormField(
+                firstDate: DateTime(2025, DateTime.february),
+                lastDate: DateTime(2026, DateTime.may),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final InputDecoration decoration = tester.widget<TextField>(find.byType(TextField)).decoration!;
+    expect(decoration.filled, isTrue);
+  });
+}
+
+class TestCalendarDelegate extends GregorianCalendarDelegate {
+  const TestCalendarDelegate();
+
+  @override
+  String formatCompactDate(DateTime date, MaterialLocalizations localizations) {
+    return '${date.year}..${date.month}..${date.day}';
+  }
+
+  @override
+  DateTime? parseCompactDate(String? inputString, MaterialLocalizations localizations) {
+    final List<String> parts = inputString!.split('..');
+    if (parts.length != 3) {
+      return null;
+    }
+    final int year = int.tryParse(parts[0]) ?? 0;
+    final int month = int.tryParse(parts[1]) ?? 0;
+    final int day = int.tryParse(parts[2]) ?? 0;
+    return DateTime(year, month, day);
+  }
+
+  @override
+  String dateHelpText(MaterialLocalizations localizations) {
+    return 'yyyy..mm..dd';
+  }
 }

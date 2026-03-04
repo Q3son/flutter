@@ -6,7 +6,9 @@
 library;
 
 import 'dart:math' as math;
+import 'dart:ui' show SemanticsHitTestBehavior;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
@@ -256,7 +258,7 @@ class _BottomSheetState extends State<BottomSheet> {
   final GlobalKey _childKey = GlobalKey(debugLabel: 'BottomSheet child');
 
   double get _childHeight {
-    final RenderBox renderBox = _childKey.currentContext!.findRenderObject()! as RenderBox;
+    final renderBox = _childKey.currentContext!.findRenderObject()! as RenderBox;
     return renderBox.size.height;
   }
 
@@ -295,7 +297,7 @@ class _BottomSheetState extends State<BottomSheet> {
     setState(() {
       dragHandleStates.remove(WidgetState.dragged);
     });
-    bool isClosing = false;
+    var isClosing = false;
     if (details.velocity.pixelsPerSecond.dy > _minFlingVelocity) {
       final double flingVelocity = -details.velocity.pixelsPerSecond.dy / _childHeight;
       if (widget.animationController!.value > 0.0) {
@@ -343,8 +345,9 @@ class _BottomSheetState extends State<BottomSheet> {
   Widget build(BuildContext context) {
     final BottomSheetThemeData bottomSheetTheme = Theme.of(context).bottomSheetTheme;
     final bool useMaterial3 = Theme.of(context).useMaterial3;
-    final BottomSheetThemeData defaults =
-        useMaterial3 ? _BottomSheetDefaultsM3(context) : const BottomSheetThemeData();
+    final BottomSheetThemeData defaults = useMaterial3
+        ? _BottomSheetDefaultsM3(context)
+        : const BottomSheetThemeData();
     final BoxConstraints? constraints =
         widget.constraints ?? bottomSheetTheme.constraints ?? defaults.constraints;
     final Color? color =
@@ -391,19 +394,18 @@ class _BottomSheetState extends State<BottomSheet> {
       clipBehavior: clipBehavior,
       child: NotificationListener<DraggableScrollableNotification>(
         onNotification: extentChanged,
-        child:
-            !showDragHandle
-                ? widget.builder(context)
-                : Stack(
-                  alignment: Alignment.topCenter,
-                  children: <Widget>[
-                    dragHandle!,
-                    Padding(
-                      padding: const EdgeInsets.only(top: kMinInteractiveDimension),
-                      child: widget.builder(context),
-                    ),
-                  ],
-                ),
+        child: !showDragHandle
+            ? widget.builder(context)
+            : Stack(
+                alignment: Alignment.topCenter,
+                children: <Widget>[
+                  dragHandle!,
+                  Padding(
+                    padding: const EdgeInsets.only(top: kMinInteractiveDimension),
+                    child: widget.builder(context),
+                  ),
+                ],
+              ),
       ),
     );
 
@@ -418,11 +420,11 @@ class _BottomSheetState extends State<BottomSheet> {
     return !widget.enableDrag
         ? bottomSheet
         : _BottomSheetGestureDetector(
-          onVerticalDragStart: _handleDragStart,
-          onVerticalDragUpdate: _handleDragUpdate,
-          onVerticalDragEnd: _handleDragEnd,
-          child: bottomSheet,
-        );
+            onVerticalDragStart: _handleDragStart,
+            onVerticalDragUpdate: _handleDragUpdate,
+            onVerticalDragEnd: _handleDragEnd,
+            child: bottomSheet,
+          );
   }
 }
 
@@ -458,6 +460,7 @@ class _DragHandle extends StatelessWidget {
       child: Semantics(
         label: MaterialLocalizations.of(context).modalBarrierDismissLabel,
         container: true,
+        button: true,
         onTap: onSemanticsTap,
         child: SizedBox(
           width: math.max(handleSize.width, kMinInteractiveDimension),
@@ -605,8 +608,9 @@ class _RenderBottomSheetLayoutWithSizeListener extends RenderShiftedBox {
     if (result == null) {
       return null;
     }
-    final Size childSize =
-        childConstraints.isTight ? childConstraints.smallest : child.getDryLayout(childConstraints);
+    final Size childSize = childConstraints.isTight
+        ? childConstraints.smallest
+        : child.getDryLayout(childConstraints);
     return result + _getPositionForChild(constraints.biggest, childSize).dy;
   }
 
@@ -614,10 +618,9 @@ class _RenderBottomSheetLayoutWithSizeListener extends RenderShiftedBox {
     return BoxConstraints(
       minWidth: constraints.maxWidth,
       maxWidth: constraints.maxWidth,
-      maxHeight:
-          isScrollControlled
-              ? constraints.maxHeight
-              : constraints.maxHeight * scrollControlDisabledMaxHeightRatio,
+      maxHeight: isScrollControlled
+          ? constraints.maxHeight
+          : constraints.maxHeight * scrollControlDisabledMaxHeightRatio,
     );
   }
 
@@ -636,7 +639,7 @@ class _RenderBottomSheetLayoutWithSizeListener extends RenderShiftedBox {
     final BoxConstraints childConstraints = _getConstraintsForChild(constraints);
     assert(childConstraints.debugAssertIsValid(isAppliedConstraint: true));
     child.layout(childConstraints, parentUsesSize: !childConstraints.isTight);
-    final BoxParentData childParentData = child.parentData! as BoxParentData;
+    final childParentData = child.parentData! as BoxParentData;
     final Size childSize = childConstraints.isTight ? childConstraints.smallest : child.size;
     childParentData.offset = _getPositionForChild(size, childSize);
 
@@ -681,7 +684,7 @@ class _ModalBottomSheetState<T> extends State<_ModalBottomSheet<T>> {
   ParametricCurve<double> animationCurve = _modalBottomSheetCurve;
 
   String _getRouteLabel(MaterialLocalizations localizations) {
-    switch (Theme.of(context).platform) {
+    switch (defaultTargetPlatform) {
       case TargetPlatform.iOS:
       case TargetPlatform.macOS:
         return '';
@@ -1088,10 +1091,9 @@ class ModalBottomSheetRoute<T> extends PopupRoute<T> {
       child: Builder(
         builder: (BuildContext context) {
           final BottomSheetThemeData sheetTheme = Theme.of(context).bottomSheetTheme;
-          final BottomSheetThemeData defaults =
-              Theme.of(context).useMaterial3
-                  ? _BottomSheetDefaultsM3(context)
-                  : const BottomSheetThemeData();
+          final BottomSheetThemeData defaults = Theme.of(context).useMaterial3
+              ? _BottomSheetDefaultsM3(context)
+              : const BottomSheetThemeData();
           return _ModalBottomSheet<T>(
             route: this,
             backgroundColor:
@@ -1116,10 +1118,12 @@ class ModalBottomSheetRoute<T> extends PopupRoute<T> {
       ),
     );
 
-    final Widget bottomSheet =
-        useSafeArea
-            ? SafeArea(bottom: false, child: content)
-            : MediaQuery.removePadding(context: context, removeTop: true, child: content);
+    Widget bottomSheet = useSafeArea
+        ? SafeArea(bottom: false, child: content)
+        : MediaQuery.removePadding(context: context, removeTop: true, child: content);
+
+    // Prevent clicks inside the bottom sheet from passing through to the barrier
+    bottomSheet = Semantics(hitTestBehavior: SemanticsHitTestBehavior.opaque, child: bottomSheet);
 
     return capturedThemes?.wrap(bottomSheet) ?? bottomSheet;
   }
@@ -1201,6 +1205,10 @@ class ModalBottomSheetRoute<T> extends PopupRoute<T> {
 /// The [sheetAnimationStyle] parameter is used to override the modal bottom sheet
 /// animation duration and reverse animation duration.
 ///
+/// The [requestFocus] parameter is used to specify whether the bottom sheet should
+/// request focus when shown.
+/// {@macro flutter.widgets.navigator.Route.requestFocus}
+///
 /// If [AnimationStyle.duration] is provided, it will be used to override
 /// the modal bottom sheet animation duration in the underlying
 /// [BottomSheet.createAnimationController].
@@ -1253,6 +1261,7 @@ Future<T?> showModalBottomSheet<T>({
   AnimationController? transitionAnimationController,
   Offset? anchorPoint,
   AnimationStyle? sheetAnimationStyle,
+  bool? requestFocus,
 }) {
   assert(debugCheckHasMediaQuery(context));
   assert(debugCheckHasMaterialLocalizations(context));
@@ -1281,6 +1290,7 @@ Future<T?> showModalBottomSheet<T>({
       anchorPoint: anchorPoint,
       useSafeArea: useSafeArea,
       sheetAnimationStyle: sheetAnimationStyle,
+      requestFocus: requestFocus,
     ),
   );
 }

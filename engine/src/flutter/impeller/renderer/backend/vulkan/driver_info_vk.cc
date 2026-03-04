@@ -13,6 +13,7 @@
 
 namespace impeller {
 
+namespace {
 const std::unordered_map<std::string_view, AdrenoGPU> kAdrenoVersions = {
     // X
     // Note: I don't know if these strings actually match as there don't seem to
@@ -105,6 +106,17 @@ const std::unordered_map<std::string_view, MaliGPU> kMaliVersions = {
     {"T760", MaliGPU::kT760},
 };
 
+constexpr std::array<std::pair<std::string_view, PowerVRGPU>, 6> kGpuSeriesMap =
+    {{
+        {"BXE", PowerVRGPU::kBXE},
+        {"BXM", PowerVRGPU::kBXM},
+        {"BXS", PowerVRGPU::kBXS},
+        {"BXT", PowerVRGPU::kBXT},
+        {"CXT", PowerVRGPU::kCXT},
+        {"DXT", PowerVRGPU::kDXT},
+    }};
+}  // namespace
+
 AdrenoGPU GetAdrenoVersion(std::string_view version) {
   /// The format that Adreno names follow is "Adreno (TM) VERSION".
   auto paren_pos = version.find("Adreno (TM) ");
@@ -117,6 +129,16 @@ AdrenoGPU GetAdrenoVersion(std::string_view version) {
     return AdrenoGPU::kUnknown;
   }
   return result->second;
+}
+
+PowerVRGPU GetPowerVRVersion(std::string_view version) {
+  for (const auto& entry : kGpuSeriesMap) {
+    if (version.find(entry.first) != std::string::npos) {
+      return entry.second;
+    }
+  }
+
+  return PowerVRGPU::kUnknown;
 }
 
 MaliGPU GetMaliVersion(std::string_view version) {
@@ -264,6 +286,9 @@ DriverInfoVK::DriverInfoVK(const vk::PhysicalDevice& device) {
     case VendorVK::kARM:
       mali_gpu_ = GetMaliVersion(driver_name_);
       break;
+    case VendorVK::kPowerVR:
+      powervr_gpu_ = GetPowerVRVersion(driver_name_);
+      break;
     default:
       break;
   }
@@ -333,6 +358,20 @@ bool DriverInfoVK::IsEmulator() const {
 }
 
 bool DriverInfoVK::IsKnownBadDriver() const {
+<<<<<<< HEAD
+=======
+  // Fall back to OpenGL ES on older Adreno devices that require additional
+  // workarounds in the Impeller Vulkan back end such as disabling framebuffer
+  // fetch.
+  //
+  // See the following issues:
+  // https://github.com/flutter/flutter/issues/178285
+  // https://github.com/flutter/flutter/issues/178498
+  if (adreno_gpu_ && *adreno_gpu_ <= AdrenoGPU::kAdreno650) {
+    return true;
+  }
+
+>>>>>>> 48c32af0345e9ad5747f78ddce828c7f795f7159
   // Disable Maleoon series GPUs, see:
   // https://github.com/flutter/flutter/issues/156623
   if (vendor_ == VendorVK::kHuawei) {
@@ -356,7 +395,11 @@ bool DriverInfoVK::IsKnownBadDriver() const {
   // https://github.com/flutter/flutter/issues/160866
   // https://github.com/flutter/flutter/issues/160804
   // https://github.com/flutter/flutter/issues/160406
+<<<<<<< HEAD
   if (vendor_ == VendorVK::kImgTec) {
+=======
+  if (powervr_gpu_.has_value() && powervr_gpu_.value() < PowerVRGPU::kBXE) {
+>>>>>>> 48c32af0345e9ad5747f78ddce828c7f795f7159
     return true;
   }
   return false;
@@ -368,6 +411,10 @@ std::optional<MaliGPU> DriverInfoVK::GetMaliGPUInfo() const {
 
 std::optional<AdrenoGPU> DriverInfoVK::GetAdrenoGPUInfo() const {
   return adreno_gpu_;
+}
+
+std::optional<PowerVRGPU> DriverInfoVK::GetPowerVRGPUInfo() const {
+  return powervr_gpu_;
 }
 
 }  // namespace impeller

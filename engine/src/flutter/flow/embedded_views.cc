@@ -6,7 +6,7 @@
 
 namespace flutter {
 
-DisplayListEmbedderViewSlice::DisplayListEmbedderViewSlice(SkRect view_bounds) {
+DisplayListEmbedderViewSlice::DisplayListEmbedderViewSlice(DlRect view_bounds) {
   builder_ = std::make_unique<DisplayListBuilder>(
       /*bounds=*/view_bounds,
       /*prepare_rtree=*/true);
@@ -35,7 +35,7 @@ void DisplayListEmbedderViewSlice::dispatch(DlOpReceiver& receiver) {
 }
 
 bool DisplayListEmbedderViewSlice::is_empty() {
-  return display_list_->bounds().isEmpty();
+  return display_list_->GetBounds().IsEmpty();
 }
 
 bool DisplayListEmbedderViewSlice::recording_ended() {
@@ -58,36 +58,63 @@ bool ExternalViewEmbedder::SupportsDynamicThreadMerging() {
 
 void ExternalViewEmbedder::Teardown() {}
 
-void MutatorsStack::PushClipRect(const SkRect& rect) {
+void MutatorsStack::PushClipRect(const DlRect& rect) {
   std::shared_ptr<Mutator> element = std::make_shared<Mutator>(rect);
   vector_.push_back(element);
 }
 
-void MutatorsStack::PushClipRRect(const SkRRect& rrect) {
+void MutatorsStack::PushClipRRect(const DlRoundRect& rrect) {
   std::shared_ptr<Mutator> element = std::make_shared<Mutator>(rrect);
   vector_.push_back(element);
 }
 
-void MutatorsStack::PushClipPath(const SkPath& path) {
+void MutatorsStack::PushClipRSE(const DlRoundSuperellipse& rrect) {
+  std::shared_ptr<Mutator> element = std::make_shared<Mutator>(rrect);
+  vector_.push_back(element);
+}
+
+void MutatorsStack::PushClipPath(const DlPath& path) {
   std::shared_ptr<Mutator> element = std::make_shared<Mutator>(path);
   vector_.push_back(element);
 }
 
-void MutatorsStack::PushTransform(const SkMatrix& matrix) {
+void MutatorsStack::PushTransform(const DlMatrix& matrix) {
   std::shared_ptr<Mutator> element = std::make_shared<Mutator>(matrix);
   vector_.push_back(element);
 }
 
-void MutatorsStack::PushOpacity(const int& alpha) {
+void MutatorsStack::PushOpacity(const uint8_t& alpha) {
   std::shared_ptr<Mutator> element = std::make_shared<Mutator>(alpha);
   vector_.push_back(element);
 }
 
 void MutatorsStack::PushBackdropFilter(
     const std::shared_ptr<DlImageFilter>& filter,
-    const SkRect& filter_rect) {
+    const DlRect& filter_rect) {
   std::shared_ptr<Mutator> element =
       std::make_shared<Mutator>(filter, filter_rect);
+  vector_.push_back(element);
+}
+
+void MutatorsStack::PushPlatformViewClipRect(const DlRect& rect) {
+  std::shared_ptr<Mutator> element =
+      std::make_shared<Mutator>(BackdropClipRect(rect));
+  vector_.push_back(element);
+}
+void MutatorsStack::PushPlatformViewClipRRect(const DlRoundRect& rrect) {
+  std::shared_ptr<Mutator> element =
+      std::make_shared<Mutator>(BackdropClipRRect(rrect));
+  vector_.push_back(element);
+}
+void MutatorsStack::PushPlatformViewClipRSuperellipse(
+    const DlRoundSuperellipse& rse) {
+  std::shared_ptr<Mutator> element =
+      std::make_shared<Mutator>(BackdropClipRSuperellipse(rse));
+  vector_.push_back(element);
+}
+void MutatorsStack::PushPlatformViewClipPath(const DlPath& path) {
+  std::shared_ptr<Mutator> element =
+      std::make_shared<Mutator>(BackdropClipPath(path));
   vector_.push_back(element);
 }
 

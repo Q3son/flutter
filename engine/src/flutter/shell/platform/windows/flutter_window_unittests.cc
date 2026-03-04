@@ -18,6 +18,7 @@ namespace testing {
 
 using ::testing::_;
 using ::testing::AnyNumber;
+using ::testing::Eq;
 using ::testing::Invoke;
 using ::testing::Return;
 
@@ -65,7 +66,6 @@ class MockFlutterWindow : public FlutterWindow {
               OnPointerLeave,
               (double, double, FlutterPointerDeviceKind, int32_t),
               (override));
-  MOCK_METHOD(void, OnSetCursor, (), (override));
   MOCK_METHOD(float, GetScrollOffsetMultiplier, (), (override));
   MOCK_METHOD(float, GetDpiScale, (), (override));
   MOCK_METHOD(void, UpdateCursorRect, (const Rect&), (override));
@@ -116,12 +116,16 @@ class FlutterWindowTest : public WindowsTest {};
 }  // namespace
 
 TEST_F(FlutterWindowTest, CreateDestroy) {
-  FlutterWindow window(800, 600);
+  std::unique_ptr<FlutterWindowsEngine> engine =
+      FlutterWindowsEngineBuilder{GetContext()}.Build();
+  FlutterWindow window(800, 600, engine->display_manager());
   ASSERT_TRUE(TRUE);
 }
 
 TEST_F(FlutterWindowTest, OnBitmapSurfaceUpdated) {
-  FlutterWindow win32window(100, 100);
+  std::unique_ptr<FlutterWindowsEngine> engine =
+      FlutterWindowsEngineBuilder{GetContext()}.Build();
+  FlutterWindow win32window(100, 100, engine->display_manager());
   int old_handle_count = GetGuiResources(GetCurrentProcess(), GR_GDIOBJECTS);
 
   constexpr size_t row_bytes = 100 * 4;
@@ -162,7 +166,9 @@ TEST_F(FlutterWindowTest, OnCursorRectUpdatedHighDPI) {
 }
 
 TEST_F(FlutterWindowTest, OnPointerStarSendsDeviceType) {
-  FlutterWindow win32window(100, 100);
+  std::unique_ptr<FlutterWindowsEngine> engine =
+      FlutterWindowsEngineBuilder{GetContext()}.Build();
+  FlutterWindow win32window(100, 100, engine->display_manager());
   MockWindowBindingHandlerDelegate delegate;
   EXPECT_CALL(delegate, OnWindowStateEvent).Times(AnyNumber());
   win32window.SetView(&delegate);
@@ -372,9 +378,15 @@ TEST_F(FlutterWindowTest, LifecycleFocusMessages) {
   win32window.InjectWindowMessage(WM_SIZE, 0, MAKEWORD(1, 1));
   EXPECT_EQ(last_event, WindowStateEvent::kShow);
 
+  EXPECT_CALL(delegate, OnFocus(Eq(FlutterViewFocusState::kFocused),
+                                Eq(FlutterViewFocusDirection::kUndefined)))
+      .Times(1);
   win32window.InjectWindowMessage(WM_SETFOCUS, 0, 0);
   EXPECT_EQ(last_event, WindowStateEvent::kFocus);
 
+  EXPECT_CALL(delegate, OnFocus(Eq(FlutterViewFocusState::kUnfocused),
+                                Eq(FlutterViewFocusDirection::kUndefined)))
+      .Times(1);
   win32window.InjectWindowMessage(WM_KILLFOCUS, 0, 0);
   EXPECT_EQ(last_event, WindowStateEvent::kUnfocus);
 }
@@ -407,16 +419,12 @@ TEST_F(FlutterWindowTest, CachedLifecycleMessage) {
         }
       });
 
+  EXPECT_CALL(delegate, OnFocus(Eq(FlutterViewFocusState::kFocused),
+                                Eq(FlutterViewFocusDirection::kUndefined)))
+      .Times(1);
   win32window.SetView(&delegate);
   EXPECT_TRUE(focused);
   EXPECT_TRUE(restored);
-}
-
-TEST_F(FlutterWindowTest, UpdateCursor) {
-  FlutterWindow win32window(100, 100);
-  win32window.UpdateFlutterCursor("text");
-  HCURSOR cursor = ::GetCursor();
-  EXPECT_EQ(cursor, ::LoadCursor(nullptr, IDC_IBEAM));
 }
 
 }  // namespace testing

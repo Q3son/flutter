@@ -35,22 +35,28 @@ class ProxyValidator extends DoctorValidator {
       return ValidationResult(ValidationType.success, const <ValidationMessage>[]);
     }
 
-    final List<ValidationMessage> messages = <ValidationMessage>[
-      const ValidationMessage('HTTP_PROXY is set'),
-      if (_noProxy.isEmpty)
-        const ValidationMessage.hint('NO_PROXY is not set')
-      else ...<ValidationMessage>[
-        ValidationMessage('NO_PROXY is $_noProxy'),
-        for (final String host in await _getLoopbackAddresses())
-          if (_noProxy.contains(host))
-            ValidationMessage('NO_PROXY contains $host')
-          else
-            ValidationMessage.hint('NO_PROXY does not contain $host'),
-      ],
-    ];
-
+    final messages = <ValidationMessage>[const ValidationMessage('HTTP_PROXY is set')];
+    if (_noProxy.isEmpty) {
+      messages.add(const ValidationMessage.hint('NO_PROXY is not set'));
+    } else {
+      messages.add(ValidationMessage('NO_PROXY is $_noProxy'));
+      final Set<String> proxyHosts = _noProxy.split(',').map((String e) => e.trim()).toSet();
+      final List<String> loopbackAddresses = await _getLoopbackAddresses();
+      for (final host in loopbackAddresses) {
+        if (proxyHosts.contains(host)) {
+          messages.add(ValidationMessage('NO_PROXY contains $host'));
+        } else {
+          messages.add(ValidationMessage.hint('NO_PROXY does not contain $host'));
+        }
+      }
+    }
     final bool hasIssues = messages.any((ValidationMessage msg) => msg.isHint || msg.isError);
 
+<<<<<<< HEAD
+    final bool hasIssues = messages.any((ValidationMessage msg) => msg.isHint || msg.isError);
+
+=======
+>>>>>>> 48c32af0345e9ad5747f78ddce828c7f795f7159
     return ValidationResult(hasIssues ? ValidationType.partial : ValidationType.success, messages);
   }
 

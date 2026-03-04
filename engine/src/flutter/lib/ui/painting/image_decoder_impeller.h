@@ -13,6 +13,7 @@
 #include "impeller/geometry/size.h"
 #include "impeller/renderer/capabilities.h"
 #include "include/core/SkImageInfo.h"
+#include "third_party/abseil-cpp/absl/status/statusor.h"
 #include "third_party/skia/include/core/SkBitmap.h"
 
 namespace impeller {
@@ -39,14 +40,6 @@ class ImpellerAllocator : public SkBitmap::Allocator {
   std::shared_ptr<impeller::DeviceBuffer> buffer_;
 };
 
-struct DecompressResult {
-  std::shared_ptr<impeller::DeviceBuffer> device_buffer;
-  std::shared_ptr<SkBitmap> sk_bitmap;
-  SkImageInfo image_info;
-  std::optional<SkImageInfo> resize_info = std::nullopt;
-  std::string decode_error;
-};
-
 class ImageDecoderImpeller final : public ImageDecoder {
  public:
   ImageDecoderImpeller(
@@ -58,15 +51,27 @@ class ImageDecoderImpeller final : public ImageDecoder {
 
   ~ImageDecoderImpeller() override;
 
+  static std::optional<impeller::PixelFormat> ToPixelFormat(SkColorType type);
+
   // |ImageDecoder|
   void Decode(fml::RefPtr<ImageDescriptor> descriptor,
-              uint32_t target_width,
-              uint32_t target_height,
+              const Options& options,
               const ImageResult& result) override;
 
-  static DecompressResult DecompressTexture(
+  struct ImageInfo {
+    impeller::ISize size;
+    impeller::PixelFormat format = impeller::PixelFormat::kUnknown;
+  };
+
+  struct DecompressResult {
+    std::shared_ptr<impeller::DeviceBuffer> device_buffer;
+    ImageInfo image_info;
+    std::optional<SkImageInfo> resize_info;
+  };
+
+  static absl::StatusOr<DecompressResult> DecompressTexture(
       ImageDescriptor* descriptor,
-      SkISize target_size,
+      const ImageDecoder::Options& options,
       impeller::ISize max_texture_size,
       bool supports_wide_gamut,
       const std::shared_ptr<const impeller::Capabilities>& capabilities,
@@ -85,10 +90,9 @@ class ImageDecoderImpeller final : public ImageDecoder {
       ImageResult result,
       const std::shared_ptr<impeller::Context>& context,
       const std::shared_ptr<impeller::DeviceBuffer>& buffer,
-      const SkImageInfo& image_info,
-      const std::shared_ptr<SkBitmap>& bitmap,
+      const ImageInfo& image_info,
       const std::optional<SkImageInfo>& resize_info,
-      const std::shared_ptr<fml::SyncSwitch>& gpu_disabled_switch);
+      const std::shared_ptr<const fml::SyncSwitch>& gpu_disabled_switch);
 
   /// @brief Create a texture from the provided bitmap.
   /// @param context     The Impeller graphics context.
@@ -101,14 +105,17 @@ class ImageDecoderImpeller final : public ImageDecoder {
  private:
   using FutureContext = std::shared_future<std::shared_ptr<impeller::Context>>;
   FutureContext context_;
-  const bool supports_wide_gamut_;
+
+  /// Whether wide gamut rendering has been enabled (but not necessarily whether
+  /// or not it is supported).
+  const bool wide_gamut_enabled_;
   std::shared_ptr<fml::SyncSwitch> gpu_disabled_switch_;
 
   /// Only call this method if the GPU is available.
   static std::pair<sk_sp<DlImage>, std::string> UnsafeUploadTextureToPrivate(
       const std::shared_ptr<impeller::Context>& context,
       const std::shared_ptr<impeller::DeviceBuffer>& buffer,
-      const SkImageInfo& image_info,
+      const ImageInfo& image_info,
       const std::optional<SkImageInfo>& resize_info);
 
   FML_DISALLOW_COPY_AND_ASSIGN(ImageDecoderImpeller);

@@ -181,8 +181,18 @@ class PageController extends ScrollController {
       'The page property cannot be read when multiple PageViews are attached to '
       'the same PageController.',
     );
-    final _PagePosition position = this.position as _PagePosition;
+    final position = this.position as _PagePosition;
     return position.page;
+  }
+
+  bool _debugCheckPageControllerAttached() {
+    assert(positions.isNotEmpty, 'PageController is not attached to a PageView.');
+    assert(
+      positions.length == 1,
+      'Multiple PageViews are attached to '
+      'the same PageController.',
+    );
+    return true;
   }
 
   /// Animates the controlled [PageView] from the current page to the given page.
@@ -190,7 +200,8 @@ class PageController extends ScrollController {
   /// The animation lasts for the given duration and follows the given curve.
   /// The returned [Future] resolves when the animation completes.
   Future<void> animateToPage(int page, {required Duration duration, required Curve curve}) {
-    final _PagePosition position = this.position as _PagePosition;
+    assert(_debugCheckPageControllerAttached());
+    final position = this.position as _PagePosition;
     if (position._cachedPage != null) {
       position._cachedPage = page.toDouble();
       return Future<void>.value();
@@ -213,7 +224,8 @@ class PageController extends ScrollController {
   /// Jumps the page position from its current value to the given value,
   /// without animation, and without checking if the new value is in range.
   void jumpToPage(int page) {
-    final _PagePosition position = this.position as _PagePosition;
+    assert(_debugCheckPageControllerAttached());
+    final position = this.position as _PagePosition;
     if (position._cachedPage != null) {
       position._cachedPage = page.toDouble();
       return;
@@ -262,7 +274,7 @@ class PageController extends ScrollController {
   @override
   void attach(ScrollPosition position) {
     super.attach(position);
-    final _PagePosition pagePosition = position as _PagePosition;
+    final pagePosition = position as _PagePosition;
     pagePosition.viewportFraction = viewportFraction;
   }
 }
@@ -332,6 +344,7 @@ class _PagePosition extends ScrollPositionWithSingleContext implements PageMetri
 
   final int initialPage;
   double _pageToUseOnStartup;
+
   // When the viewport has a zero-size, the `page` can not
   // be retrieved by `getPageFromPixels`, so we need to cache the page
   // for use when resizing the viewport to non-zero next time.
@@ -362,6 +375,7 @@ class _PagePosition extends ScrollPositionWithSingleContext implements PageMetri
   @override
   double get viewportFraction => _viewportFraction;
   double _viewportFraction;
+
   set viewportFraction(double value) {
     if (_viewportFraction == value) {
       return;
@@ -407,10 +421,10 @@ class _PagePosition extends ScrollPositionWithSingleContext implements PageMetri
     );
     return hasContentDimensions || haveDimensions
         ? _cachedPage ??
-            getPageFromPixels(
-              clampDouble(pixels, minScrollExtent, maxScrollExtent),
-              viewportDimension,
-            )
+              getPageFromPixels(
+                clampDouble(pixels, minScrollExtent, maxScrollExtent),
+                viewportDimension,
+              )
         : null;
   }
 
@@ -425,7 +439,7 @@ class _PagePosition extends ScrollPositionWithSingleContext implements PageMetri
   @override
   void restoreScrollOffset() {
     if (!hasPixels) {
-      final double? value =
+      final value =
           PageStorage.maybeOf(context.storageContext)?.readState(context.storageContext) as double?;
       if (value != null) {
         _pageToUseOnStartup = value;
@@ -921,22 +935,21 @@ class _PageViewState extends State<PageView> {
   @override
   Widget build(BuildContext context) {
     final AxisDirection axisDirection = _getDirection(context);
-    final ScrollPhysics physics = _ForceImplicitScrollPhysics(
-      allowImplicitScrolling: widget.allowImplicitScrolling,
-    ).applyTo(
-      widget.pageSnapping
-          ? _kPagePhysics.applyTo(
-            widget.physics ?? widget.scrollBehavior?.getScrollPhysics(context),
-          )
-          : widget.physics ?? widget.scrollBehavior?.getScrollPhysics(context),
-    );
+    final ScrollPhysics physics =
+        _ForceImplicitScrollPhysics(allowImplicitScrolling: widget.allowImplicitScrolling).applyTo(
+          widget.pageSnapping
+              ? _kPagePhysics.applyTo(
+                  widget.physics ?? widget.scrollBehavior?.getScrollPhysics(context),
+                )
+              : widget.physics ?? widget.scrollBehavior?.getScrollPhysics(context),
+        );
 
     return NotificationListener<ScrollNotification>(
       onNotification: (ScrollNotification notification) {
         if (notification.depth == 0 &&
             widget.onPageChanged != null &&
             notification is ScrollUpdateNotification) {
-          final PageMetrics metrics = notification.metrics as PageMetrics;
+          final metrics = notification.metrics as PageMetrics;
           final int currentPage = metrics.page!.round();
           if (currentPage != _lastReportedPage) {
             _lastReportedPage = currentPage;

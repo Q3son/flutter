@@ -12,11 +12,14 @@ import 'package:flutter/widgets.dart';
 
 import 'theme.dart';
 
+// Examples can assume:
+// late BuildContext context;
+
 /// Defines a theme for [Dialog] widgets.
 ///
-/// Descendant widgets obtain the current [DialogTheme] object using
-/// `DialogTheme.of(context)`. Instances of [DialogTheme] can be customized with
-/// [DialogTheme.copyWith].
+/// Descendant widgets obtain the current [DialogThemeData] object using
+/// [DialogTheme.of]. Instances of [DialogThemeData] can be customized with
+/// [DialogThemeData.copyWith].
 ///
 /// [titleTextStyle] and [contentTextStyle] are used in [AlertDialog]s and [SimpleDialog]s.
 ///
@@ -192,7 +195,16 @@ class DialogTheme extends InheritedTheme with Diagnosticable {
         );
   }
 
-  /// The [ThemeData.dialogTheme] property of the ambient [Theme].
+  /// Retrieves the [DialogThemeData] from the closest ancestor [DialogTheme].
+  ///
+  /// If there is no enclosing [DialogTheme] widget, then
+  /// [ThemeData.dialogTheme] is used.
+  ///
+  /// Typical usage is as follows:
+  ///
+  /// ```dart
+  /// DialogThemeData theme = DialogTheme.of(context);
+  /// ```
   static DialogThemeData of(BuildContext context) {
     final DialogTheme? dialogTheme = context.dependOnInheritedWidgetOfExactType<DialogTheme>();
     return dialogTheme?.data ?? Theme.of(context).dialogTheme;
@@ -302,7 +314,7 @@ class DialogTheme extends InheritedTheme with Diagnosticable {
 /// Defines default property values for descendant [Dialog] widgets.
 ///
 /// Descendant widgets obtain the current [DialogThemeData] object using
-/// `CardTheme.of(context).data`. Instances of [DialogThemeData] can be
+/// [DialogTheme.of]. Instances of [DialogThemeData] can be
 /// customized with [DialogThemeData.copyWith].
 ///
 /// Typically a [DialogThemeData] is specified as part of the overall [Theme]
@@ -336,6 +348,7 @@ class DialogThemeData with Diagnosticable {
     this.barrierColor,
     this.insetPadding,
     this.clipBehavior,
+    this.constraints,
   });
 
   /// Overrides the default value for [Dialog.backgroundColor].
@@ -379,6 +392,11 @@ class DialogThemeData with Diagnosticable {
   /// Overrides the default value of [Dialog.clipBehavior].
   final Clip? clipBehavior;
 
+  /// Constrains the size of the [Dialog].
+  ///
+  /// If null, the bottom sheet's size will be unconstrained.
+  final BoxConstraints? constraints;
+
   /// Creates a copy of this object but with the given fields replaced with the
   /// new values.
   DialogThemeData copyWith({
@@ -395,6 +413,7 @@ class DialogThemeData with Diagnosticable {
     Color? barrierColor,
     EdgeInsets? insetPadding,
     Clip? clipBehavior,
+    BoxConstraints? constraints,
   }) {
     return DialogThemeData(
       backgroundColor: backgroundColor ?? this.backgroundColor,
@@ -410,6 +429,7 @@ class DialogThemeData with Diagnosticable {
       barrierColor: barrierColor ?? this.barrierColor,
       insetPadding: insetPadding ?? this.insetPadding,
       clipBehavior: clipBehavior ?? this.clipBehavior,
+      constraints: constraints ?? this.constraints,
     );
   }
 
@@ -434,6 +454,7 @@ class DialogThemeData with Diagnosticable {
       barrierColor: Color.lerp(a?.barrierColor, b?.barrierColor, t),
       insetPadding: EdgeInsets.lerp(a?.insetPadding, b?.insetPadding, t),
       clipBehavior: t < 0.5 ? a?.clipBehavior : b?.clipBehavior,
+      constraints: BoxConstraints.lerp(a?.constraints, b?.constraints, t),
     );
   }
 
@@ -452,6 +473,7 @@ class DialogThemeData with Diagnosticable {
     barrierColor,
     insetPadding,
     clipBehavior,
+    constraints,
   ]);
 
   @override
@@ -475,7 +497,8 @@ class DialogThemeData with Diagnosticable {
         other.actionsPadding == actionsPadding &&
         other.barrierColor == barrierColor &&
         other.insetPadding == insetPadding &&
-        other.clipBehavior == clipBehavior;
+        other.clipBehavior == clipBehavior &&
+        other.constraints == constraints;
   }
 
   @override
@@ -504,5 +527,8 @@ class DialogThemeData with Diagnosticable {
       DiagnosticsProperty<EdgeInsets>('insetPadding', insetPadding, defaultValue: null),
     );
     properties.add(DiagnosticsProperty<Clip>('clipBehavior', clipBehavior, defaultValue: null));
+    properties.add(
+      DiagnosticsProperty<BoxConstraints>('constraints', constraints, defaultValue: null),
+    );
   }
 }

@@ -5,6 +5,10 @@
 #include "impeller/display_list/testing/render_text_in_canvas.h"
 
 #include "flutter/testing/testing.h"
+<<<<<<< HEAD
+=======
+#include "impeller/display_list/dl_text_impeller.h"
+>>>>>>> 48c32af0345e9ad5747f78ddce828c7f795f7159
 #include "txt/platform.h"
 
 namespace flutter {
@@ -39,7 +43,12 @@ bool RenderTextInCanvasSkia(DlCanvas* canvas,
   // text_paint.stroke_width = 1;
   // text_paint.style =
   //     options.stroke ? Paint::Style::kStroke : Paint::Style::kFill;
+<<<<<<< HEAD
   canvas->DrawTextFrame(frame, position.x, position.y, text_paint);
+=======
+  canvas->DrawText(DlTextImpeller::Make(frame), position.x, position.y,
+                   text_paint);
+>>>>>>> 48c32af0345e9ad5747f78ddce828c7f795f7159
   return true;
 }
 }  // namespace testing

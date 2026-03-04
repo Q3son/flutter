@@ -11,6 +11,8 @@
 #include "flutter/shell/platform/linux/fl_text_input_channel.h"
 
 static constexpr char kNewlineInputAction[] = "TextInputAction.newline";
+static constexpr char kInputPurposeImProperty[] = "input-purpose";
+static constexpr char kInputHintsImProperty[] = "input-hints";
 
 static constexpr int64_t kClientIdUnset = -1;
 
@@ -18,6 +20,9 @@ struct _FlTextInputHandler {
   GObject parent_instance;
 
   FlTextInputChannel* channel;
+
+  // The widget with input focus.
+  GtkWidget* widget;
 
   // Client ID provided by Flutter to report events with.
   int64_t client_id;
@@ -36,8 +41,6 @@ struct _FlTextInputHandler {
 
   // Input method.
   GtkIMContext* im_context;
-
-  GWeakRef view_delegate;
 
   flutter::TextInputModel* text_model;
 
@@ -238,18 +241,30 @@ static gboolean im_delete_surrounding_cb(FlTextInputHandler* self,
 }
 
 // Called when the input method client is set up.
-static void set_client(int64_t client_id,
-                       const gchar* input_action,
-                       gboolean enable_delta_model,
-                       FlTextInputType input_type,
-                       gpointer user_data) {
+static void set_client(int64_t client_id, gpointer user_data) {
   FlTextInputHandler* self = FL_TEXT_INPUT_HANDLER(user_data);
 
   self->client_id = client_id;
+}
+
+// Called when the input method configuration is changed.
+static void configure(const gchar* input_action,
+                      gboolean enable_delta_model,
+                      FlTextInputType input_type,
+                      GtkInputPurpose im_purpose,
+                      GtkInputHints im_hints,
+                      gpointer user_data) {
+  FlTextInputHandler* self = FL_TEXT_INPUT_HANDLER(user_data);
+
   g_free(self->input_action);
   self->input_action = g_strdup(input_action);
   self->enable_delta_model = enable_delta_model;
   self->input_type = input_type;
+
+  g_object_set(G_OBJECT(self->im_context), kInputPurposeImProperty, im_purpose,
+               nullptr);
+  g_object_set(G_OBJECT(self->im_context), kInputHintsImProperty, im_hints,
+               nullptr);
 }
 
 // Hides the input method.
@@ -316,12 +331,6 @@ static void clear_client(gpointer user_data) {
 // after each of these updates. It transforms the composing rect to GDK window
 // coordinates and notifies GTK of the updated cursor position.
 static void update_im_cursor_position(FlTextInputHandler* self) {
-  g_autoptr(FlTextInputViewDelegate) view_delegate =
-      FL_TEXT_INPUT_VIEW_DELEGATE(g_weak_ref_get(&self->view_delegate));
-  if (view_delegate == nullptr) {
-    return;
-  }
-
   // Skip update if not composing to avoid setting to position 0.
   if (!self->text_model->composing()) {
     return;
@@ -338,8 +347,9 @@ static void update_im_cursor_position(FlTextInputHandler* self) {
 
   // Transform from Flutter view coordinates to GTK window coordinates.
   GdkRectangle preedit_rect = {};
-  fl_text_input_view_delegate_translate_coordinates(
-      view_delegate, x, y, &preedit_rect.x, &preedit_rect.y);
+  gtk_widget_translate_coordinates(self->widget,
+                                   gtk_widget_get_toplevel(self->widget), x, y,
+                                   &preedit_rect.x, &preedit_rect.y);
 
   // Set the cursor location in window coordinates so that GTK can position
   // any system input method windows.
@@ -395,7 +405,6 @@ static void fl_text_input_handler_dispose(GObject* object) {
     delete self->text_model;
     self->text_model = nullptr;
   }
-  g_weak_ref_clear(&self->view_delegate);
   g_clear_object(&self->cancellable);
 
   G_OBJECT_CLASS(fl_text_input_handler_parent_class)->dispose(object);
@@ -414,9 +423,27 @@ static void fl_text_input_handler_init(FlTextInputHandler* self) {
   self->cancellable = g_cancellable_new();
 }
 
-static void init_im_context(FlTextInputHandler* self,
-                            GtkIMContext* im_context) {
-  self->im_context = GTK_IM_CONTEXT(g_object_ref(im_context));
+static FlTextInputChannelVTable text_input_vtable = {
+    .set_client = set_client,
+    .configure = configure,
+    .hide = hide,
+    .show = show,
+    .set_editing_state = set_editing_state,
+    .clear_client = clear_client,
+    .set_editable_size_and_transform = set_editable_size_and_transform,
+    .set_marked_text_rect = set_marked_text_rect,
+};
+
+FlTextInputHandler* fl_text_input_handler_new(FlBinaryMessenger* messenger) {
+  g_return_val_if_fail(FL_IS_BINARY_MESSENGER(messenger), nullptr);
+
+  FlTextInputHandler* self = FL_TEXT_INPUT_HANDLER(
+      g_object_new(fl_text_input_handler_get_type(), nullptr));
+
+  self->channel =
+      fl_text_input_channel_new(messenger, &text_input_vtable, self);
+
+  self->im_context = GTK_IM_CONTEXT(gtk_im_multicontext_new());
 
   // On Wayland, this call sets up the input method so it can be enabled
   // immediately when required. Without it, on-screen keyboard's don't come up
@@ -440,37 +467,26 @@ static void init_im_context(FlTextInputHandler* self,
   g_signal_connect_object(self->im_context, "delete-surrounding",
                           G_CALLBACK(im_delete_surrounding_cb), self,
                           G_CONNECT_SWAPPED);
-}
-
-static FlTextInputChannelVTable text_input_vtable = {
-    .set_client = set_client,
-    .hide = hide,
-    .show = show,
-    .set_editing_state = set_editing_state,
-    .clear_client = clear_client,
-    .set_editable_size_and_transform = set_editable_size_and_transform,
-    .set_marked_text_rect = set_marked_text_rect,
-};
-
-FlTextInputHandler* fl_text_input_handler_new(
-    FlBinaryMessenger* messenger,
-    GtkIMContext* im_context,
-    FlTextInputViewDelegate* view_delegate) {
-  g_return_val_if_fail(FL_IS_BINARY_MESSENGER(messenger), nullptr);
-  g_return_val_if_fail(GTK_IS_IM_CONTEXT(im_context), nullptr);
-  g_return_val_if_fail(FL_IS_TEXT_INPUT_VIEW_DELEGATE(view_delegate), nullptr);
-
-  FlTextInputHandler* self = FL_TEXT_INPUT_HANDLER(
-      g_object_new(fl_text_input_handler_get_type(), nullptr));
-
-  self->channel =
-      fl_text_input_channel_new(messenger, &text_input_vtable, self);
-
-  init_im_context(self, im_context);
-
-  g_weak_ref_init(&self->view_delegate, view_delegate);
 
   return self;
+}
+
+GtkIMContext* fl_text_input_handler_get_im_context(FlTextInputHandler* self) {
+  g_return_val_if_fail(FL_IS_TEXT_INPUT_HANDLER(self), nullptr);
+  return self->im_context;
+}
+
+void fl_text_input_handler_set_widget(FlTextInputHandler* self,
+                                      GtkWidget* widget) {
+  g_return_if_fail(FL_IS_TEXT_INPUT_HANDLER(self));
+  self->widget = widget;
+  gtk_im_context_set_client_window(self->im_context,
+                                   gtk_widget_get_window(self->widget));
+}
+
+GtkWidget* fl_text_input_handler_get_widget(FlTextInputHandler* self) {
+  g_return_val_if_fail(FL_IS_TEXT_INPUT_HANDLER(self), nullptr);
+  return self->widget;
 }
 
 gboolean fl_text_input_handler_filter_keypress(FlTextInputHandler* self,

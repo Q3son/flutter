@@ -13,7 +13,7 @@ class ListTileApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(theme: ThemeData(useMaterial3: true), home: const ListTileExample());
+    return const MaterialApp(home: ListTileExample());
   }
 }
 
@@ -47,8 +47,8 @@ class _ListTileExampleState extends State<ListTileExample> {
                   titleAlignment = value;
                 });
               },
-              itemBuilder:
-                  (BuildContext context) => <PopupMenuEntry<ListTileTitleAlignment>>[
+              itemBuilder: (BuildContext context) =>
+                  <PopupMenuEntry<ListTileTitleAlignment>>[
                     const PopupMenuItem<ListTileTitleAlignment>(
                       value: ListTileTitleAlignment.threeLine,
                       child: Text('threeLine'),

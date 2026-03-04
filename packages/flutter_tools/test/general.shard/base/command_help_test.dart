@@ -31,16 +31,15 @@ void _testMessageLength({
     wrapColumn: wrapColumn,
   );
 
-  int expectedWidth = maxTestLineLength;
+  var expectedWidth = maxTestLineLength;
 
   if (stdoutSupportsAnsi) {
-    const int ansiMetaCharactersLength = 33;
+    const ansiMetaCharactersLength = 33;
     expectedWidth += ansiMetaCharactersLength;
   }
 
   expect(commandHelp.I.toString().length, lessThanOrEqualTo(expectedWidth));
   expect(commandHelp.L.toString().length, lessThanOrEqualTo(expectedWidth));
-  expect(commandHelp.M.toString().length, lessThanOrEqualTo(expectedWidth));
   expect(commandHelp.P.toString().length, lessThanOrEqualTo(expectedWidth));
   expect(commandHelp.R.toString().length, lessThanOrEqualTo(expectedWidth));
   expect(commandHelp.S.toString().length, lessThanOrEqualTo(expectedWidth));
@@ -70,9 +69,9 @@ void main() {
       testWithoutContext('ends with a resetBold when it has parenthetical text', () {
         // This is apparently required to work around bugs in some terminal clients.
         final Platform platform = FakePlatform(stdoutSupportsAnsi: true);
-        final AnsiTerminal terminal = AnsiTerminal(stdio: FakeStdio(), platform: platform);
+        final terminal = AnsiTerminal(stdio: FakeStdio(), platform: platform);
 
-        final CommandHelpOption commandHelpOption = CommandHelpOption(
+        final commandHelpOption = CommandHelpOption(
           'tester',
           'for testing',
           platform: platform,
@@ -89,7 +88,6 @@ void main() {
 
         expect(commandHelp.I.toString(), startsWith('\x1B[1mI\x1B[22m'));
         expect(commandHelp.L.toString(), startsWith('\x1B[1mL\x1B[22m'));
-        expect(commandHelp.M.toString(), startsWith('\x1B[1mM\x1B[22m'));
         expect(commandHelp.P.toString(), startsWith('\x1B[1mP\x1B[22m'));
         expect(commandHelp.R.toString(), startsWith('\x1B[1mR\x1B[22m'));
         expect(commandHelp.S.toString(), startsWith('\x1B[1mS\x1B[22m'));
@@ -197,10 +195,6 @@ void main() {
           ),
         );
         expect(
-          commandHelp.M.toString(),
-          equals('\x1B[1mM\x1B[22m Write SkSL shaders to a unique file in the project directory.'),
-        );
-        expect(
           commandHelp.P.toString(),
           equals(
             '\x1B[1mP\x1B[22m Toggle performance overlay.                    \x1B[90m(WidgetsApp.showPerformanceOverlay)\x1B[39m\x1B[22m',
@@ -303,10 +297,6 @@ void main() {
           equals(
             'I Toggle oversized image inversion.                     (debugInvertOversizedImages)',
           ),
-        );
-        expect(
-          commandHelp.M.toString(),
-          equals('M Write SkSL shaders to a unique file in the project directory.'),
         );
         expect(
           commandHelp.L.toString(),

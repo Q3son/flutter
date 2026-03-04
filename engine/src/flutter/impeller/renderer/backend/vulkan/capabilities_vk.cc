@@ -12,6 +12,9 @@
 #include "impeller/renderer/backend/vulkan/vk.h"
 #include "impeller/renderer/backend/vulkan/workarounds_vk.h"
 
+// vulkan.hpp generates some clang-tidy warnings.
+// NOLINTBEGIN(clang-analyzer-security.PointerSub)
+
 namespace impeller {
 
 static constexpr const char* kInstanceLayer = "ImpellerInstance";
@@ -193,18 +196,25 @@ static const char* GetExtensionName(RequiredAndroidDeviceExtensionVK ext) {
       return VK_EXT_QUEUE_FAMILY_FOREIGN_EXTENSION_NAME;
     case RequiredAndroidDeviceExtensionVK::kKHRDedicatedAllocation:
       return VK_KHR_DEDICATED_ALLOCATION_EXTENSION_NAME;
-    case RequiredAndroidDeviceExtensionVK::kKHRExternalFenceFd:
-      return VK_KHR_EXTERNAL_FENCE_FD_EXTENSION_NAME;
-    case RequiredAndroidDeviceExtensionVK::kKHRExternalFence:
-      return VK_KHR_EXTERNAL_FENCE_EXTENSION_NAME;
-    case RequiredAndroidDeviceExtensionVK::kKHRExternalSemaphoreFd:
-      return VK_KHR_EXTERNAL_SEMAPHORE_FD_EXTENSION_NAME;
-    case RequiredAndroidDeviceExtensionVK::kKHRExternalSemaphore:
-      return VK_KHR_EXTERNAL_SEMAPHORE_EXTENSION_NAME;
     case RequiredAndroidDeviceExtensionVK::kLast:
       return "Unknown";
   }
   FML_UNREACHABLE();
+}
+
+static const char* GetExtensionName(OptionalAndroidDeviceExtensionVK ext) {
+  switch (ext) {
+    case OptionalAndroidDeviceExtensionVK::kKHRExternalFenceFd:
+      return VK_KHR_EXTERNAL_FENCE_FD_EXTENSION_NAME;
+    case OptionalAndroidDeviceExtensionVK::kKHRExternalFence:
+      return VK_KHR_EXTERNAL_FENCE_EXTENSION_NAME;
+    case OptionalAndroidDeviceExtensionVK::kKHRExternalSemaphoreFd:
+      return VK_KHR_EXTERNAL_SEMAPHORE_FD_EXTENSION_NAME;
+    case OptionalAndroidDeviceExtensionVK::kKHRExternalSemaphore:
+      return VK_KHR_EXTERNAL_SEMAPHORE_EXTENSION_NAME;
+    case OptionalAndroidDeviceExtensionVK::kLast:
+      return "Unknown";
+  }
 }
 
 static const char* GetExtensionName(OptionalDeviceExtensionVK ext) {
@@ -262,8 +272,9 @@ CapabilitiesVK::GetEnabledDeviceExtensions(
     }
     exts = maybe_exts.value();
   } else {
-    exts = std::set(embedder_device_extensions_.begin(),
-                    embedder_device_extensions_.end());
+    for (const auto& ext : embedder_device_extensions_) {
+      exts.insert(ext);
+    }
   }
 
   std::vector<std::string> enabled;
@@ -291,6 +302,17 @@ CapabilitiesVK::GetEnabledDeviceExtensions(
     return true;
   };
 
+  auto for_each_optional_android_extension =
+      [&](OptionalAndroidDeviceExtensionVK ext) {
+#ifdef FML_OS_ANDROID
+        auto name = GetExtensionName(ext);
+        if (exts.find(name) != exts.end()) {
+          enabled.push_back(name);
+        }
+#endif  //  FML_OS_ANDROID
+        return true;
+      };
+
   auto for_each_optional_extension = [&](OptionalDeviceExtensionVK ext) {
     auto name = GetExtensionName(ext);
     if (exts.find(name) != exts.end()) {
@@ -304,7 +326,10 @@ CapabilitiesVK::GetEnabledDeviceExtensions(
           for_each_common_extension) &&
       IterateExtensions<RequiredAndroidDeviceExtensionVK>(
           for_each_android_extension) &&
-      IterateExtensions<OptionalDeviceExtensionVK>(for_each_optional_extension);
+      IterateExtensions<OptionalDeviceExtensionVK>(
+          for_each_optional_extension) &&
+      IterateExtensions<OptionalAndroidDeviceExtensionVK>(
+          for_each_optional_android_extension);
 
   if (!iterate_extensions) {
     VALIDATION_LOG << "Device not suitable since required extensions are not "
@@ -486,6 +511,10 @@ bool CapabilitiesVK::SupportsPrimitiveRestart() const {
   return has_primitive_restart_;
 }
 
+bool CapabilitiesVK::Supports32BitPrimitiveIndices() const {
+  return true;
+}
+
 void CapabilitiesVK::SetOffscreenFormat(PixelFormat pixel_format) const {
   default_color_format_ = pixel_format;
 }
@@ -499,11 +528,11 @@ bool CapabilitiesVK::SetPhysicalDevice(
     default_color_format_ = PixelFormat::kUnknown;
   }
 
-  if (HasSuitableDepthStencilFormat(device, vk::Format::eD32SfloatS8Uint)) {
-    default_depth_stencil_format_ = PixelFormat::kD32FloatS8UInt;
-  } else if (HasSuitableDepthStencilFormat(device,
-                                           vk::Format::eD24UnormS8Uint)) {
+  if (HasSuitableDepthStencilFormat(device, vk::Format::eD24UnormS8Uint)) {
     default_depth_stencil_format_ = PixelFormat::kD24UnormS8Uint;
+  } else if (HasSuitableDepthStencilFormat(device,
+                                           vk::Format::eD32SfloatS8Uint)) {
+    default_depth_stencil_format_ = PixelFormat::kD32FloatS8UInt;
   } else {
     default_depth_stencil_format_ = PixelFormat::kUnknown;
   }
@@ -549,6 +578,7 @@ bool CapabilitiesVK::SetPhysicalDevice(
     required_common_device_extensions_.clear();
     required_android_device_extensions_.clear();
     optional_device_extensions_.clear();
+    optional_android_device_extensions_.clear();
 
     std::set<std::string> exts;
     if (!use_embedder_extensions_) {
@@ -558,8 +588,9 @@ bool CapabilitiesVK::SetPhysicalDevice(
       }
       exts = maybe_exts.value();
     } else {
-      exts = std::set(embedder_device_extensions_.begin(),
-                      embedder_device_extensions_.end());
+      for (const auto& ext : embedder_device_extensions_) {
+        exts.insert(ext);
+      }
     }
 
     IterateExtensions<RequiredCommonDeviceExtensionVK>([&](auto ext) -> bool {
@@ -583,6 +614,14 @@ bool CapabilitiesVK::SetPhysicalDevice(
       }
       return true;
     });
+    IterateExtensions<OptionalAndroidDeviceExtensionVK>(
+        [&](OptionalAndroidDeviceExtensionVK ext) {
+          auto name = GetExtensionName(ext);
+          if (exts.find(name) != exts.end()) {
+            optional_android_device_extensions_.insert(ext);
+          }
+          return true;
+        });
   }
 
   supports_texture_fixed_rate_compression_ =
@@ -601,6 +640,19 @@ bool CapabilitiesVK::SetPhysicalDevice(
   // See VUID-VkPipelineInputAssemblyStateCreateInfo-triangleFans-04452.
   has_triangle_fans_ =
       !HasExtension(OptionalDeviceExtensionVK::kVKKHRPortabilitySubset);
+
+  // External Fence/Semaphore for AHB swapchain
+  if (HasExtension(OptionalAndroidDeviceExtensionVK::kKHRExternalFenceFd) &&
+      HasExtension(OptionalAndroidDeviceExtensionVK::kKHRExternalFence) &&
+      HasExtension(OptionalAndroidDeviceExtensionVK::kKHRExternalSemaphore) &&
+      HasExtension(OptionalAndroidDeviceExtensionVK::kKHRExternalSemaphoreFd)) {
+    supports_external_fence_and_semaphore_ = true;
+  }
+
+  minimum_uniform_alignment_ =
+      device_properties_.limits.minUniformBufferOffsetAlignment;
+  minimum_storage_alignment_ =
+      device_properties_.limits.minStorageBufferOffsetAlignment;
 
   return true;
 }
@@ -680,6 +732,18 @@ PixelFormat CapabilitiesVK::GetDefaultGlyphAtlasFormat() const {
   return PixelFormat::kR8UNormInt;
 }
 
+size_t CapabilitiesVK::GetMinimumUniformAlignment() const {
+  return minimum_uniform_alignment_;
+}
+
+size_t CapabilitiesVK::GetMinimumStorageBufferAlignment() const {
+  return minimum_storage_alignment_;
+}
+
+bool CapabilitiesVK::NeedsPartitionedHostBuffer() const {
+  return false;
+}
+
 bool CapabilitiesVK::HasExtension(RequiredCommonDeviceExtensionVK ext) const {
   return required_common_device_extensions_.find(ext) !=
          required_common_device_extensions_.end();
@@ -693,6 +757,11 @@ bool CapabilitiesVK::HasExtension(RequiredAndroidDeviceExtensionVK ext) const {
 bool CapabilitiesVK::HasExtension(OptionalDeviceExtensionVK ext) const {
   return optional_device_extensions_.find(ext) !=
          optional_device_extensions_.end();
+}
+
+bool CapabilitiesVK::HasExtension(OptionalAndroidDeviceExtensionVK ext) const {
+  return optional_android_device_extensions_.find(ext) !=
+         optional_android_device_extensions_.end();
 }
 
 bool CapabilitiesVK::SupportsTextureFixedRateCompression() const {
@@ -765,4 +834,14 @@ void CapabilitiesVK::ApplyWorkarounds(const WorkaroundsVK& workarounds) {
   has_framebuffer_fetch_ = !workarounds.input_attachment_self_dependency_broken;
 }
 
+bool CapabilitiesVK::SupportsExternalSemaphoreExtensions() const {
+  return supports_external_fence_and_semaphore_;
+}
+
+bool CapabilitiesVK::SupportsExtendedRangeFormats() const {
+  return false;
+}
+
 }  // namespace impeller
+
+// NOLINTEND(clang-analyzer-security.PointerSub)

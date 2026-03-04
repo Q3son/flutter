@@ -12,6 +12,7 @@ import 'package:flutter_devicelab/framework/framework.dart';
 import 'package:flutter_devicelab/framework/task_result.dart';
 import 'package:flutter_devicelab/framework/utils.dart';
 import 'package:path/path.dart' as path;
+import 'package:pub_semver/pub_semver.dart';
 
 final String gradlew = Platform.isWindows ? 'gradlew.bat' : 'gradlew';
 final String gradlewExecutable = Platform.isWindows ? '.\\$gradlew' : './$gradlew';
@@ -20,7 +21,7 @@ final String fileReadWriteMode = Platform.isWindows ? 'rw-rw-rw-' : 'rw-r--r--';
 /// Combines several TaskFunctions with trivial success value into one.
 TaskFunction combine(List<TaskFunction> tasks) {
   return () async {
-    for (final TaskFunction task in tasks) {
+    for (final task in tasks) {
       final TaskResult result = await task();
       if (result.failed) {
         return result;
@@ -33,15 +34,20 @@ TaskFunction combine(List<TaskFunction> tasks) {
 /// Tests that the Flutter module project template works and supports
 /// adding Flutter to an existing Android app.
 class ModuleTest {
-  ModuleTest({this.gradleVersion = '7.6.3'});
+  ModuleTest({this.gradleVersion = '7.6.3', Version? agpVersion})
+    : agpVersion = agpVersion ?? Version(8, 3, 0);
 
   static const String buildTarget = 'module-gradle';
+  // gradleVersion is a String because gradle does not follow dart semver
+  // rules for rc candidates.
   final String gradleVersion;
+  final Version agpVersion;
   final StringBuffer stdout = StringBuffer();
   final StringBuffer stderr = StringBuffer();
 
   Future<TaskResult> call() async {
     section('Running: $buildTarget-$gradleVersion');
+
     section('Find Java');
 
     final String? javaHome = await findJavaHome();
@@ -53,7 +59,7 @@ class ModuleTest {
     section('Create Flutter module project');
 
     final Directory tempDir = Directory.systemTemp.createTempSync('flutter_module_test.');
-    final Directory projectDir = Directory(path.join(tempDir.path, 'hello'));
+    final projectDir = Directory(path.join(tempDir.path, 'hello'));
     try {
       await inDirectory(tempDir, () async {
         await flutter(
@@ -63,22 +69,16 @@ class ModuleTest {
           stderr: stderr,
         );
       });
+      print('Created template in $tempDir.');
 
       section('Create package with native assets');
 
-      await flutter(
-        'config',
-        options: <String>['--enable-native-assets'],
-        output: stdout,
-        stderr: stderr,
-      );
-
-      const String ffiPackageName = 'ffi_package';
+      const ffiPackageName = 'ffi_package';
       await createFfiPackage(ffiPackageName, tempDir);
 
       section('Add FFI package');
 
-      final File pubspec = File(path.join(projectDir.path, 'pubspec.yaml'));
+      final pubspec = File(path.join(projectDir.path, 'pubspec.yaml'));
       String content = await pubspec.readAsString();
       content = content.replaceFirst(
         'dependencies:${Platform.lineTerminator}',
@@ -180,17 +180,6 @@ class ModuleTest {
         await flutter('clean', output: stdout, stderr: stderr);
       });
 
-      section('Make Android host app editable');
-
-      await inDirectory(projectDir, () async {
-        await flutter(
-          'make-host-app-editable',
-          options: <String>['android'],
-          output: stdout,
-          stderr: stderr,
-        );
-      });
-
       section('Build editable host app');
 
       await inDirectory(projectDir, () async {
@@ -215,9 +204,20 @@ class ModuleTest {
         return TaskResult.failure('Failed to build editable host .apk');
       }
 
+      section('Flutter build aar succeeds');
+
+      await inDirectory(projectDir, () async {
+        await flutter(
+          'build',
+          options: <String>['aar', '--no-profile'],
+          output: stdout,
+          stderr: stderr,
+        );
+      });
+
       section('Add to existing Android app');
 
-      final Directory hostApp = Directory(path.join(tempDir.path, 'hello_host_app'));
+      final hostApp = Directory(path.join(tempDir.path, 'hello_host_app'));
       mkdir(hostApp);
       recursiveCopy(
         Directory(
@@ -237,15 +237,23 @@ class ModuleTest {
         Directory(path.join(hostApp.path, 'gradle', 'wrapper')),
       );
 
-      // Modify gradle version to passed in version.
-      // This is somehow the wrong file.
-      final File gradleWrapperProperties = File(
+      // Modify gradle version to the passed in version.
+      final gradleWrapperProperties = File(
         path.join(hostApp.path, 'gradle', 'wrapper', 'gradle-wrapper.properties'),
       );
       String propertyContent = await gradleWrapperProperties.readAsString();
       propertyContent = propertyContent.replaceFirst('REPLACEME', gradleVersion);
-      section(propertyContent);
+      section('Modify gradle wrapper file contents');
       await gradleWrapperProperties.writeAsString(propertyContent, flush: true);
+
+      // Modify AGP version to the passed in version.
+      final topBuildDotGradle = File(path.join(hostApp.path, 'build.gradle'));
+      String topBuildContent = await topBuildDotGradle.readAsString();
+      topBuildContent = topBuildContent.replaceFirst('REPLACEME', agpVersion.toString());
+      section(topBuildContent);
+      await topBuildDotGradle.writeAsString(topBuildContent, flush: true);
+
+      final bool greaterThanOrEqualToGradle83 = agpVersion.compareTo(Version(8, 3, 0)) >= 0;
 
       section('Build debug host APK');
 
@@ -300,7 +308,7 @@ class ModuleTest {
         );
       }
 
-      section('Check file access modes for read-only asset from Flutter module');
+      section('Check file access modes for Debug read-only asset from Flutter module');
 
       final String readonlyDebugAssetFilePath = path.joinAll(<String>[
         hostApp.path,
@@ -309,13 +317,15 @@ class ModuleTest {
         'intermediates',
         'assets',
         'debug',
+        ...greaterThanOrEqualToGradle83 ? <String>['mergeDebugAssets'] : <String>[],
         'flutter_assets',
         'assets',
         'read-only.txt',
       ]);
-      final File readonlyDebugAssetFile = File(readonlyDebugAssetFilePath);
+      // ./app/build/intermediates/assets/debug/mergeDebugAssets/flutter_assets/assets/read-only.txt
+      final readonlyDebugAssetFile = File(readonlyDebugAssetFilePath);
       if (!exists(readonlyDebugAssetFile)) {
-        return TaskResult.failure('Failed to copy read-only asset file');
+        return TaskResult.failure('Failed to copy read-only debug asset file');
       }
 
       String modes = readonlyDebugAssetFile.statSync().modeString();
@@ -366,12 +376,12 @@ class ModuleTest {
       section('Check the NOTICE file is correct');
 
       await inDirectory(hostApp, () async {
-        final File apkFile = File(releaseHostApk);
+        final apkFile = File(releaseHostApk);
         final Archive apk = ZipDecoder().decodeBytes(apkFile.readAsBytesSync());
         // Shouldn't be missing since we already checked it exists above.
         final ArchiveFile? noticesFile = apk.findFile('assets/flutter_assets/NOTICES.Z');
 
-        final Uint8List? licenseData = noticesFile?.content as Uint8List?;
+        final licenseData = noticesFile?.content as Uint8List?;
         if (licenseData == null) {
           return TaskResult.failure('Invalid license file.');
         }
@@ -393,7 +403,7 @@ class ModuleTest {
         );
       }
 
-      section('Check file access modes for read-only asset from Flutter module');
+      section('Check file access modes for release read-only asset from Flutter module');
 
       final String readonlyReleaseAssetFilePath = path.joinAll(<String>[
         hostApp.path,
@@ -402,13 +412,14 @@ class ModuleTest {
         'intermediates',
         'assets',
         'release',
+        ...greaterThanOrEqualToGradle83 ? <String>['mergeReleaseAssets'] : <String>[],
         'flutter_assets',
         'assets',
         'read-only.txt',
       ]);
-      final File readonlyReleaseAssetFile = File(readonlyReleaseAssetFilePath);
+      final readonlyReleaseAssetFile = File(readonlyReleaseAssetFilePath);
       if (!exists(readonlyReleaseAssetFile)) {
-        return TaskResult.failure('Failed to copy read-only asset file');
+        return TaskResult.failure('Failed to copy read-only release asset file');
       }
 
       modes = readonlyReleaseAssetFile.statSync().modeString();
@@ -418,7 +429,7 @@ class ModuleTest {
       }
 
       section('Check for specific log errors.');
-      final String finalStderr = stderr.toString();
+      final finalStderr = stderr.toString();
       if (finalStderr.contains("You are applying Flutter's main Gradle plugin imperatively")) {
         return TaskResult.failure('Applied the Flutter Gradle Plugin imperatively');
       }
@@ -426,7 +437,8 @@ class ModuleTest {
       return TaskResult.success(null);
     } on TaskResult catch (taskResult) {
       return taskResult;
-    } catch (e) {
+    } catch (e, stackTrace) {
+      print('Task exception stack trace:\n$stackTrace');
       return TaskResult.failure(e.toString());
     } finally {
       rmTree(tempDir);
@@ -437,9 +449,11 @@ class ModuleTest {
 Future<void> main() async {
   await task(
     combine(<TaskFunction>[
-      // ignore: avoid_redundant_argument_values
-      ModuleTest(gradleVersion: '8.4').call,
-      ModuleTest(gradleVersion: '8.4-rc-3').call,
+      // 3 tests comes close to timeout.
+      // Pre AGP 8.3
+      ModuleTest(gradleVersion: '8.4', agpVersion: Version.parse('8.2.1')).call,
+      // Post AGP 8.3 + rc candidates can work
+      ModuleTest(gradleVersion: '8.13-rc-1', agpVersion: Version.parse('8.8.1')).call,
     ]),
   );
 }

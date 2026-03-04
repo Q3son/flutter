@@ -23,13 +23,12 @@ import 'package:skia_gold_client/skia_gold_client.dart';
 import 'package:stream_channel/stream_channel.dart';
 
 import 'package:test_core/backend.dart' hide Compiler;
-// TODO(ditman): Fix ignores when https://github.com/flutter/flutter/issues/143599 is resolved.
-import 'package:test_core/src/runner/environment.dart'; // ignore: implementation_imports
-import 'package:test_core/src/runner/platform.dart'; // ignore: implementation_imports
-import 'package:test_core/src/runner/plugin/platform_helpers.dart'; // ignore: implementation_imports
-import 'package:test_core/src/runner/runner_suite.dart'; // ignore: implementation_imports
-import 'package:test_core/src/util/io.dart'; // ignore: implementation_imports
-import 'package:test_core/src/util/stack_trace_mapper.dart'; // ignore: implementation_imports
+import 'package:test_core/src/runner/environment.dart';
+import 'package:test_core/src/runner/platform.dart';
+import 'package:test_core/src/runner/plugin/platform_helpers.dart';
+import 'package:test_core/src/runner/runner_suite.dart';
+import 'package:test_core/src/util/io.dart';
+import 'package:test_core/src/util/stack_trace_mapper.dart';
 
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:web_test_utils/image_compare.dart';
@@ -112,7 +111,7 @@ class BrowserPlatform extends PlatformPlugin {
     required String? overridePathToCanvasKit,
     required bool isVerbose,
   }) async {
-    final shelf_io.IOServer server = shelf_io.IOServer(await HttpMultiServer.loopback(0));
+    final server = shelf_io.IOServer(await HttpMultiServer.loopback(0));
     return BrowserPlatform._(
       suite,
       browserEnvironment: browserEnvironment,
@@ -176,7 +175,7 @@ class BrowserPlatform extends PlatformPlugin {
       return shelf.Response.notFound('Not a request for CanvasKit.');
     }
 
-    final File file = File(p.joinAll(<String>[pathOverride, ...p.split(request.url.path).skip(1)]));
+    final file = File(p.joinAll(<String>[pathOverride, ...p.split(request.url.path).skip(1)]));
 
     if (!file.existsSync()) {
       return shelf.Response.notFound('File not found: ${request.url.path}');
@@ -186,7 +185,7 @@ class BrowserPlatform extends PlatformPlugin {
     final String? contentType = contentTypes[extension];
 
     if (contentType == null) {
-      final String error = 'Failed to determine Content-Type for "${request.url.path}".';
+      final error = 'Failed to determine Content-Type for "${request.url.path}".';
       stderr.writeln(error);
       return shelf.Response.internalServerError(body: error);
     }
@@ -199,7 +198,7 @@ class BrowserPlatform extends PlatformPlugin {
 
   /// Lists available test images under `out/web_tests/test_images`.
   Future<shelf.Response> _testImageListingHandler(shelf.Request request) async {
-    const Map<String, String> supportedImageTypes = <String, String>{
+    const supportedImageTypes = <String, String>{
       '.png': 'image/png',
       '.jpg': 'image/jpeg',
       '.jpeg': 'image/jpeg',
@@ -212,17 +211,16 @@ class BrowserPlatform extends PlatformPlugin {
       return shelf.Response.notFound('Not found.');
     }
 
-    final Directory testImageDirectory = Directory(
+    final testImageDirectory = Directory(
       p.join(env.environment.webTestsArtifactsDir.path, 'test_images'),
     );
 
-    final List<String> testImageFiles =
-        testImageDirectory
-            .listSync(recursive: true)
-            .whereType<File>()
-            .map<String>((File file) => p.relative(file.path, from: testImageDirectory.path))
-            .where((String path) => supportedImageTypes.containsKey(p.extension(path)))
-            .toList();
+    final List<String> testImageFiles = testImageDirectory
+        .listSync(recursive: true)
+        .whereType<File>()
+        .map<String>((File file) => p.relative(file.path, from: testImageDirectory.path))
+        .where((String path) => supportedImageTypes.containsKey(p.extension(path)))
+        .toList();
 
     return shelf.Response.ok(
       json.encode(testImageFiles),
@@ -248,7 +246,7 @@ class BrowserPlatform extends PlatformPlugin {
         extension == '.h';
     if (isSource && p.isRelative(path)) {
       final String fullPath = p.join(env.environment.engineSrcDir.path, path);
-      final File file = File(fullPath);
+      final file = File(fullPath);
       if (file.existsSync()) {
         return shelf.Response.ok(file.openRead());
       }
@@ -289,7 +287,7 @@ class BrowserPlatform extends PlatformPlugin {
   /// other as prefixes. To actually read the file, the file system root is
   /// prepended before creating the file.
   shelf.Handler _createAbsolutePackageUrlHandler() {
-    final Map<String, Package> urlToPackage = <String, Package>{};
+    final urlToPackage = <String, Package>{};
     for (final Package package in packageConfig.packages) {
       // Turns the URI as encoded in package_config.json to a file path.
       final String configPath = p.fromUri(package.root);
@@ -323,7 +321,7 @@ class BrowserPlatform extends PlatformPlugin {
         p.rootPrefix(p.fromUri(package.root.path)),
         p.fromUri(requestedPath),
       );
-      final File fileInPackage = File(filePath);
+      final fileInPackage = File(filePath);
       if (!fileInPackage.existsSync()) {
         return shelf.Response.notFound('File not found: $requestedPath');
       }
@@ -339,17 +337,14 @@ class BrowserPlatform extends PlatformPlugin {
     final int payloadLength = int.parse(request.requestedUri.queryParameters['length']!);
     final int chunkLength = int.parse(request.requestedUri.queryParameters['chunk']!);
 
-    final StreamController<List<int>> controller = StreamController<List<int>>();
+    final controller = StreamController<List<int>>();
 
     Future<void> fillPayload() async {
-      int remainingByteCount = payloadLength;
-      int byteCounter = 0;
+      var remainingByteCount = payloadLength;
+      var byteCounter = 0;
       while (remainingByteCount > 0) {
         final int currentChunkLength = min(chunkLength, remainingByteCount);
-        final List<int> chunk = List<int>.generate(
-          currentChunkLength,
-          (int i) => (byteCounter + i) & 0xFF,
-        );
+        final chunk = List<int>.generate(currentChunkLength, (int i) => (byteCounter + i) & 0xFF);
         byteCounter = (byteCounter + currentChunkLength) & 0xFF;
         remainingByteCount -= currentChunkLength;
         controller.add(chunk);
@@ -376,8 +371,8 @@ class BrowserPlatform extends PlatformPlugin {
     }
 
     final String payload = await request.readAsString();
-    final Map<String, dynamic> requestData = json.decode(payload) as Map<String, dynamic>;
-    final String filename = requestData['filename'] as String;
+    final requestData = json.decode(payload) as Map<String, dynamic>;
+    final filename = requestData['filename'] as String;
 
     if (!(await browserManager).supportsScreenshots) {
       if (isVerbose) {
@@ -389,8 +384,8 @@ class BrowserPlatform extends PlatformPlugin {
       return shelf.Response.ok(json.encode('OK'));
     }
 
-    final Map<String, dynamic> region = requestData['region'] as Map<String, dynamic>;
-    final bool isCanvaskitTest = requestData['isCanvaskitTest'] as bool;
+    final region = requestData['region'] as Map<String, dynamic>;
+    final isCanvaskitTest = requestData['isCanvaskitTest'] as bool;
     final String result = await _diffScreenshot(filename, region, isCanvaskitTest);
     return shelf.Response.ok(json.encode(result));
   }
@@ -400,7 +395,7 @@ class BrowserPlatform extends PlatformPlugin {
     Map<String, dynamic> region,
     bool isCanvaskitTest,
   ) async {
-    final Rectangle<num> regionAsRectange = Rectangle<num>(
+    final regionAsRectange = Rectangle<num>(
       region['x'] as num,
       region['y'] as num,
       region['width'] as num,
@@ -450,7 +445,7 @@ class BrowserPlatform extends PlatformPlugin {
   /// This is used for trivial use-cases, such as `favicon.ico`, host pages, etc.
   shelf.Handler createSimpleDirectoryHandler(Directory directory) {
     return (shelf.Request request) {
-      final File fileInDirectory = File(p.join(directory.path, request.url.path));
+      final fileInDirectory = File(p.join(directory.path, request.url.path));
 
       if (request.url.path.contains('//') || !fileInDirectory.existsSync()) {
         return shelf.Response.notFound('File not found: ${request.url.path}');
@@ -460,7 +455,7 @@ class BrowserPlatform extends PlatformPlugin {
       final String? contentType = contentTypes[extension];
 
       if (contentType == null) {
-        final String error = 'Failed to determine Content-Type for "${request.url.path}".';
+        final error = 'Failed to determine Content-Type for "${request.url.path}".';
         stderr.writeln(error);
         return shelf.Response.internalServerError(body: error);
       }
@@ -477,14 +472,12 @@ class BrowserPlatform extends PlatformPlugin {
   }
 
   String getCanvasKitVariant() {
-    switch (suite.runConfig.variant) {
-      case CanvasKitVariant.full:
-        return 'full';
-      case CanvasKitVariant.chromium:
-        return 'chromium';
-      case null:
-        return 'auto';
-    }
+    return switch (suite.runConfig.variant) {
+      CanvasKitVariant.full => 'full',
+      CanvasKitVariant.chromium => 'chromium',
+      CanvasKitVariant.experimentalWebParagraph => 'experimentalWebParagraph',
+      null => 'auto',
+    };
   }
 
   String _makeBuildConfigString(String scriptBase, CompileConfiguration config) {
@@ -511,13 +504,14 @@ class BrowserPlatform extends PlatformPlugin {
     final String path = p.fromUri(request.url);
 
     if (path.endsWith('.html')) {
-      final String test = '${p.withoutExtension(path)}.dart';
+      final test = '${p.withoutExtension(path)}.dart';
       final String scriptBase = htmlEscape.convert(p.basename(test));
 
       final String buildConfigsString = suite.testBundle.compileConfigs
           .map((CompileConfiguration config) => _makeBuildConfigString(scriptBase, config))
           .join(',\n');
-      final String bootstrapScript = '''
+      final bootstrapScript =
+          '''
 <script>
   // Define this before loading flutter.js to test PR flutter/engine#51294
   if (!window._flutter) {
@@ -539,6 +533,8 @@ class BrowserPlatform extends PlatformPlugin {
       canvasKitVariant: "${getCanvasKitVariant()}",
       canvasKitBaseUrl: "/canvaskit",
       forceSingleThreadedSkwasm: ${suite.runConfig.forceSingleThreadedSkwasm},
+      wasmAllowList: ${jsonEncode(suite.runConfig.wasmAllowList)},
+      enableWimp: ${suite.runConfig.enableWimp},
     },
   });
 </script>
@@ -618,7 +614,7 @@ class BrowserPlatform extends PlatformPlugin {
       return _browserManager!;
     }
 
-    final Completer<WebSocketChannel> completer = Completer<WebSocketChannel>.sync();
+    final completer = Completer<WebSocketChannel>.sync();
     final String path = _webSocketHandler.create(
       webSocketHandler((WebSocketChannel webSocket, _) {
         completer.complete(webSocket);
@@ -672,7 +668,7 @@ class BrowserPlatform extends PlatformPlugin {
   @override
   Future<void> close() {
     return _closeMemo.runOnce(() async {
-      final List<Future<void>> futures = <Future<void>>[];
+      final futures = <Future<void>>[];
       futures.add(
         Future<void>.microtask(() async {
           if (_browserManager != null) {
@@ -711,7 +707,7 @@ class OneOffHandler {
   ///
   /// [handler] will be unmounted as soon as it receives a request.
   String create(shelf.Handler handler) {
-    final String path = _counter.toString();
+    final path = _counter.toString();
     _handlers[path] = handler;
     _counter++;
     return path;
@@ -881,7 +877,7 @@ class BrowserManager {
     Directory? sourceMapDirectory,
     bool debug = false,
   }) {
-    final Completer<BrowserManager> completer = Completer<BrowserManager>();
+    final completer = Completer<BrowserManager>();
 
     // For the cases where we use a delegator such as `adb` (for Android) or
     // `xcrun` (for IOS), these delegator processes can shut down before the
@@ -1013,15 +1009,15 @@ class BrowserManager {
           // to let the host page move forward.
           controller!.channel('test.browser.mapper').sink.add(null);
         } else {
-          final String sourceMapFileName = '${p.basename(path)}.browser_test.dart.js.map';
+          final sourceMapFileName = '${p.basename(path)}.browser_test.dart.js.map';
           final String pathToTest = p.dirname(path);
 
           final String mapPath = p.join(_sourceMapDirectory.path, pathToTest, sourceMapFileName);
 
-          final Map<String, Uri> packageMap = <String, Uri>{
+          final packageMap = <String, Uri>{
             for (final Package p in packageConfig.packages) p.name: p.packageUriRoot,
           };
-          final JSStackTraceMapper mapper = JSStackTraceMapper(
+          final mapper = JSStackTraceMapper(
             await File(mapPath).readAsString(),
             mapUrl: p.toUri(mapPath),
             packageMap: packageMap,
@@ -1033,7 +1029,7 @@ class BrowserManager {
 
         _controllers.add(controller!);
 
-        final List<Future<RunnerSuite>> futures = <Future<RunnerSuite>>[controller!.suite];
+        final futures = <Future<RunnerSuite>>[controller!.suite];
         if (_browser.onUncaughtException != null) {
           futures.add(
             _browser.onUncaughtException!.then<RunnerSuite>(

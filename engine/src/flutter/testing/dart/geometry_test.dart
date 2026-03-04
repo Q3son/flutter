@@ -89,7 +89,7 @@ void main() {
   });
 
   test('Size created from doubles', () {
-    const Size size = Size(5.0, 7.0);
+    const size = Size(5.0, 7.0);
     expect(size.width, equals(5.0));
     expect(size.height, equals(7.0));
     expect(size.shortestSide, equals(5.0));
@@ -113,12 +113,12 @@ void main() {
   });
 
   test('Rect.toString test', () {
-    const Rect r = Rect.fromLTRB(1.0, 3.0, 5.0, 7.0);
+    const r = Rect.fromLTRB(1.0, 3.0, 5.0, 7.0);
     expect(r.toString(), 'Rect.fromLTRB(1.0, 3.0, 5.0, 7.0)');
   });
 
   test('Rect accessors', () {
-    const Rect r = Rect.fromLTRB(1.0, 3.0, 5.0, 7.0);
+    const r = Rect.fromLTRB(1.0, 3.0, 5.0, 7.0);
     expect(r.left, equals(1.0));
     expect(r.top, equals(3.0));
     expect(r.right, equals(5.0));
@@ -126,7 +126,7 @@ void main() {
   });
 
   test('Rect.fromCenter', () {
-    Rect rect = Rect.fromCenter(center: const Offset(1.0, 3.0), width: 5.0, height: 7.0);
+    var rect = Rect.fromCenter(center: const Offset(1.0, 3.0), width: 5.0, height: 7.0);
     expect(rect.left, -1.5);
     expect(rect.top, -0.5);
     expect(rect.right, 3.5);
@@ -152,7 +152,7 @@ void main() {
   });
 
   test('Rect created by width and height', () {
-    const Rect r = Rect.fromLTWH(1.0, 3.0, 5.0, 7.0);
+    const r = Rect.fromLTWH(1.0, 3.0, 5.0, 7.0);
     expect(r.left, equals(1.0));
     expect(r.top, equals(3.0));
     expect(r.right, equals(6.0));
@@ -162,8 +162,8 @@ void main() {
   });
 
   test('Rect intersection', () {
-    const Rect r1 = Rect.fromLTRB(0.0, 0.0, 100.0, 100.0);
-    const Rect r2 = Rect.fromLTRB(50.0, 50.0, 200.0, 200.0);
+    const r1 = Rect.fromLTRB(0.0, 0.0, 100.0, 100.0);
+    const r2 = Rect.fromLTRB(50.0, 50.0, 200.0, 200.0);
     final Rect r3 = r1.intersect(r2);
     expect(r3.left, equals(50.0));
     expect(r3.top, equals(50.0));
@@ -174,8 +174,8 @@ void main() {
   });
 
   test('Rect expandToInclude overlapping rects', () {
-    const Rect r1 = Rect.fromLTRB(0.0, 0.0, 100.0, 100.0);
-    const Rect r2 = Rect.fromLTRB(50.0, 50.0, 200.0, 200.0);
+    const r1 = Rect.fromLTRB(0.0, 0.0, 100.0, 100.0);
+    const r2 = Rect.fromLTRB(50.0, 50.0, 200.0, 200.0);
     final Rect r3 = r1.expandToInclude(r2);
     expect(r3.left, equals(0.0));
     expect(r3.top, equals(0.0));
@@ -187,8 +187,8 @@ void main() {
   });
 
   test('Rect expandToInclude crossing rects', () {
-    const Rect r1 = Rect.fromLTRB(50.0, 0.0, 50.0, 200.0);
-    const Rect r2 = Rect.fromLTRB(0.0, 50.0, 200.0, 50.0);
+    const r1 = Rect.fromLTRB(50.0, 0.0, 50.0, 200.0);
+    const r2 = Rect.fromLTRB(0.0, 50.0, 200.0, 50.0);
     final Rect r3 = r1.expandToInclude(r2);
     expect(r3.left, equals(0.0));
     expect(r3.top, equals(0.0));
@@ -200,8 +200,8 @@ void main() {
   });
 
   test('RRect.fromRectXY', () {
-    const Rect baseRect = Rect.fromLTWH(1.0, 3.0, 5.0, 7.0);
-    final RRect r = RRect.fromRectXY(baseRect, 1.0, 1.0);
+    const baseRect = Rect.fromLTWH(1.0, 3.0, 5.0, 7.0);
+    final r = RRect.fromRectXY(baseRect, 1.0, 1.0);
     expect(r.left, equals(1.0));
     expect(r.top, equals(3.0));
     expect(r.right, equals(6.0));
@@ -211,7 +211,7 @@ void main() {
   });
 
   test('RRect.contains()', () {
-    final RRect rrect = RRect.fromRectAndCorners(
+    final rrect = RRect.fromRectAndCorners(
       const Rect.fromLTRB(1.0, 1.0, 2.0, 2.0),
       topLeft: const Radius.circular(0.5),
       topRight: const Radius.circular(0.25),
@@ -229,7 +229,7 @@ void main() {
   });
 
   test('RRect.contains() large radii', () {
-    final RRect rrect = RRect.fromRectAndCorners(
+    final rrect = RRect.fromRectAndCorners(
       const Rect.fromLTRB(1.0, 1.0, 2.0, 2.0),
       topLeft: const Radius.circular(5000.0),
       topRight: const Radius.circular(2500.0),
@@ -247,13 +247,12 @@ void main() {
   });
 
   test('RRect.scaleRadii() properly constrained radii should remain unchanged', () {
-    final RRect rrect =
-        RRect.fromRectAndCorners(
-          const Rect.fromLTRB(1.0, 1.0, 2.0, 2.0),
-          topLeft: const Radius.circular(0.5),
-          topRight: const Radius.circular(0.25),
-          bottomRight: const Radius.elliptical(0.25, 0.75),
-        ).scaleRadii();
+    final RRect rrect = RRect.fromRectAndCorners(
+      const Rect.fromLTRB(1.0, 1.0, 2.0, 2.0),
+      topLeft: const Radius.circular(0.5),
+      topRight: const Radius.circular(0.25),
+      bottomRight: const Radius.elliptical(0.25, 0.75),
+    ).scaleRadii();
 
     // check sides
     expect(rrect.left, 1.0);
@@ -273,13 +272,12 @@ void main() {
   });
 
   test('RRect.scaleRadii() sum of radii that exceed side length should properly scale', () {
-    final RRect rrect =
-        RRect.fromRectAndCorners(
-          const Rect.fromLTRB(1.0, 1.0, 2.0, 2.0),
-          topLeft: const Radius.circular(5000.0),
-          topRight: const Radius.circular(2500.0),
-          bottomRight: const Radius.elliptical(2500.0, 7500.0),
-        ).scaleRadii();
+    final RRect rrect = RRect.fromRectAndCorners(
+      const Rect.fromLTRB(1.0, 1.0, 2.0, 2.0),
+      topLeft: const Radius.circular(5000.0),
+      topRight: const Radius.circular(2500.0),
+      bottomRight: const Radius.elliptical(2500.0, 7500.0),
+    ).scaleRadii();
 
     // check sides
     expect(rrect.left, 1.0);
@@ -299,7 +297,7 @@ void main() {
   });
 
   test('Radius.clamp() operates as expected', () {
-    final RRect rrectMin = RRect.fromLTRBR(
+    final rrectMin = RRect.fromLTRBR(
       1,
       3,
       5,
@@ -314,7 +312,7 @@ void main() {
     expect(rrectMin.trRadius, equals(const Radius.circular(0)));
     expect(rrectMin.blRadius, equals(const Radius.circular(0)));
 
-    final RRect rrectMax = RRect.fromLTRBR(
+    final rrectMax = RRect.fromLTRBR(
       1,
       3,
       5,
@@ -329,7 +327,7 @@ void main() {
     expect(rrectMax.trRadius, equals(const Radius.circular(10)));
     expect(rrectMax.blRadius, equals(const Radius.circular(10)));
 
-    final RRect rrectMix = RRect.fromLTRBR(
+    final rrectMix = RRect.fromLTRBR(
       1,
       3,
       5,
@@ -347,7 +345,7 @@ void main() {
     expect(rrectMix.trRadius, equals(const Radius.elliptical(0, 10)));
     expect(rrectMix.blRadius, equals(const Radius.elliptical(0, 10)));
 
-    final RRect rrectMix1 = RRect.fromLTRBR(
+    final rrectMix1 = RRect.fromLTRBR(
       1,
       3,
       5,
@@ -367,7 +365,7 @@ void main() {
   });
 
   test('Radius.clampValues() operates as expected', () {
-    final RRect rrectMin = RRect.fromLTRBR(
+    final rrectMin = RRect.fromLTRBR(
       1,
       3,
       5,
@@ -382,7 +380,7 @@ void main() {
     expect(rrectMin.trRadius, equals(const Radius.circular(0)));
     expect(rrectMin.blRadius, equals(const Radius.circular(0)));
 
-    final RRect rrectMax = RRect.fromLTRBR(
+    final rrectMax = RRect.fromLTRBR(
       1,
       3,
       5,
@@ -397,7 +395,7 @@ void main() {
     expect(rrectMax.trRadius, equals(const Radius.elliptical(10, 20)));
     expect(rrectMax.blRadius, equals(const Radius.elliptical(10, 20)));
 
-    final RRect rrectMix = RRect.fromLTRBR(
+    final rrectMix = RRect.fromLTRBR(
       1,
       3,
       5,
@@ -415,7 +413,7 @@ void main() {
     expect(rrectMix.trRadius, equals(const Radius.elliptical(5, 20)));
     expect(rrectMix.blRadius, equals(const Radius.elliptical(5, 20)));
 
-    final RRect rrectMix2 = RRect.fromLTRBR(
+    final rrectMix2 = RRect.fromLTRBR(
       1,
       3,
       5,
@@ -514,8 +512,8 @@ void main() {
   });
 
   test('infinity lerp', () {
-    const Offset a = Offset(double.infinity, double.infinity);
-    const Offset b = Offset(4, 4);
+    const a = Offset(double.infinity, double.infinity);
+    const b = Offset(4, 4);
     final Offset? result = Offset.lerp(a, b, 0.5);
     if (result == null) {
       expect(result != null, true);
@@ -573,4 +571,154 @@ void main() {
     expect(rrect.brRadiusX, 0);
     expect(rrect.brRadiusY, 0);
   });
+
+  test('RSuperellipse.contains is correct with no corners', () {
+    // RSuperellipse of bounds with no corners contains corners just barely.
+    const rse = RSuperellipse.fromLTRBXY(-50, -50, 50, 50, 0, 0);
+
+    expect(rse.contains(const Offset(-50, -50)), isTrue);
+    // Rectangles have half-in, half-out containment so we need
+    // to be careful about testing containment of right/bottom corners.
+    expect(rse.contains(const Offset(-50, 49.99)), isTrue);
+    expect(rse.contains(const Offset(49.99, -50)), isTrue);
+    expect(rse.contains(const Offset(49.99, 49.99)), isTrue);
+    expect(rse.contains(const Offset(-50.01, -50)), isFalse);
+    expect(rse.contains(const Offset(-50, -50.01)), isFalse);
+    expect(rse.contains(const Offset(-50.01, 50)), isFalse);
+    expect(rse.contains(const Offset(-50, 50.01)), isFalse);
+    expect(rse.contains(const Offset(50.01, -50)), isFalse);
+    expect(rse.contains(const Offset(50, -50.01)), isFalse);
+    expect(rse.contains(const Offset(50.01, 50)), isFalse);
+    expect(rse.contains(const Offset(50, 50.01)), isFalse);
+  });
+
+  test('RSuperellipse.contains is correct with tiny corners', () {
+    // RSuperellipse of bounds with even the tiniest corners does not contain corners.
+    const rse = RSuperellipse.fromLTRBXY(-50, -50, 50, 50, 0.01, 0.01);
+
+    expect(rse.contains(const Offset(-50, -50)), isFalse);
+    expect(rse.contains(const Offset(-50, 50)), isFalse);
+    expect(rse.contains(const Offset(50, -50)), isFalse);
+    expect(rse.contains(const Offset(50, 50)), isFalse);
+  });
+
+  test('RSuperellipse.contains is correct with uniform corners', () {
+    const rse = RSuperellipse.fromLTRBXY(-50, -50, 50, 50, 5.0, 5.0);
+
+    void checkPointAndMirrors(Offset p) {
+      checkPointWithOffset(rse, Offset(p.dx, p.dy), const Offset(0.02, 0.02));
+      checkPointWithOffset(rse, Offset(p.dx, -p.dy), const Offset(0.02, -0.02));
+      checkPointWithOffset(rse, Offset(-p.dx, p.dy), const Offset(-0.02, 0.02));
+      checkPointWithOffset(rse, Offset(-p.dx, -p.dy), const Offset(-0.02, -0.02));
+    }
+
+    checkPointAndMirrors(const Offset(0, 49.995)); // Top
+    checkPointAndMirrors(const Offset(44.245, 49.95)); // Top curve start
+    checkPointAndMirrors(const Offset(45.72, 49.87)); // Top joint
+    checkPointAndMirrors(const Offset(48.53, 48.53)); // Circular arc mid
+    checkPointAndMirrors(const Offset(49.87, 45.72)); // Right joint
+    checkPointAndMirrors(const Offset(49.95, 44.245)); // Right curve start
+    checkPointAndMirrors(const Offset(49.995, 0)); // Right
+  });
+
+  test('RSuperellipse.contains is correct with uniform elliptical corners', () {
+    const rse = RSuperellipse.fromLTRBXY(-50, -50, 50, 50, 5.0, 10.0);
+
+    void checkPointAndMirrors(Offset p) {
+      checkPointWithOffset(rse, Offset(p.dx, p.dy), const Offset(0.02, 0.02));
+      checkPointWithOffset(rse, Offset(p.dx, -p.dy), const Offset(0.02, -0.02));
+      checkPointWithOffset(rse, Offset(-p.dx, p.dy), const Offset(-0.02, 0.02));
+      checkPointWithOffset(rse, Offset(-p.dx, -p.dy), const Offset(-0.02, -0.02));
+    }
+
+    checkPointAndMirrors(const Offset(0, 49.995)); // Top
+    checkPointAndMirrors(const Offset(44.245, 49.911)); // Top curve start
+    checkPointAndMirrors(const Offset(45.72, 49.75)); // Top joint
+    checkPointAndMirrors(const Offset(48.51, 47.07)); // Circular arc mid
+    checkPointAndMirrors(const Offset(49.87, 41.44)); // Right joint
+    checkPointAndMirrors(const Offset(49.95, 38.49)); // Right curve start
+    checkPointAndMirrors(const Offset(49.995, 0)); // Right
+  });
+
+  test('RSuperellipse.contains is correct with uniform corners and unequal height and width', () {
+    // The bounds is not centered at the origin and has unequal height and width.
+    const rse = RSuperellipse.fromLTRBXY(0, 0, 50, 100, 23.0, 30.0);
+
+    final Offset center = rse.outerRect.center;
+    void checkPointAndMirrors(Offset globalPoint) {
+      final Offset p = globalPoint - center;
+      checkPointWithOffset(rse, Offset(p.dx, p.dy) + center, const Offset(0.02, 0.02));
+      checkPointWithOffset(rse, Offset(p.dx, -p.dy) + center, const Offset(0.02, -0.02));
+      checkPointWithOffset(rse, Offset(-p.dx, p.dy) + center, const Offset(-0.02, 0.02));
+      checkPointWithOffset(rse, Offset(-p.dx, -p.dy) + center, const Offset(-0.02, -0.02));
+    }
+
+    checkPointAndMirrors(const Offset(24.99, 99.99)); // Bottom mid-edge
+    checkPointAndMirrors(const Offset(29.99, 99.64));
+    checkPointAndMirrors(const Offset(34.99, 98.06));
+    checkPointAndMirrors(const Offset(39.99, 94.73));
+    checkPointAndMirrors(const Offset(44.13, 89.99));
+    checkPointAndMirrors(const Offset(48.46, 79.99));
+    checkPointAndMirrors(const Offset(49.70, 69.99));
+    checkPointAndMirrors(const Offset(49.97, 59.99));
+    checkPointAndMirrors(const Offset(49.99, 49.99)); // Right mid-edge
+  });
+
+  test('RSuperellipse.contains is correct for a slim diagonal shape', () {
+    // This shape has large radii on one diagonal and tiny radii on the other,
+    // resulting in a almond-like shape placed diagonally (NW to SE).
+    final rse = RSuperellipse.fromLTRBAndCorners(
+      -50,
+      -50,
+      50,
+      50,
+      topLeft: const Radius.circular(1.0),
+      topRight: const Radius.circular(99.0),
+      bottomLeft: const Radius.circular(99.0),
+      bottomRight: const Radius.circular(1.0),
+    );
+
+    expect(rse.contains(const Offset(0, 0)), isTrue);
+    expect(rse.contains(const Offset(-49.999, -49.999)), isFalse);
+    expect(rse.contains(const Offset(-49.999, 49.999)), isFalse);
+    expect(rse.contains(const Offset(49.999, 49.999)), isFalse);
+    expect(rse.contains(const Offset(49.999, -49.999)), isFalse);
+
+    // The pointy ends at the NE and SW corners
+    checkPointWithOffset(rse, const Offset(-49.70, -49.70), const Offset(-0.02, -0.02));
+    checkPointWithOffset(rse, const Offset(49.70, 49.70), const Offset(0.02, 0.02));
+
+    // Checks two points symmetrical to the origin.
+    void checkDiagonalPoints(Offset p) {
+      checkPointWithOffset(rse, p, const Offset(0.02, -0.02));
+      checkPointWithOffset(rse, Offset(-p.dx, -p.dy), const Offset(-0.02, 0.02));
+    }
+
+    // A few other points along the edge
+    checkDiagonalPoints(const Offset(-40.0, -49.59));
+    checkDiagonalPoints(const Offset(-20.0, -45.64));
+    checkDiagonalPoints(const Offset(0.0, -37.01));
+    checkDiagonalPoints(const Offset(20.0, -21.96));
+    checkDiagonalPoints(const Offset(21.05, -20.92));
+    checkDiagonalPoints(const Offset(40.0, 5.68));
+  });
+
+  test('RSuperellipse.contains is correct for points outside of a sharp corner', () {
+    expect(
+      RSuperellipse.fromLTRBAndCorners(
+        196.0,
+        0.0,
+        294.0,
+        28.0,
+        topRight: const Radius.circular(3.0),
+        bottomRight: const Radius.circular(3.0),
+      ).contains(const Offset(147.0, 14.0)),
+      isFalse,
+    );
+  });
+}
+
+void checkPointWithOffset(RSuperellipse rse, Offset inPoint, Offset outwardOffset) {
+  expect(rse.contains(inPoint), isTrue);
+  expect(rse.contains(inPoint + outwardOffset), isFalse);
 }

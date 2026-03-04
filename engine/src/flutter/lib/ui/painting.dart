@@ -32,6 +32,11 @@ bool _rrectIsValid(RRect rrect) {
   return true;
 }
 
+bool _rsuperellipseIsValid(RSuperellipse rsuperellipse) {
+  assert(!rsuperellipse.hasNaN, 'RSuperellipse argument contained a NaN value.');
+  return true;
+}
+
 bool _offsetIsValid(Offset offset) {
   assert(!offset.dx.isNaN && !offset.dy.isNaN, 'Offset argument contained a NaN value.');
   return true;
@@ -210,7 +215,7 @@ class Color {
   final ColorSpace colorSpace;
 
   static int _floatToInt8(double x) {
-    return (x * 255.0).round() & 0xff;
+    return (x * 255.0).round().clamp(0, 255);
   }
 
   /// A 32 bit value representing this color.
@@ -228,7 +233,7 @@ class Color {
   ///
   /// Unlike accessing the floating point equivalent channels individually
   /// ([a], [r], [g], [b]), this method is intentionally _lossy_, and scales
-  /// each channel using `(channel * 255.0).round() & 0xff`.
+  /// each channel using `(channel * 255.0).round().clamp(0, 255)`.
   ///
   /// While useful for storing a 32-bit integer value, prefer accessing the
   /// individual channels (and storing the double equivalent) where higher
@@ -258,7 +263,7 @@ class Color {
   ///
   /// A value of 0 means this color is fully transparent. A value of 255 means
   /// this color is fully opaque.
-  @Deprecated('Use .a.')
+  @Deprecated('Use (*.a * 255.0).round().clamp(0, 255)')
   int get alpha => (0xff000000 & value) >> 24;
 
   /// The alpha channel of this color as a double.
@@ -269,15 +274,15 @@ class Color {
   double get opacity => alpha / 0xFF;
 
   /// The red channel of this color in an 8 bit value.
-  @Deprecated('Use .r.')
+  @Deprecated('Use (*.r * 255.0).round().clamp(0, 255)')
   int get red => (0x00ff0000 & value) >> 16;
 
   /// The green channel of this color in an 8 bit value.
-  @Deprecated('Use .g.')
+  @Deprecated('Use (*.g * 255.0).round().clamp(0, 255)')
   int get green => (0x0000ff00 & value) >> 8;
 
   /// The blue channel of this color in an 8 bit value.
-  @Deprecated('Use .b.')
+  @Deprecated('Use (*.b * 255.0).round().clamp(0, 255)')
   int get blue => (0x000000ff & value) >> 0;
 
   /// Returns a new color with the provided components updated.
@@ -288,6 +293,13 @@ class Color {
   /// If [colorSpace] is provided, and is different than the current color
   /// space, the component values are updated before transforming them to the
   /// provided [ColorSpace].
+  ///
+  /// Example:
+  /// ```dart
+  /// import 'dart:ui';
+  /// /// Create a color with 50% opacity.
+  /// Color makeTransparent(Color color) => color.withValues(alpha: 0.5);
+  /// ```
   Color withValues({
     double? alpha,
     double? red,
@@ -998,6 +1010,7 @@ enum BlendMode {
 ///  * [Paint.filterQuality], which is used to pass [FilterQuality] to the
 ///    engine while using drawImage calls on a [Canvas].
 ///  * [ImageShader].
+///  * [FragmentShader.setImageSampler].
 ///  * [ImageFilter.matrix].
 ///  * [Canvas.drawImage].
 ///  * [Canvas.drawImageRect].
@@ -1360,7 +1373,7 @@ final class Paint {
   set isAntiAlias(bool value) {
     // We encode true as zero and false as one because the default value, which
     // we always encode as zero, is true.
-    final int encoded = value ? 0 : 1;
+    final encoded = value ? 0 : 1;
     _data.setInt32(_kIsAntiAliasOffset, encoded, _kFakeHostEndian);
   }
 
@@ -1451,7 +1464,7 @@ final class Paint {
   }
 
   set strokeWidth(double value) {
-    final double encoded = value;
+    final encoded = value;
     _data.setFloat32(_kStrokeWidthOffset, encoded, _kFakeHostEndian);
   }
 
@@ -1623,7 +1636,7 @@ final class Paint {
   ///
   /// When a shape is being drawn, [colorFilter] overrides [color] and [shader].
   ColorFilter? get colorFilter {
-    final _ColorFilter? nativeFilter = _objects?[_kColorFilterIndex] as _ColorFilter?;
+    final nativeFilter = _objects?[_kColorFilterIndex] as _ColorFilter?;
     return nativeFilter?.creator;
   }
 
@@ -1657,7 +1670,7 @@ final class Paint {
   ///
   ///  * [MaskFilter], which is used for drawing geometry.
   ImageFilter? get imageFilter {
-    final _ImageFilter? nativeFilter = _objects?[_kImageFilterIndex] as _ImageFilter?;
+    final nativeFilter = _objects?[_kImageFilterIndex] as _ImageFilter?;
     return nativeFilter?.creator;
   }
 
@@ -1668,7 +1681,7 @@ final class Paint {
       }
     } else {
       final List<Object?> objects = _ensureObjectsInitialized();
-      final _ImageFilter? imageFilter = objects[_kImageFilterIndex] as _ImageFilter?;
+      final imageFilter = objects[_kImageFilterIndex] as _ImageFilter?;
       if (imageFilter?.creator != value) {
         objects[_kImageFilterIndex] = value._toNativeImageFilter();
       }
@@ -1693,8 +1706,8 @@ final class Paint {
     if (const bool.fromEnvironment('dart.vm.product')) {
       return super.toString();
     }
-    final StringBuffer result = StringBuffer();
-    String semicolon = '';
+    final result = StringBuffer();
+    var semicolon = '';
     result.write('Paint(');
     if (style == PaintingStyle.stroke) {
       result.write('$style');
@@ -1897,6 +1910,22 @@ enum PixelFormat {
   /// component, followed by: green, blue and alpha. Premultiplied alpha isn't
   /// used, matching [ImageByteFormat.rawExtendedRgba128].
   rgbaFloat32,
+
+  /// Each pixel is 32 bits, the red channel is just one 32 bit float.
+  rFloat32,
+}
+
+/// The format of pixel data of the texture generated by
+/// [decodeImageFromPixels].
+enum TargetPixelFormat {
+  /// Unspecified pixel format, let the engine decide the best pixel format.
+  dontCare,
+
+  /// Each pixel is 128 bits, where each color component is a 32 bit float.
+  rgbaFloat32,
+
+  /// Each pixel is 32 bits, the red channel is just one 32 bit float.
+  rFloat32,
 }
 
 /// Signature for [Image] lifecycle events.
@@ -2354,7 +2383,7 @@ base class _NativeCodec extends NativeFieldWrapperClass1 implements Codec {
 
   @override
   Future<FrameInfo> getNextFrame() async {
-    final Completer<FrameInfo> completer = Completer<FrameInfo>.sync();
+    final completer = Completer<FrameInfo>.sync();
     final String? error = _getNextFrame((
       _Image? image,
       int durationMilliseconds,
@@ -2623,7 +2652,12 @@ void decodeImageFromList(Uint8List list, ImageDecoderCallback callback) {
 
 Future<void> _decodeImageFromListAsync(Uint8List list, ImageDecoderCallback callback) async {
   final Codec codec = await instantiateImageCodec(list);
-  final FrameInfo frameInfo = await codec.getNextFrame();
+  final FrameInfo frameInfo;
+  try {
+    frameInfo = await codec.getNextFrame();
+  } finally {
+    codec.dispose();
+  }
   callback(frameInfo.image);
 }
 
@@ -2661,6 +2695,7 @@ void decodeImageFromPixels(
   int? targetWidth,
   int? targetHeight,
   bool allowUpscaling = true,
+  TargetPixelFormat targetFormat = TargetPixelFormat.dontCare,
 }) {
   if (targetWidth != null) {
     assert(allowUpscaling || targetWidth <= width);
@@ -2670,7 +2705,7 @@ void decodeImageFromPixels(
   }
 
   ImmutableBuffer.fromUint8List(pixels).then((ImmutableBuffer buffer) {
-    final ImageDescriptor descriptor = ImageDescriptor.raw(
+    final descriptor = ImageDescriptor.raw(
       buffer,
       width: width,
       height: height,
@@ -2688,7 +2723,11 @@ void decodeImageFromPixels(
     }
 
     descriptor
-        .instantiateCodec(targetWidth: targetWidth, targetHeight: targetHeight)
+        .instantiateCodec(
+          targetWidth: targetWidth,
+          targetHeight: targetHeight,
+          targetFormat: targetFormat,
+        )
         .then((Codec codec) {
           final Future<FrameInfo> frameInfo = codec.getNextFrame();
           codec.dispose();
@@ -2702,6 +2741,31 @@ void decodeImageFromPixels(
         });
   });
 }
+
+/// Decodes the given [pixels] into an [Image] synchronously.
+///
+/// The [pixels] are expected to be in the format specified by [format].
+///
+/// The [width] and [height] arguments specify the dimensions of the image.
+///
+/// This function returns an [Image] immediately. The image might not be
+/// fully decoded yet, but it can be drawn to a [Canvas].
+Image decodeImageFromPixelsSync(Uint8List pixels, int width, int height, PixelFormat format) {
+  final image = Image._(_Image._(), width, height);
+  _decodeImageFromPixelsSync(pixels, width, height, format.index, image._image);
+  return image;
+}
+
+@Native<Void Function(Handle, Int32, Int32, Int32, Handle)>(
+  symbol: 'Image::decodeImageFromPixelsSync',
+)
+external void _decodeImageFromPixelsSync(
+  Uint8List pixels,
+  int width,
+  int height,
+  int format,
+  _Image outImage,
+);
 
 /// Determines the winding rule that decides how the interior of a [Path] is
 /// calculated.
@@ -2844,7 +2908,7 @@ abstract class Path {
   /// This copy is fast and does not require additional memory unless either
   /// the `source` path or the path returned by this constructor are modified.
   factory Path.from(Path source) {
-    final _NativePath clonedPath = _NativePath._();
+    final clonedPath = _NativePath._();
     (source as _NativePath)._clone(clonedPath);
     return clonedPath;
   }
@@ -3016,6 +3080,10 @@ abstract class Path {
   /// argument.
   void addRRect(RRect rrect);
 
+  /// Adds a new sub-path that consists of curves needed to form the rounded
+  /// superellipse described by the argument.
+  void addRSuperellipse(RSuperellipse rsuperellipse);
+
   /// Adds the sub-paths of `path`, offset by `offset`, to this path.
   ///
   /// If `matrix4` is specified, the path will be transformed by this matrix
@@ -3082,7 +3150,7 @@ abstract class Path {
   /// curve order is reduced where possible so that cubics may be turned into
   /// quadratics, and quadratics maybe turned into lines.
   static Path combine(PathOperation operation, Path path1, Path path2) {
-    final _NativePath path = _NativePath();
+    final path = _NativePath();
     if (path._op(path1 as _NativePath, path2 as _NativePath, operation.index)) {
       return path;
     }
@@ -3359,6 +3427,15 @@ base class _NativePath extends NativeFieldWrapperClass1 implements Path {
   external void _addRRect(Float32List rrect);
 
   @override
+  void addRSuperellipse(RSuperellipse rsuperellipse) {
+    assert(_rsuperellipseIsValid(rsuperellipse));
+    _addRSuperellipse(rsuperellipse._native());
+  }
+
+  @Native<Void Function(Pointer<Void>, Pointer<Void>)>(symbol: 'Path::addRSuperellipse')
+  external void _addRSuperellipse(_NativeRSuperellipse rsuperellipse);
+
+  @override
   void addPath(Path path, Offset offset, {Float64List? matrix4}) {
     assert(_offsetIsValid(offset));
     if (matrix4 != null) {
@@ -3423,7 +3500,7 @@ base class _NativePath extends NativeFieldWrapperClass1 implements Path {
   @override
   Path shift(Offset offset) {
     assert(_offsetIsValid(offset));
-    final _NativePath path = _NativePath._();
+    final path = _NativePath._();
     _shift(path, offset.dx, offset.dy);
     return path;
   }
@@ -3434,7 +3511,7 @@ base class _NativePath extends NativeFieldWrapperClass1 implements Path {
   @override
   Path transform(Float64List matrix4) {
     assert(_matrix4IsValid(matrix4));
-    final _NativePath path = _NativePath._();
+    final path = _NativePath._();
     _transform(path, matrix4);
     return path;
   }
@@ -3684,7 +3761,7 @@ base class _PathMeasure extends NativeFieldWrapperClass1 {
       contourIndex <= currentContourIndex,
       'Iterator must be advanced before index $contourIndex can be used.',
     );
-    final _NativePath path = _NativePath._();
+    final path = _NativePath._();
     _extractPath(path, contourIndex, start, end, startWithMoveTo);
     return path;
   }
@@ -3865,7 +3942,7 @@ _ColorTransform _getColorTransform(ColorSpace source, ColorSpace destination) {
   // format long
   // p3ToSrgb = srgbColors * inv(p3Colors)
   // srgbToP3 = inv(p3ToSrgb)
-  const _MatrixColorTransform srgbToP3 = _MatrixColorTransform(<double>[
+  const srgbToP3 = _MatrixColorTransform(<double>[
     0.808052267214446, 0.220292047628890, -0.139648846160100,
     0.145738111193222, //
     0.096480880462996, 0.916386732581291, -0.086093928394828,
@@ -4013,6 +4090,24 @@ class ColorFilter implements ImageFilter {
       _matrix = null,
       _type = _kTypeSrgbToLinearGamma;
 
+  /// Creates a color filter that applies the given saturation to the RGB
+  /// channels.
+  factory ColorFilter.saturation(double saturation) {
+    const rLuminance = 0.2126;
+    const gLuminance = 0.7152;
+    const bLuminance = 0.0722;
+    final double invSat = 1 - saturation;
+
+    return ColorFilter.matrix(<double>[
+      // dart format off
+      invSat * rLuminance + saturation, invSat * gLuminance,              invSat * bLuminance,              0, 0,
+      invSat * rLuminance,              invSat * gLuminance + saturation, invSat * bLuminance,              0, 0,
+      invSat * rLuminance,              invSat * gLuminance,              invSat * bLuminance + saturation, 0, 0,
+      0,                                0,                                0,                                1, 0,
+      // dart format on
+    ]);
+  }
+
   final Color? _color;
   final BlendMode? _blendMode;
   final List<double>? _matrix;
@@ -4070,7 +4165,7 @@ class ColorFilter implements ImageFilter {
   }
 
   @override
-  String get _shortDescription {
+  String get debugShortDescription {
     switch (_type) {
       case _kTypeMode:
         return 'ColorFilter.mode($_color, $_blendMode)';
@@ -4155,6 +4250,8 @@ base class _ColorFilter extends NativeFieldWrapperClass1 {
 /// See also:
 ///
 ///  * [BackdropFilter], a widget that applies [ImageFilter] to its rendering.
+///  * [ClipRect], a widget that limits the area affected by the [ImageFilter]
+///    when used with [BackdropFilter].
 ///  * [ImageFiltered], a widget that applies [ImageFilter] to its children.
 ///  * [SceneBuilder.pushBackdropFilter], which is the low-level API for using
 ///    this class as a backdrop filter.
@@ -4165,8 +4262,39 @@ abstract class ImageFilter {
   ImageFilter._(); // ignore: unused_element
 
   /// Creates an image filter that applies a Gaussian blur.
-  factory ImageFilter.blur({double sigmaX = 0.0, double sigmaY = 0.0, TileMode? tileMode}) {
-    return _GaussianBlurImageFilter(sigmaX: sigmaX, sigmaY: sigmaY, tileMode: tileMode);
+  ///
+  /// The `sigma_x` and `sigma_y` are the standard deviation of the Gaussian
+  /// kernel in the X direction and the Y direction, respectively.
+  ///
+  /// The `tile_mode` defines the behavior of sampling pixels at the edges when
+  /// performing a standard, unbounded blur.
+  ///
+  /// The `bounds` argument is optional and enables "bounded blur" mode. When
+  /// `bounds` is non-null, the image filter substitutes transparent black for
+  /// any sample it reads from outside the defined bounding rectangle. The final
+  /// weighted sum is then divided by the total weight of the non-transparent samples
+  /// (the effective alpha), resulting in opaque output.
+  ///
+  /// The bounded mode prevents color bleeding from content adjacent to the
+  /// bounds into the blurred area, and is typically used when the blur must be
+  /// strictly contained within a clipped region, such as for iOS-style frosted
+  /// glass effects.
+  ///
+  /// The `bounds` rectangle is specified in the canvas's current coordinate
+  /// space and is affected by the current transform; consequently, the bounds
+  /// may not be axis-aligned in the final canvas coordinates.
+  factory ImageFilter.blur({
+    double sigmaX = 0.0,
+    double sigmaY = 0.0,
+    TileMode? tileMode,
+    Rect? bounds,
+  }) {
+    return _GaussianBlurImageFilter(
+      sigmaX: sigmaX,
+      sigmaY: sigmaY,
+      tileMode: tileMode,
+      bounds: bounds,
+    );
   }
 
   /// Creates an image filter that dilates each input pixel's channel values
@@ -4206,11 +4334,29 @@ abstract class ImageFilter {
 
   /// Creates an image filter from a [FragmentShader].
   ///
+  /// > [!WARNING]
+  /// > This API is only supported when using the Impeller rendering engine.
+  /// > On other backends, an [UnsupportedError] will be thrown.
+  ///
+  /// > To check at runtime whether this API is supported, use [isShaderFilterSupported].
+  ///
+  /// Example usage:
+  ///
+  /// ```dart
+  /// if (ui.ImageFilter.isShaderFilterSupported) {
+  ///   // Use the filter...
+  /// }
+  /// ```
+  ///
   /// The fragment shader provided here has additional requirements to be used
   /// by the engine for filtering. The first uniform value must be a vec2, this
   /// will be set by the engine to the size of the bound texture. There must
   /// also be at least one sampler2D uniform, the first of which will be set by
   /// the engine to contain the filter input.
+  ///
+  /// When Impeller uses the OpenGL(ES) backend, the y-axis direction is
+  /// reversed. Custom fragment shaders must invert the y-axis on
+  /// GLES or they will render upside-down.
   ///
   /// For example, the following is a valid fragment shader that can be used
   /// with this API. Note that the uniform names are not required to have any
@@ -4227,15 +4373,16 @@ abstract class ImageFilter {
   /// out vec4 frag_color;
   ///
   /// void main() {
-  ///   frag_color = texture(u_texture_input, FlutterFragCoord().xy / u_size) * u_time;
+  ///   vec2 uv = FlutterFragCoord().xy / u_size;
+  /// // Reverse y axis for OpenGL backend.
+  /// #ifdef IMPELLER_TARGET_OPENGLES
+  ///   uv.y = 1.0 - uv.y
+  /// #endif
+  ///   frag_color = texture(u_texture_input, uv) * u_time;
   ///
   /// }
   ///
   /// ```
-  ///
-  /// This API is only supported when using the Impeller rendering engine. On
-  /// other backends a [UnsupportedError] will be thrown. To check at runtime
-  /// whether this API is suppored use [isShaderFilterSupported].
   factory ImageFilter.shader(FragmentShader shader) {
     if (!_impellerEnabled) {
       throw UnsupportedError('ImageFilter.shader only supported with Impeller rendering engine.');
@@ -4243,7 +4390,7 @@ abstract class ImageFilter {
     final bool invalidFloats = shader._floats.length < 2;
     final bool invalidSampler = !shader._validateImageFilter();
     if (invalidFloats || invalidSampler) {
-      final StringBuffer buffer = StringBuffer(
+      final buffer = StringBuffer(
         'ImageFilter.shader requires that the first uniform is a vec2 and at '
         'least one sampler uniform is present.\n',
       );
@@ -4258,15 +4405,19 @@ abstract class ImageFilter {
   }
 
   /// Whether [ImageFilter.shader] is supported on the current backend.
+  ///
+  /// > [!WARNING]
+  /// > This property will only return true when the Impeller rendering engine is enabled.
+  /// > Attempting to create an [ImageFilter.shader] when this property is `false` will throw an [UnsupportedError].
   static bool get isShaderFilterSupported => _impellerEnabled;
 
   // Converts this to a native DlImageFilter. See the comments of this method in
   // subclasses for the exact type of DlImageFilter this method converts to.
   _ImageFilter _toNativeImageFilter();
 
-  // The description text to show when the filter is part of a composite
-  // [ImageFilter] created using [ImageFilter.compose].
-  String get _shortDescription;
+  /// The description text to show when the filter is part of a composite
+  /// [ImageFilter] created using [ImageFilter.compose].
+  String get debugShortDescription => toString();
 }
 
 class _MatrixImageFilter implements ImageFilter {
@@ -4281,7 +4432,7 @@ class _MatrixImageFilter implements ImageFilter {
   _ImageFilter _toNativeImageFilter() => nativeFilter;
 
   @override
-  String get _shortDescription => 'matrix($data, $filterQuality)';
+  String get debugShortDescription => 'matrix($data, $filterQuality)';
 
   @override
   String toString() => 'ImageFilter.matrix($data, $filterQuality)';
@@ -4301,11 +4452,17 @@ class _MatrixImageFilter implements ImageFilter {
 }
 
 class _GaussianBlurImageFilter implements ImageFilter {
-  _GaussianBlurImageFilter({required this.sigmaX, required this.sigmaY, required this.tileMode});
+  _GaussianBlurImageFilter({
+    required this.sigmaX,
+    required this.sigmaY,
+    required this.tileMode,
+    this.bounds,
+  });
 
   final double sigmaX;
   final double sigmaY;
   final TileMode? tileMode;
+  final Rect? bounds;
 
   // MakeBlurFilter
   late final _ImageFilter nativeFilter = _ImageFilter.blur(this);
@@ -4328,10 +4485,12 @@ class _GaussianBlurImageFilter implements ImageFilter {
   }
 
   @override
-  String get _shortDescription => 'blur($sigmaX, $sigmaY, $_modeString)';
+  String get debugShortDescription => 'blur($sigmaX, $sigmaY, $_modeString${_boundsString()})';
+
+  String _boundsString() => bounds == null ? '' : ', bounds: $bounds';
 
   @override
-  String toString() => 'ImageFilter.blur($sigmaX, $sigmaY, $_modeString)';
+  String toString() => 'ImageFilter.blur($sigmaX, $sigmaY, $_modeString${_boundsString()})';
 
   @override
   bool operator ==(Object other) {
@@ -4341,11 +4500,12 @@ class _GaussianBlurImageFilter implements ImageFilter {
     return other is _GaussianBlurImageFilter &&
         other.sigmaX == sigmaX &&
         other.sigmaY == sigmaY &&
+        other.bounds == bounds &&
         other.tileMode == tileMode;
   }
 
   @override
-  int get hashCode => Object.hash(sigmaX, sigmaY);
+  int get hashCode => Object.hash(sigmaX, sigmaY, bounds, tileMode);
 }
 
 class _DilateImageFilter implements ImageFilter {
@@ -4359,7 +4519,7 @@ class _DilateImageFilter implements ImageFilter {
   _ImageFilter _toNativeImageFilter() => nativeFilter;
 
   @override
-  String get _shortDescription => 'dilate($radiusX, $radiusY)';
+  String get debugShortDescription => 'dilate($radiusX, $radiusY)';
 
   @override
   String toString() => 'ImageFilter.dilate($radiusX, $radiusY)';
@@ -4387,7 +4547,7 @@ class _ErodeImageFilter implements ImageFilter {
   _ImageFilter _toNativeImageFilter() => nativeFilter;
 
   @override
-  String get _shortDescription => 'erode($radiusX, $radiusY)';
+  String get debugShortDescription => 'erode($radiusX, $radiusY)';
 
   @override
   String toString() => 'ImageFilter.erode($radiusX, $radiusY)';
@@ -4416,11 +4576,11 @@ class _ComposeImageFilter implements ImageFilter {
   _ImageFilter _toNativeImageFilter() => nativeFilter;
 
   @override
-  String get _shortDescription =>
-      '${innerFilter._shortDescription} -> ${outerFilter._shortDescription}';
+  String get debugShortDescription =>
+      '${innerFilter.debugShortDescription} -> ${outerFilter.debugShortDescription}';
 
   @override
-  String toString() => 'ImageFilter.compose(source -> $_shortDescription -> result)';
+  String toString() => 'ImageFilter.compose(source -> $debugShortDescription -> result)';
 
   @override
   bool operator ==(Object other) {
@@ -4447,7 +4607,7 @@ class _FragmentShaderImageFilter implements ImageFilter {
   _ImageFilter _toNativeImageFilter() => nativeFilter;
 
   @override
-  String get _shortDescription => 'shader';
+  String get debugShortDescription => 'shader';
 
   @override
   String toString() => 'ImageFilter.shader(Shader#${shader.hashCode})';
@@ -4457,8 +4617,13 @@ class _FragmentShaderImageFilter implements ImageFilter {
     if (other.runtimeType != runtimeType) {
       return false;
     }
-    return other is _FragmentShaderImageFilter && other.shader == shader;
+    return other is _FragmentShaderImageFilter &&
+        other.shader == shader &&
+        _equals(nativeFilter, other.nativeFilter);
   }
+
+  @Native<Bool Function(Handle, Handle)>(symbol: 'ImageFilter::equals')
+  external static bool _equals(_ImageFilter a, _ImageFilter b);
 
   @override
   int get hashCode => shader.hashCode;
@@ -4473,7 +4638,17 @@ base class _ImageFilter extends NativeFieldWrapperClass1 {
   /// Creates an image filter that applies a Gaussian blur.
   _ImageFilter.blur(_GaussianBlurImageFilter filter) : creator = filter {
     _constructor();
-    _initBlur(filter.sigmaX, filter.sigmaY, filter.tileMode?.index ?? -1);
+    final Rect bounds = filter.bounds ?? Rect.zero;
+    _initBlur(
+      filter.sigmaX,
+      filter.sigmaY,
+      filter.tileMode?.index ?? -1,
+      filter.bounds != null,
+      bounds.left,
+      bounds.top,
+      bounds.right,
+      bounds.bottom,
+    );
   }
 
   /// Creates an image filter that dilates each input pixel's channel values
@@ -4525,11 +4700,19 @@ base class _ImageFilter extends NativeFieldWrapperClass1 {
   @Native<Void Function(Handle)>(symbol: 'ImageFilter::Create')
   external void _constructor();
 
-  @Native<Void Function(Pointer<Void>, Double, Double, Int32)>(
-    symbol: 'ImageFilter::initBlur',
-    isLeaf: true,
-  )
-  external void _initBlur(double sigmaX, double sigmaY, int tileMode);
+  @Native<
+    Void Function(Pointer<Void>, Double, Double, Int32, Bool, Double, Double, Double, Double)
+  >(symbol: 'ImageFilter::initBlur', isLeaf: true)
+  external void _initBlur(
+    double sigmaX,
+    double sigmaY,
+    int tileMode,
+    bool bounded,
+    double boundsLeft,
+    double boundsTop,
+    double boundsRight,
+    double boundsBottom,
+  );
 
   @Native<Void Function(Pointer<Void>, Double, Double)>(
     symbol: 'ImageFilter::initDilate',
@@ -4602,23 +4785,32 @@ base class Shader extends NativeFieldWrapperClass1 {
   }
 }
 
-/// Defines what happens at the edge of a gradient or the sampling of a source image
-/// in an [ImageFilter].
+/// Defines how to handle areas outside the defined bounds of a gradient or image filter.
 ///
-/// A gradient is defined along a finite inner area. In the case of a linear
-/// gradient, it's between the parallel lines that are orthogonal to the line
-/// drawn between two points. In the case of radial gradients, it's the disc
-/// that covers the circle centered on a particular point up to a given radius.
+/// ## For Gradients
 ///
-/// An image filter reads source samples from a source image and performs operations
-/// on those samples to produce a result image. An image defines color samples only
-/// for pixels within the bounds of the image but some filter operations, such as a blur
-/// filter, read samples over a wide area to compute the output for a given pixel. Such
-/// a filter would need to combine samples from inside the image with hypothetical
-/// color values from outside the image.
+/// Gradients are defined with some specific bounds creating an inner area and an outer area, and `TileMode` controls how colors
+/// are determined for areas outside these bounds:
 ///
-/// This enum is used to define how the gradient or image filter should treat the regions
-/// outside that defined inner area.
+/// - **Linear gradients**: The inner area is the area between two points
+///   (typically referred to as `start` and `end` in the gradient API), or more precisely,
+///   it's the area between the parallel lines that are orthogonal to the line drawn between the two points.
+///   Colors outside this area are determined by the `TileMode`.
+///
+/// - **Radial gradients**: The inner area is the disc defined by a center and radius.
+///   Colors outside this disc are determined by the `TileMode`.
+///
+/// - **Sweep gradients**: The inner area is the angular sector between `startAngle`
+///   and `endAngle`. Colors outside this sector are determined by the `TileMode`.
+///
+/// ## For Image Filters
+///
+/// When applying filters (like blur) that sample colors from outside an image's bounds,
+/// `TileMode` defines how those out-of-bounds samples are determined:
+///
+/// - It controls what color values are used when the filter needs to sample
+///   from areas outside the original image.
+/// - This is particularly important for effects like blurring near image edges.
 ///
 /// See also:
 ///
@@ -4636,8 +4828,12 @@ base class Shader extends NativeFieldWrapperClass1 {
 enum TileMode {
   /// Samples beyond the edge are clamped to the nearest color in the defined inner area.
   ///
-  /// A gradient will paint all the regions outside the inner area with the
-  /// color at the end of the color stop list closest to that region.
+  /// For gradients, this means the region outside the inner area is painted with
+  /// the color at the end of the color stop list closest to that region.
+  ///
+  /// For sweep gradients specifically, the entire area outside the angular sector
+  /// defined by [startAngle] and [endAngle] will be painted with the color at the
+  /// end of the color stop list closest to that region.
   ///
   /// An image filter will substitute the nearest edge pixel for any samples taken from
   /// outside its source image.
@@ -4652,6 +4848,9 @@ enum TileMode {
   /// For a gradient, this technique is as if the stop points from 0.0 to 1.0 were then
   /// repeated from 1.0 to 2.0, 2.0 to 3.0, and so forth (and for linear gradients, similarly
   /// from -1.0 to 0.0, -2.0 to -1.0, etc).
+  ///
+  /// For sweep gradients, the gradient pattern is repeated in the same direction
+  /// (clockwise) for angles beyond [endAngle] and before [startAngle].
   ///
   /// An image filter will treat its source image as if it were tiled across the enlarged
   /// sample space from which it reads, each tile in the same orientation as the base image.
@@ -4668,6 +4867,9 @@ enum TileMode {
   /// again from 4.0 to 3.0, and so forth (and for linear gradients, similarly in the
   /// negative direction).
   ///
+  /// For sweep gradients, the gradient pattern is mirrored back and forth as the angle
+  /// increases beyond [endAngle] or decreases below [startAngle].
+  ///
   /// An image filter will treat its source image as tiled in an alternating forwards and
   /// backwards or upwards and downwards direction across the sample space from which
   /// it is reading.
@@ -4680,8 +4882,11 @@ enum TileMode {
   /// Samples beyond the edge are treated as transparent black.
   ///
   /// A gradient will render transparency over any region that is outside the circle of a
-  /// radial gradient or outside the parallel lines that define the inner area of a linear
-  /// gradient.
+  /// radial gradient, outside the parallel lines that define the inner area of a linear
+  /// gradient, or outside the angular sector of a sweep gradient.
+  ///
+  /// For sweep gradients, only the sector between [startAngle] and [endAngle] will be
+  /// painted; all other areas will be transparent.
   ///
   /// An image filter will substitute transparent black for any sample it must read from
   /// outside its source image.
@@ -4694,8 +4899,8 @@ enum TileMode {
 
 Float32List _encodeWideColorList(List<Color> colors) {
   final int colorCount = colors.length;
-  final Float32List result = Float32List(colorCount * 4);
-  for (int i = 0; i < colorCount; i++) {
+  final result = Float32List(colorCount * 4);
+  for (var i = 0; i < colorCount; i++) {
     final Color colorXr = colors[i].withValues(colorSpace: ColorSpace.extendedSRGB);
     result[i * 4 + 0] = colorXr.a;
     result[i * 4 + 1] = colorXr.r;
@@ -4707,8 +4912,8 @@ Float32List _encodeWideColorList(List<Color> colors) {
 
 Int32List _encodeColorList(List<Color> colors) {
   final int colorCount = colors.length;
-  final Int32List result = Int32List(colorCount);
-  for (int i = 0; i < colorCount; i++) {
+  final result = Int32List(colorCount);
+  for (var i = 0; i < colorCount; i++) {
     result[i] = colors[i].value;
   }
   return result;
@@ -4716,8 +4921,8 @@ Int32List _encodeColorList(List<Color> colors) {
 
 Float32List _encodePointList(List<Offset> points) {
   final int pointCount = points.length;
-  final Float32List result = Float32List(pointCount * 2);
-  for (int i = 0; i < pointCount; i++) {
+  final result = Float32List(pointCount * 2);
+  for (var i = 0; i < pointCount; i++) {
     final int xIndex = i * 2;
     final int yIndex = xIndex + 1;
     final Offset point = points[i];
@@ -4731,7 +4936,7 @@ Float32List _encodePointList(List<Offset> points) {
 Float32List _encodeTwoPoints(Offset pointA, Offset pointB) {
   assert(_offsetIsValid(pointA));
   assert(_offsetIsValid(pointB));
-  final Float32List result = Float32List(4);
+  final result = Float32List(4);
   result[0] = pointA.dx;
   result[1] = pointA.dy;
   result[2] = pointB.dx;
@@ -4789,8 +4994,9 @@ base class Gradient extends Shader {
     _validateColorStops(colors, colorStops);
     final Float32List endPointsBuffer = _encodeTwoPoints(from, to);
     final Float32List colorsBuffer = _encodeWideColorList(colors);
-    final Float32List? colorStopsBuffer =
-        colorStops == null ? null : Float32List.fromList(colorStops);
+    final Float32List? colorStopsBuffer = colorStops == null
+        ? null
+        : Float32List.fromList(colorStops);
     _constructor();
     _initLinear(endPointsBuffer, colorsBuffer, colorStopsBuffer, tileMode.index, matrix4);
   }
@@ -4842,8 +5048,9 @@ base class Gradient extends Shader {
        assert(matrix4 == null || _matrix4IsValid(matrix4)),
        super._() {
     _validateColorStops(colors, colorStops);
-    final Float32List? colorStopsBuffer =
-        colorStops == null ? null : Float32List.fromList(colorStops);
+    final Float32List? colorStopsBuffer = colorStops == null
+        ? null
+        : Float32List.fromList(colorStops);
     final Float32List colorsBuffer = _encodeWideColorList(colors);
 
     // If focal is null or focal radius is null, this should be treated as a regular radial gradient
@@ -4887,16 +5094,38 @@ base class Gradient extends Shader {
   /// positive angles going clockwise around the `center`.
   ///
   /// If `colorStops` is provided, `colorStops[i]` is a number from 0.0 to 1.0
-  /// that specifies where `color[i]` begins in the gradient. If `colorStops` is
-  /// not provided, then only two stops, at 0.0 and 1.0, are implied (and
-  /// `color` must therefore only have two entries). Stop values less than 0.0
-  /// will be rounded up to 0.0 and stop values greater than 1.0 will be rounded
-  /// down to 1.0. Each stop value must be greater than or equal to the previous
-  /// stop value. Stop values that do not meet this criteria will be rounded up
-  /// to the previous stop value.
+  /// that specifies where `colors[i]` begins in the gradient. If `colorStops` is
+  /// not provided, then only two stops, at 0.0 and 1.0, are implied
+  /// (and `colors` must therefore only have two entries). Stop values less than
+  /// 0.0 will be rounded up to 0.0 and stop values greater than 1.0 will be
+  /// rounded down to 1.0. Each stop value must be greater than or equal to the
+  /// previous stop value. Stop values that do not meet this criteria will be
+  /// rounded up to the previous stop value.
+  ///
+  /// The `startAngle` and `endAngle` parameters define the angular sector to be
+  /// painted. Angles are measured in radians clockwise from the positive x-axis.
+  /// Values outside the range `[0, 2π]` are normalized to this range using modulo
+  /// arithmetic. The gradient is only painted in the sector between `startAngle`
+  /// and `endAngle`. The `tileMode` determines how the gradient behaves outside
+  /// this sector.
+  ///
+  /// The `tileMode` argument specifies how the gradient should handle areas
+  /// outside the angular sector defined by `startAngle` and `endAngle`:
   ///
   /// The behavior before `startAngle` and after `endAngle` is described by the
   /// `tileMode` argument. For details, see the [TileMode] enum.
+  ///
+  /// * [TileMode.clamp]: The edge colors are extended to infinity.
+  /// * [TileMode.mirror]: The gradient is repeated, alternating direction each time.
+  /// * [TileMode.repeated]: The gradient is repeated in the same direction.
+  /// * [TileMode.decal]: Only the colors within the gradient's angular sector are
+  ///   drawn, with transparent black elsewhere.
+  ///
+  /// The [colorStops] argument must have the same number of values as [colors],
+  /// if specified. It specifies the position of each color stop between 0.0 and
+  /// 1.0. If it is null, a uniform distribution is assumed. The stop values must
+  /// be in ascending order. A stop value of 0.0 corresponds to [startAngle], and
+  /// a stop value of 1.0 corresponds to [endAngle].
   ///
   /// ![](https://flutter.github.io/assets-for-api-docs/assets/dart-ui/tile_mode_clamp_sweep.png)
   /// ![](https://flutter.github.io/assets-for-api-docs/assets/dart-ui/tile_mode_decal_sweep.png)
@@ -4924,8 +5153,9 @@ base class Gradient extends Shader {
        super._() {
     _validateColorStops(colors, colorStops);
     final Float32List colorsBuffer = _encodeWideColorList(colors);
-    final Float32List? colorStopsBuffer =
-        colorStops == null ? null : Float32List.fromList(colorStops);
+    final Float32List? colorStopsBuffer = colorStops == null
+        ? null
+        : Float32List.fromList(colorStops);
     _constructor();
     _initSweep(
       center.dx,
@@ -5113,6 +5343,7 @@ base class FragmentProgram extends NativeFieldWrapperClass1 {
   }
 
   String? _debugName;
+  final List<WeakReference<FragmentShader>> _shaders = <WeakReference<FragmentShader>>[];
 
   /// Creates a fragment program from the asset with key [assetKey].
   ///
@@ -5131,7 +5362,7 @@ base class FragmentProgram extends NativeFieldWrapperClass1 {
       return Future<FragmentProgram>.value(program);
     }
     return Future<FragmentProgram>.microtask(() {
-      final FragmentProgram program = FragmentProgram._fromAsset(encodedKey);
+      final program = FragmentProgram._fromAsset(encodedKey);
       _shaderRegistry[encodedKey] = program;
       return program;
     });
@@ -5145,6 +5376,7 @@ base class FragmentProgram extends NativeFieldWrapperClass1 {
   // re-initialized.
   static final Map<String, FragmentProgram> _shaderRegistry = <String, FragmentProgram>{};
 
+  // This is called on hot reload when a shader has changed.
   static void _reinitializeShader(String assetKey) {
     // If a shader for the asset isn't already registered, then there's no
     // need to reinitialize it. The new shader will be loaded and initialized
@@ -5158,6 +5390,98 @@ base class FragmentProgram extends NativeFieldWrapperClass1 {
     if (result.isNotEmpty) {
       throw result; // ignore: only_throw_errors
     }
+
+    // Update all the named bindings.
+    program._shaders.removeWhere((WeakReference<FragmentShader> shaderReference) {
+      final FragmentShader? shader = shaderReference.target;
+      if (shader == null) {
+        return true;
+      }
+
+      shader._reinitialize();
+      shader._slots.removeWhere((WeakReference<UniformFloatSlot> slotReference) {
+        final UniformFloatSlot? slot = slotReference.target;
+        if (slot == null) {
+          return true;
+        }
+
+        if (!program._hasUniform(slot.name)) {
+          return true;
+        }
+
+        slot._shaderIndex = program._getUniformFloatIndex(slot.name, slot.index);
+        return false;
+      });
+
+      shader._samplers.removeWhere((WeakReference<ImageSamplerSlot> ref) {
+        final ImageSamplerSlot? slot = ref.target;
+        if (slot == null) {
+          return true;
+        }
+
+        slot._shaderIndex = program._getImageSamplerIndex(slot.name);
+        return false;
+      });
+
+      return false;
+    });
+  }
+
+  bool _hasUniform(String name) {
+    return _uniformInfo.any((dynamic entry) => (entry! as Map<String, Object>)['name'] == name);
+  }
+
+  int _getImageSamplerIndex(String name) {
+    var index = 0;
+    var found = false;
+    for (final Object? entryDynamic in _uniformInfo) {
+      final entry = entryDynamic! as Map<String, Object>;
+      if (entry['name'] == name) {
+        if (entry['type'] != 'SampledImage') {
+          throw ArgumentError('Uniform "$name" is not an image sampler.');
+        }
+        found = true;
+        break;
+      } else if (entry['type'] == 'SampledImage') {
+        index += 1;
+      }
+    }
+
+    if (!found) {
+      throw ArgumentError('No uniform named "$name".');
+    }
+    return index;
+  }
+
+  int _getUniformFloatIndex(String name, int index, [int? expectedSize]) {
+    if (index < 0) {
+      throw ArgumentError('Index `$index` out of bounds for `$name`.');
+    }
+
+    var offset = 0;
+    var found = false;
+    const sizeOfFloat = 4;
+    for (final Object? entryDynamic in _uniformInfo) {
+      final entry = entryDynamic! as Map<String, Object>;
+      final int sizeInFloats = (entry['size'] as int? ?? 0) ~/ sizeOfFloat;
+      if (entry['name'] == name) {
+        if (index + 1 > sizeInFloats) {
+          throw ArgumentError('Index `$index` out of bounds for `$name`.');
+        }
+        if (expectedSize != null && sizeInFloats != expectedSize) {
+          throw ArgumentError('Uniform `$name` has size $sizeInFloats, not size $expectedSize.');
+        }
+        found = true;
+        break;
+      }
+      offset += sizeInFloats;
+    }
+
+    if (!found) {
+      throw ArgumentError('No uniform named "$name".');
+    }
+
+    return offset + index;
   }
 
   @pragma('vm:entry-point')
@@ -5166,6 +5490,9 @@ base class FragmentProgram extends NativeFieldWrapperClass1 {
   @pragma('vm:entry-point')
   late int _samplerCount;
 
+  @pragma('vm:entry-point')
+  late List<dynamic> _uniformInfo;
+
   @Native<Void Function(Handle)>(symbol: 'FragmentProgram::Create')
   external void _constructor();
 
@@ -5173,7 +5500,154 @@ base class FragmentProgram extends NativeFieldWrapperClass1 {
   external String _initFromAsset(String assetKey);
 
   /// Returns a fresh instance of [FragmentShader].
-  FragmentShader fragmentShader() => FragmentShader._(this, debugName: _debugName);
+  FragmentShader fragmentShader() {
+    final result = FragmentShader._(this, debugName: _debugName);
+    _shaders.removeWhere((WeakReference<FragmentShader> ref) => ref.target == null);
+    _shaders.add(WeakReference<FragmentShader>(result));
+    return result;
+  }
+}
+
+/// A binding to a uniform of type float. Calling [set] on this object updates
+/// a float uniform's value.
+///
+/// Example:
+///
+/// ```dart
+/// void updateShader(ui.FragmentShader shader) {
+///   shader.getUniformFloat('uColor', 0).set(1.0);
+///   shader.getUniformFloat('uColor', 1).set(0.0);
+///   shader.getUniformFloat('uColor', 2).set(0.0);
+/// }
+/// ```
+///
+/// See also:
+///   [FragmentShader.getUniformFloat] - How [UniformFloatSlot] instances are acquired.
+///
+base class UniformFloatSlot {
+  UniformFloatSlot._(this._shader, this.name, this.index, this._shaderIndex);
+
+  /// Set the float value of the bound uniform.
+  void set(double val) {
+    _shader.setFloat(_shaderIndex, val);
+  }
+
+  /// VisibleForTesting: This is the index one would use with
+  /// [FragmentShader.setFloat] for this uniform.
+  int get shaderIndex {
+    return _shaderIndex;
+  }
+
+  final FragmentShader _shader;
+  int _shaderIndex;
+
+  /// The name of the bound uniform.
+  final String name;
+
+  /// The offset into the bound uniform. For example, 1 for `.y` or 2 for `.b`.
+  final int index;
+}
+
+/// A binding to a uniform of type vec2. Calling [set] on this object updates
+/// the uniform's value.
+///
+/// Example:
+///
+/// ```dart
+/// void updateShader(ui.FragmentShader shader) {
+///   shader.getUniformVec2('uSize').set(100, 100);
+/// }
+/// ```
+///
+/// See also:
+///   [FragmentShader.getUniformVec2] - How [UniformVec2Slot] instances are acquired.
+///
+base class UniformVec2Slot {
+  UniformVec2Slot._(this._xSlot, this._ySlot);
+
+  /// Set the float value of the bound uniform.
+  void set(double x, double y) {
+    _xSlot.set(x);
+    _ySlot.set(y);
+  }
+
+  final UniformFloatSlot _xSlot, _ySlot;
+}
+
+/// A binding to a uniform of type vec3. Calling [set] on this object updates
+/// the uniform's value.
+///
+/// Example:
+///
+/// ```dart
+/// void updateShader(ui.FragmentShader shader, double time) {
+///   shader.getUniformVec3('uScaledTime').set(time, time*0.1, time*0.01);
+/// }
+/// ```
+///
+/// See also:
+///   [FragmentShader.getUniformVec3] - How [UniformVec3Slot] instances are acquired.
+///
+base class UniformVec3Slot {
+  UniformVec3Slot._(this._xSlot, this._ySlot, this._zSlot);
+
+  /// Set the float value of the bound uniform.
+  void set(double x, double y, double z) {
+    _xSlot.set(x);
+    _ySlot.set(y);
+    _zSlot.set(z);
+  }
+
+  final UniformFloatSlot _xSlot, _ySlot, _zSlot;
+}
+
+/// A binding to a uniform of type vec4. Calling [set] on this object updates
+/// the uniform's value.
+///
+/// Example:
+///
+/// ```dart
+/// void updateShader(ui.FragmentShader shader) {
+///   shader.getUniformVec4('uColor').set(1.0, 0.0, 1.0, 1.0);
+/// }
+/// ```
+///
+/// See also:
+///   [FragmentShader.getUniformVec4] - How [UniformVec4Slot] instances are acquired.
+///
+base class UniformVec4Slot {
+  UniformVec4Slot._(this._xSlot, this._ySlot, this._zSlot, this._wSlot);
+
+  /// Set the float value of the bound uniform.
+  void set(double x, double y, double z, double w) {
+    _xSlot.set(x);
+    _ySlot.set(y);
+    _zSlot.set(z);
+    _wSlot.set(w);
+  }
+
+  final UniformFloatSlot _xSlot, _ySlot, _zSlot, _wSlot;
+}
+
+/// A binding to a shader's image sampler. Calling [set] on this object updates
+/// a sampler's bound image.
+base class ImageSamplerSlot {
+  ImageSamplerSlot._(this._shader, this.name, this._shaderIndex);
+
+  final FragmentShader _shader;
+  int _shaderIndex;
+
+  /// Set the [Image] value for the bound sampler associated with this slot.
+  void set(Image val) {
+    _shader.setImageSampler(_shaderIndex, val);
+  }
+
+  /// VisibleForTesting: This is the index one would use with
+  /// [FragmentShader.setImageSampler] for this sampler.
+  int get shaderIndex => _shaderIndex;
+
+  /// The name of the bound uniform.
+  final String name;
 }
 
 /// A [Shader] generated from a [FragmentProgram].
@@ -5190,16 +5664,33 @@ base class FragmentProgram extends NativeFieldWrapperClass1 {
 /// are required to exist simultaneously, they must be obtained from two
 /// different calls to [FragmentProgram.fragmentShader].
 base class FragmentShader extends Shader {
-  FragmentShader._(FragmentProgram program, {String? debugName})
-    : _debugName = debugName,
-      super._() {
-    _floats = _constructor(program, program._uniformFloatCount, program._samplerCount);
+  FragmentShader._(this._program, {String? debugName}) : _debugName = debugName, super._() {
+    _floats = _constructor(_program, _program._uniformFloatCount, _program._samplerCount);
   }
+
+  final FragmentProgram _program;
 
   final String? _debugName;
 
   static final Float32List _kEmptyFloat32List = Float32List(0);
   Float32List _floats = _kEmptyFloat32List;
+  final List<WeakReference<UniformFloatSlot>> _slots = <WeakReference<UniformFloatSlot>>[];
+  final List<WeakReference<ImageSamplerSlot>> _samplers = <WeakReference<ImageSamplerSlot>>[];
+
+  void _reinitialize() {
+    _floats = _constructor(_program, _program._uniformFloatCount, _program._samplerCount);
+  }
+
+  List<UniformFloatSlot> _getSlotsForUniform(String name, int size) {
+    final int baseShaderIndex = _program._getUniformFloatIndex(name, 0, size);
+    final slots = List<UniformFloatSlot>.generate(
+      size,
+      (i) => UniformFloatSlot._(this, name, baseShaderIndex, i),
+    );
+    _slots.removeWhere((WeakReference<UniformFloatSlot> ref) => ref.target == null);
+    _slots.addAll(slots.map((slot) => WeakReference<UniformFloatSlot>(slot)));
+    return slots;
+  }
 
   /// Sets the float uniform at [index] to [value].
   ///
@@ -5229,10 +5720,10 @@ base class FragmentShader extends Shader {
   ///   shader.setFloat(2, 83);  // uMagnitude y
   ///
   ///   // Convert color to premultiplied opacity.
-  ///   shader.setFloat(3, color.red / 255 * color.opacity);   // uColor r
-  ///   shader.setFloat(4, color.green / 255 * color.opacity); // uColor g
-  ///   shader.setFloat(5, color.blue / 255 * color.opacity);  // uColor b
-  ///   shader.setFloat(6, color.opacity);                     // uColor a
+  ///   shader.setFloat(3, color.r * color.a); // uColor r
+  ///   shader.setFloat(4, color.g * color.a); // uColor g
+  ///   shader.setFloat(5, color.b * color.a); // uColor b
+  ///   shader.setFloat(6, color.a);           // uColor a
   ///
   ///   // initialize sampler uniform.
   ///   shader.setImageSampler(0, image);
@@ -5249,16 +5740,125 @@ base class FragmentShader extends Shader {
     _floats[index] = value;
   }
 
+  /// Access the float binding for uniform named [name] with optional offset
+  /// [index]. Example [index] values: 1 for 'foo.y', 2 for 'foo.b'.
+  ///
+  /// Example:
+  ///
+  /// ```glsl
+  /// uniform float uScale;
+  /// uniform sampler2D uTexture;
+  /// uniform vec2 uMagnitude;
+  /// uniform vec4 uColor;
+  /// ```
+  ///
+  /// ```dart
+  /// void updateShader(ui.FragmentShader shader) {
+  ///   shader.getUniformFloat('uScale');
+  ///   shader.getUniformFloat('uMagnitude', 0);
+  ///   shader.getUniformFloat('uMagnitude', 1);
+  ///   shader.getUniformFloat('uColor', 0);
+  ///   shader.getUniformFloat('uColor', 1);
+  ///   shader.getUniformFloat('uColor', 2);
+  ///   shader.getUniformFloat('uColor', 3);
+  /// }
+  /// ```
+  UniformFloatSlot getUniformFloat(String name, [int? index]) {
+    index ??= 0;
+    final int shaderIndex = _program._getUniformFloatIndex(name, index);
+    final result = UniformFloatSlot._(this, name, index, shaderIndex);
+    _slots.removeWhere((WeakReference<UniformFloatSlot> ref) => ref.target == null);
+    _slots.add(WeakReference<UniformFloatSlot>(result));
+    return result;
+  }
+
+  /// Access the float binding for a vec2 uniform named [name].
+  ///
+  /// Example:
+  ///
+  /// ```glsl
+  /// uniform float uScale;
+  /// uniform vec2 uMagnitude;
+  /// ```
+  ///
+  /// ```dart
+  /// void updateShader(ui.FragmentShader shader) {
+  ///   shader.getUniformFloat('uScale');
+  ///   shader.getUniformVec2('uMagnitude');
+  /// }
+  /// ```
+  UniformVec2Slot getUniformVec2(String name) {
+    final List<UniformFloatSlot> slots = _getSlotsForUniform(name, 2);
+    return UniformVec2Slot._(slots[0], slots[1]);
+  }
+
+  /// Access the float binding for a vec3 uniform named [name].
+  ///
+  /// Example:
+  ///
+  /// ```glsl
+  /// uniform float uScale;
+  /// uniform vec3 uScaledTime;
+  /// ```
+  ///
+  /// ```dart
+  /// void updateShader(ui.FragmentShader shader) {
+  ///   shader.getUniformFloat('uScale');
+  ///   shader.getUniformVec3('uScaledTime');
+  /// }
+  /// ```
+  UniformVec3Slot getUniformVec3(String name) {
+    final List<UniformFloatSlot> slots = _getSlotsForUniform(name, 3);
+    return UniformVec3Slot._(slots[0], slots[1], slots[2]);
+  }
+
+  /// Access the float binding for a vec4 uniform named [name].
+  ///
+  /// Example:
+  ///
+  /// ```glsl
+  /// uniform float uScale;
+  /// uniform vec4 uColor;
+  /// ```
+  ///
+  /// ```dart
+  /// void updateShader(ui.FragmentShader shader) {
+  ///   shader.getUniformFloat('uScale');
+  ///   shader.getUniformVec4('uColor');
+  /// }
+  /// ```
+  UniformVec4Slot getUniformVec4(String name) {
+    final List<UniformFloatSlot> slots = _getSlotsForUniform(name, 4);
+    return UniformVec4Slot._(slots[0], slots[1], slots[2], slots[3]);
+  }
+
+  /// Access the [ImageSamplerSlot] binding associated with the sampler named
+  /// [name].
+  ///
+  /// The index provided to setImageSampler is the index of the sampler uniform
+  /// defined in the fragment program, excluding all non-sampler uniforms.
+  ImageSamplerSlot getImageSampler(String name) {
+    final int index = _program._getImageSamplerIndex(name);
+    final slot = ImageSamplerSlot._(this, name, index);
+    _samplers.removeWhere((WeakReference<ImageSamplerSlot> ref) => ref.target == null);
+    _samplers.add(WeakReference<ImageSamplerSlot>(slot));
+    return slot;
+  }
+
   /// Sets the sampler uniform at [index] to [image].
   ///
   /// The index provided to setImageSampler is the index of the sampler uniform defined
   /// in the fragment program, excluding all non-sampler uniforms.
   ///
+  /// The optional [filterQuality] argument may be provided to set the quality level used to sample
+  /// the image. By default, it is set to [FilterQuality.none].
+  ///
   /// All the sampler uniforms that a shader expects must be provided or the
   /// results will be undefined.
-  void setImageSampler(int index, Image image) {
+  void setImageSampler(int index, Image image, {FilterQuality filterQuality = FilterQuality.none}) {
     assert(!debugDisposed, 'Tried to access uniforms on a disposed Shader: $this');
-    _setImageSampler(index, image._image);
+    assert(!image.debugDisposed, 'Image has been disposed');
+    _setImageSampler(index, image._image, filterQuality.index);
   }
 
   /// Releases the native resources held by the [FragmentShader].
@@ -5280,10 +5880,10 @@ base class FragmentShader extends Shader {
     int samplerUniforms,
   );
 
-  @Native<Void Function(Pointer<Void>, Handle, Handle)>(
+  @Native<Void Function(Pointer<Void>, Handle, Handle, Int32)>(
     symbol: 'ReusableFragmentShader::SetImageSampler',
   )
-  external void _setImageSampler(int index, _Image sampler);
+  external void _setImageSampler(int index, _Image sampler, int filterQualityIndex);
 
   @Native<Bool Function(Pointer<Void>)>(symbol: 'ReusableFragmentShader::ValidateSamplers')
   external bool _validateSamplers();
@@ -5409,7 +6009,7 @@ base class Vertices extends NativeFieldWrapperClass1 {
     }
     assert(() {
       if (indices != null) {
-        for (int index = 0; index < indices.length; index += 1) {
+        for (var index = 0; index < indices.length; index += 1) {
           if (indices[index] >= positions.length) {
             throw ArgumentError(
               '"indices" values must be valid indices in the positions list '
@@ -5422,8 +6022,9 @@ base class Vertices extends NativeFieldWrapperClass1 {
       return true;
     }());
     final Float32List encodedPositions = _encodePointList(positions);
-    final Float32List? encodedTextureCoordinates =
-        (textureCoordinates != null) ? _encodePointList(textureCoordinates) : null;
+    final Float32List? encodedTextureCoordinates = (textureCoordinates != null)
+        ? _encodePointList(textureCoordinates)
+        : null;
     final Int32List? encodedColors = colors != null ? _encodeColorList(colors) : null;
     final Uint16List? encodedIndices = indices != null ? Uint16List.fromList(indices) : null;
 
@@ -5503,7 +6104,7 @@ base class Vertices extends NativeFieldWrapperClass1 {
     }
     assert(() {
       if (indices != null) {
-        for (int index = 0; index < indices.length; index += 1) {
+        for (var index = 0; index < indices.length; index += 1) {
           if (indices[index] * 2 >= positions.length) {
             throw ArgumentError(
               '"indices" values must be valid indices in the positions list '
@@ -5566,7 +6167,7 @@ base class Vertices extends NativeFieldWrapperClass1 {
 /// Defines how a list of points is interpreted when drawing a set of points.
 ///
 /// Used by [Canvas.drawPoints] and [Canvas.drawRawPoints].
-// These enum values must be kept in sync with DlCanvas::PointMode.
+// These enum values must be kept in sync with DlPointMode.
 enum PointMode {
   /// Draw each point separately.
   ///
@@ -5862,6 +6463,18 @@ abstract class Canvas {
   void clipRRect(RRect rrect, {bool doAntiAlias = true});
 
   /// Reduces the clip region to the intersection of the current clip and the
+  /// given rounded superellipse.
+  ///
+  /// ![](https://flutter.github.io/assets-for-api-docs/assets/dart-ui/clip_rsuperellipse.png)
+  ///
+  /// If [doAntiAlias] is true, then the clip will be anti-aliased.
+  ///
+  /// If multiple draw commands intersect with the clip boundary, this can result
+  /// in incorrect blending at the clip boundary. See [saveLayer] for a
+  /// discussion of how to address that and some examples of using [clipRSuperellipse].
+  void clipRSuperellipse(RSuperellipse rsuperellipse, {bool doAntiAlias = true});
+
+  /// Reduces the clip region to the intersection of the current clip and the
   /// given [Path].
   ///
   /// ![](https://flutter.github.io/assets-for-api-docs/assets/dart-ui/clip_path.png)
@@ -5983,6 +6596,13 @@ abstract class Canvas {
   ///
   /// This shape is almost but not quite entirely unlike an annulus.
   void drawDRRect(RRect outer, RRect inner, Paint paint);
+
+  /// Draws a rounded superellipse with the given [Paint]. The shape is filled,
+  /// and the value of the [Paint.style] is ignored for this call.
+  ///
+  /// ![](https://flutter.github.io/assets-for-api-docs/assets/dart-ui/canvas_rsuperellipse.png#gh-light-mode-only)
+  /// ![](https://flutter.github.io/assets-for-api-docs/assets/dart-ui/canvas_rsuperellipse.png#gh-dark-mode-only)
+  void drawRSuperellipse(RSuperellipse rsuperellipse, Paint paint);
 
   /// Draws an axis-aligned oval that fills the given axis-aligned rectangle
   /// with the given [Paint]. Whether the oval is filled or stroked (or both) is
@@ -6555,7 +7175,7 @@ base class _NativeCanvas extends NativeFieldWrapperClass1 implements Canvas {
 
   @override
   Float64List getTransform() {
-    final Float64List matrix4 = Float64List(16);
+    final matrix4 = Float64List(16);
     _getTransform(matrix4);
     return matrix4;
   }
@@ -6596,6 +7216,15 @@ base class _NativeCanvas extends NativeFieldWrapperClass1 implements Canvas {
   external void _clipRRect(Float32List rrect, bool doAntiAlias);
 
   @override
+  void clipRSuperellipse(RSuperellipse rsuperellipse, {bool doAntiAlias = true}) {
+    assert(_rsuperellipseIsValid(rsuperellipse));
+    _clipRSuperellipse(rsuperellipse._native(), doAntiAlias);
+  }
+
+  @Native<Void Function(Pointer<Void>, Pointer<Void>, Bool)>(symbol: 'Canvas::clipRSuperellipse')
+  external void _clipRSuperellipse(_NativeRSuperellipse rsuperellipse, bool doAntiAlias);
+
+  @override
   void clipPath(Path path, {bool doAntiAlias = true}) {
     _clipPath(path as _NativePath, doAntiAlias);
   }
@@ -6605,7 +7234,7 @@ base class _NativeCanvas extends NativeFieldWrapperClass1 implements Canvas {
 
   @override
   Rect getLocalClipBounds() {
-    final Float64List bounds = Float64List(4);
+    final bounds = Float64List(4);
     _getLocalClipBounds(bounds);
     return Rect.fromLTRB(bounds[0], bounds[1], bounds[2], bounds[3]);
   }
@@ -6615,7 +7244,7 @@ base class _NativeCanvas extends NativeFieldWrapperClass1 implements Canvas {
 
   @override
   Rect getDestinationClipBounds() {
-    final Float64List bounds = Float64List(4);
+    final bounds = Float64List(4);
     _getDestinationClipBounds(bounds);
     return Rect.fromLTRB(bounds[0], bounds[1], bounds[2], bounds[3]);
   }
@@ -6701,6 +7330,21 @@ base class _NativeCanvas extends NativeFieldWrapperClass1 implements Canvas {
   external void _drawDRRect(
     Float32List outer,
     Float32List inner,
+    List<Object?>? paintObjects,
+    ByteData paintData,
+  );
+
+  @override
+  void drawRSuperellipse(RSuperellipse rsuperellipse, Paint paint) {
+    assert(_rsuperellipseIsValid(rsuperellipse));
+    _drawRSuperellipse(rsuperellipse._native(), paint._objects, paint._data);
+  }
+
+  @Native<Void Function(Pointer<Void>, Pointer<Void>, Handle, Handle)>(
+    symbol: 'Canvas::drawRSuperellipse',
+  )
+  external void _drawRSuperellipse(
+    _NativeRSuperellipse rsuperellipse,
     List<Object?>? paintObjects,
     ByteData paintData,
   );
@@ -6945,7 +7589,7 @@ base class _NativeCanvas extends NativeFieldWrapperClass1 implements Canvas {
 
   @override
   void drawParagraph(Paragraph paragraph, Offset offset) {
-    final _NativeParagraph nativeParagraph = paragraph as _NativeParagraph;
+    final nativeParagraph = paragraph as _NativeParagraph;
     assert(!nativeParagraph.debugDisposed);
     assert(_offsetIsValid(offset));
     assert(!nativeParagraph._needsLayout);
@@ -7012,10 +7656,10 @@ base class _NativeCanvas extends NativeFieldWrapperClass1 implements Canvas {
       );
     }
 
-    final Float32List rstTransformBuffer = Float32List(rectCount * 4);
-    final Float32List rectBuffer = Float32List(rectCount * 4);
+    final rstTransformBuffer = Float32List(rectCount * 4);
+    final rectBuffer = Float32List(rectCount * 4);
 
-    for (int i = 0; i < rectCount; i++) {
+    for (var i = 0; i < rectCount; i++) {
       final int index0 = i * 4;
       final int index1 = index0 + 1;
       final int index2 = index0 + 2;
@@ -7033,8 +7677,9 @@ base class _NativeCanvas extends NativeFieldWrapperClass1 implements Canvas {
       rectBuffer[index3] = rect.bottom;
     }
 
-    final Int32List? colorBuffer =
-        (colors == null || colors.isEmpty) ? null : _encodeColorList(colors);
+    final Int32List? colorBuffer = (colors == null || colors.isEmpty)
+        ? null
+        : _encodeColorList(colors);
     final Float32List? cullRectBuffer = cullRect?._getValue32();
     final int qualityIndex = paint.filterQuality.index;
 
@@ -7178,9 +7823,9 @@ abstract class Picture {
   /// Synchronously creates a handle to an image of this picture.
   ///
   /// {@template dart.ui.painting.Picture.toImageSync}
-  /// The returned image will be `width` pixels wide and `height` pixels high.
-  /// The picture is rasterized within the 0 (left), 0 (top), `width` (right),
-  /// `height` (bottom) bounds. Content outside these bounds is clipped.
+  /// The returned image will be [width] pixels wide and [height] pixels high.
+  /// The picture is rasterized within the 0 (left), 0 (top), [width] (right),
+  /// [height] (bottom) bounds. Content outside these bounds is clipped.
   ///
   /// The image object is created and returned synchronously, but is rasterized
   /// asynchronously. If the rasterization fails, an exception will be thrown
@@ -7191,8 +7836,16 @@ abstract class Picture {
   /// efficient to draw.
   ///
   /// If no GPU context is available, the image will be rasterized on the CPU.
+  ///
+  /// The [targetFormat] argument specifies the pixel format of the returned
+  /// [Image]. If [TargetPixelFormat.dontCare] is specified, the pixel format
+  /// will be chosen automatically based on the GPU capabilities.
   /// {@endtemplate}
-  Image toImageSync(int width, int height);
+  Image toImageSync(
+    int width,
+    int height, {
+    TargetPixelFormat targetFormat = TargetPixelFormat.dontCare,
+  });
 
   /// Release the resources used by this object. The object is no longer usable
   /// after this method is called.
@@ -7239,19 +7892,25 @@ base class _NativePicture extends NativeFieldWrapperClass1 implements Picture {
   external String? _toImage(int width, int height, void Function(_Image?) callback);
 
   @override
-  Image toImageSync(int width, int height) {
+  Image toImageSync(
+    int width,
+    int height, {
+    TargetPixelFormat targetFormat = TargetPixelFormat.dontCare,
+  }) {
     assert(!_disposed);
     if (width <= 0 || height <= 0) {
       throw Exception('Invalid image dimensions.');
     }
 
-    final _Image image = _Image._();
-    _toImageSync(width, height, image);
+    final image = _Image._();
+    _toImageSync(width, height, targetFormat.index, image);
     return Image._(image, image.width, image.height);
   }
 
-  @Native<Void Function(Pointer<Void>, Uint32, Uint32, Handle)>(symbol: 'Picture::toImageSync')
-  external void _toImageSync(int width, int height, _Image outImage);
+  @Native<Void Function(Pointer<Void>, Uint32, Uint32, Int32, Handle)>(
+    symbol: 'Picture::toImageSync',
+  )
+  external void _toImageSync(int width, int height, int targetFormat, _Image outImage);
 
   @override
   void dispose() {
@@ -7346,7 +8005,7 @@ base class _NativePictureRecorder extends NativeFieldWrapperClass1 implements Pi
     if (_canvas == null) {
       throw StateError('PictureRecorder did not start recording.');
     }
-    final _NativePicture picture = _NativePicture._();
+    final picture = _NativePicture._();
     _endRecording(picture);
     _canvas!._recorder = null;
     _canvas = null;
@@ -7496,15 +8155,15 @@ class Shadow {
     }
     a ??= <Shadow>[];
     b ??= <Shadow>[];
-    final List<Shadow> result = <Shadow>[];
+    final result = <Shadow>[];
     final int commonLength = math.min(a.length, b.length);
-    for (int i = 0; i < commonLength; i += 1) {
+    for (var i = 0; i < commonLength; i += 1) {
       result.add(Shadow.lerp(a[i], b[i], t)!);
     }
-    for (int i = commonLength; i < a.length; i += 1) {
+    for (var i = commonLength; i < a.length; i += 1) {
       result.add(a[i].scale(1.0 - t));
     }
-    for (int i = commonLength; i < b.length; i += 1) {
+    for (var i = commonLength; i < b.length; i += 1) {
       result.add(b[i].scale(t));
     }
     return result;
@@ -7533,10 +8192,10 @@ class Shadow {
     }
 
     final int byteCount = shadows.length * _kBytesPerShadow;
-    final ByteData shadowsData = ByteData(byteCount);
+    final shadowsData = ByteData(byteCount);
 
-    int shadowOffset = 0;
-    for (int shadowIndex = 0; shadowIndex < shadows.length; ++shadowIndex) {
+    var shadowOffset = 0;
+    for (var shadowIndex = 0; shadowIndex < shadows.length; ++shadowIndex) {
       final Shadow shadow = shadows[shadowIndex];
       shadowOffset = shadowIndex * _kBytesPerShadow;
 
@@ -7571,7 +8230,7 @@ base class ImmutableBuffer extends NativeFieldWrapperClass1 {
   /// Creates a copy of the data from a [Uint8List] suitable for internal use
   /// in the engine.
   static Future<ImmutableBuffer> fromUint8List(Uint8List list) {
-    final ImmutableBuffer instance = ImmutableBuffer._(list.length);
+    final instance = ImmutableBuffer._(list.length);
     return _futurize((_Callback<void> callback) {
       return instance._init(list, callback);
     }).then((_) => instance);
@@ -7586,7 +8245,7 @@ base class ImmutableBuffer extends NativeFieldWrapperClass1 {
     // the same encoding here so that users can load assets with the same
     // key they have written in the pubspec.
     final String encodedKey = Uri(path: Uri.encodeFull(assetKey)).path;
-    final ImmutableBuffer instance = ImmutableBuffer._(0);
+    final instance = ImmutableBuffer._(0);
     return _futurize((_Callback<int> callback) {
       return instance._initFromAsset(encodedKey, callback);
     }).then((int length) {
@@ -7601,7 +8260,7 @@ base class ImmutableBuffer extends NativeFieldWrapperClass1 {
   ///
   /// Throws an [Exception] if the asset does not exist.
   static Future<ImmutableBuffer> fromFilePath(String path) {
-    final ImmutableBuffer instance = ImmutableBuffer._(0);
+    final instance = ImmutableBuffer._(0);
     return _futurize((_Callback<int> callback) {
       return instance._initFromFile(path, callback);
     }).then((int length) {
@@ -7688,7 +8347,7 @@ abstract class ImageDescriptor {
 
   /// Creates an image descriptor from encoded data in a supported format.
   static Future<ImageDescriptor> encoded(ImmutableBuffer buffer) {
-    final _NativeImageDescriptor descriptor = _NativeImageDescriptor._();
+    final descriptor = _NativeImageDescriptor._();
     return _futurize((_Callback<void> callback) {
       return descriptor._initEncoded(buffer, callback);
     }).then((_) => descriptor);
@@ -7725,7 +8384,11 @@ abstract class ImageDescriptor {
   ///
   /// If either targetWidth or targetHeight is less than or equal to zero, it
   /// will be treated as if it is null.
-  Future<Codec> instantiateCodec({int? targetWidth, int? targetHeight});
+  Future<Codec> instantiateCodec({
+    int? targetWidth,
+    int? targetHeight,
+    TargetPixelFormat targetFormat = TargetPixelFormat.dontCare,
+  });
 }
 
 base class _NativeImageDescriptor extends NativeFieldWrapperClass1 implements ImageDescriptor {
@@ -7799,7 +8462,11 @@ base class _NativeImageDescriptor extends NativeFieldWrapperClass1 implements Im
   external void dispose();
 
   @override
-  Future<Codec> instantiateCodec({int? targetWidth, int? targetHeight}) async {
+  Future<Codec> instantiateCodec({
+    int? targetWidth,
+    int? targetHeight,
+    TargetPixelFormat targetFormat = TargetPixelFormat.dontCare,
+  }) async {
     if (targetWidth != null && targetWidth <= 0) {
       targetWidth = null;
     }
@@ -7819,14 +8486,19 @@ base class _NativeImageDescriptor extends NativeFieldWrapperClass1 implements Im
     assert(targetHeight != null);
 
     final Codec codec = _NativeCodec._();
-    _instantiateCodec(codec, targetWidth!, targetHeight!);
+    _instantiateCodec(codec, targetWidth!, targetHeight!, targetFormat.index);
     return codec;
   }
 
-  @Native<Void Function(Pointer<Void>, Handle, Int32, Int32)>(
+  @Native<Void Function(Pointer<Void>, Handle, Int32, Int32, Int32)>(
     symbol: 'ImageDescriptor::instantiateCodec',
   )
-  external void _instantiateCodec(Codec outCodec, int targetWidth, int targetHeight);
+  external void _instantiateCodec(
+    Codec outCodec,
+    int targetWidth,
+    int targetHeight,
+    int targetFormat,
+  );
 
   @override
   String toString() =>
@@ -7877,11 +8549,11 @@ typedef _CallbackerWithError<T> = String? Function(_CallbackWithError<T?> callba
 //
 // TODO(ianh): We should either automate the code duplication or just make it public.
 Future<T> _futurize<T>(_Callbacker<T> callbacker) {
-  final Completer<T> completer = Completer<T>.sync();
+  final completer = Completer<T>.sync();
   // If the callback synchronously throws an error, then synchronously
   // rethrow that error instead of adding it to the completer. This
   // prevents the Zone from receiving an uncaught exception.
-  bool isSync = true;
+  var isSync = true;
   final String? error = callbacker((T? t) {
     if (t == null) {
       if (isSync) {
@@ -7902,11 +8574,11 @@ Future<T> _futurize<T>(_Callbacker<T> callbacker) {
 
 /// A variant of `_futurize` that can communicate specific errors.
 Future<T> _futurizeWithError<T>(_CallbackerWithError<T> callbacker) {
-  final Completer<T> completer = Completer<T>.sync();
+  final completer = Completer<T>.sync();
   // If the callback synchronously throws an error, then synchronously
   // rethrow that error instead of adding it to the completer. This
   // prevents the Zone from receiving an uncaught exception.
-  bool isSync = true;
+  var isSync = true;
   final String? error = callbacker((T? t, String? error) {
     if (t != null) {
       completer.complete(t);
@@ -7942,7 +8614,7 @@ class PictureRasterizationException implements Exception {
 
   @override
   String toString() {
-    final StringBuffer buffer = StringBuffer('Failed to rasterize a picture: $message.');
+    final buffer = StringBuffer('Failed to rasterize a picture: $message.');
     if (stack != null) {
       buffer.writeln();
       buffer.writeln('The callstack when the image was created was:');

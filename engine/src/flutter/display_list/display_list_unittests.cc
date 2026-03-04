@@ -12,14 +12,21 @@
 #include "flutter/display_list/dl_blend_mode.h"
 #include "flutter/display_list/dl_builder.h"
 #include "flutter/display_list/dl_paint.h"
+#include "flutter/display_list/dl_text_skia.h"
 #include "flutter/display_list/effects/dl_image_filters.h"
+#include "flutter/display_list/geometry/dl_path_builder.h"
 #include "flutter/display_list/geometry/dl_rtree.h"
 #include "flutter/display_list/skia/dl_sk_dispatcher.h"
 #include "flutter/display_list/testing/dl_test_snippets.h"
 #include "flutter/display_list/utils/dl_receiver_utils.h"
 #include "flutter/fml/logging.h"
 #include "flutter/fml/math.h"
-#include "flutter/impeller/typographer/backends/skia/text_frame_skia.h"
+
+#if IMPELLER_SUPPORTS_RENDERING
+#include "flutter/impeller/display_list/dl_text_impeller.h"  // nogncheck
+#include "flutter/impeller/typographer/backends/skia/text_frame_skia.h"  //nogncheck
+#endif
+
 #include "flutter/testing/assertions_skia.h"
 #include "flutter/testing/display_list_testing.h"
 #include "flutter/testing/testing.h"
@@ -42,9 +49,6 @@ namespace testing {
 
 static std::vector<testing::DisplayListInvocationGroup> allGroups =
     CreateAllGroups();
-
-using ClipOp = DlCanvas::ClipOp;
-using PointMode = DlCanvas::PointMode;
 
 template <typename BaseT>
 class DisplayListTestBase : public BaseT {
@@ -544,7 +548,7 @@ TEST_F(DisplayListTest, BuilderClipBoundsAfterClipRect) {
   DlRect clip_rect = DlRect::MakeLTRB(10, 10, 20, 20);
   DlRect clip_bounds = DlRect::MakeLTRB(10, 10, 20, 20);
   DisplayListBuilder builder(cull_rect);
-  builder.ClipRect(clip_rect, ClipOp::kIntersect, false);
+  builder.ClipRect(clip_rect, DlClipOp::kIntersect, false);
   ASSERT_EQ(builder.GetDestinationClipCoverage(), clip_bounds);
 }
 
@@ -554,7 +558,7 @@ TEST_F(DisplayListTest, BuilderClipBoundsAfterClipRRect) {
   DlRoundRect clip_rrect = DlRoundRect::MakeRectXY(clip_rect, 2, 2);
   DlRect clip_bounds = DlRect::MakeLTRB(10, 10, 20, 20);
   DisplayListBuilder builder(cull_rect);
-  builder.ClipRoundRect(clip_rrect, ClipOp::kIntersect, false);
+  builder.ClipRoundRect(clip_rrect, DlClipOp::kIntersect, false);
   ASSERT_EQ(builder.GetDestinationClipCoverage(), clip_bounds);
 }
 
@@ -564,7 +568,7 @@ TEST_F(DisplayListTest, BuilderClipBoundsAfterClipPath) {
                      DlPath::MakeRectLTRB(15, 15, 20, 20);
   DlRect clip_bounds = DlRect::MakeLTRB(10, 10, 20, 20);
   DisplayListBuilder builder(cull_rect);
-  builder.ClipPath(clip_path, ClipOp::kIntersect, false);
+  builder.ClipPath(clip_path, DlClipOp::kIntersect, false);
   ASSERT_EQ(builder.GetDestinationClipCoverage(), clip_bounds);
 }
 
@@ -589,7 +593,7 @@ TEST_F(DisplayListTest, UnclippedSaveLayerContentAccountsForFilter) {
   DisplayListBuilder builder;
   builder.Save();
   {
-    builder.ClipRect(clip_rect, ClipOp::kIntersect, false);
+    builder.ClipRect(clip_rect, DlClipOp::kIntersect, false);
     builder.SaveLayer(cull_rect, &layer_paint);
     {  //
       builder.DrawRect(draw_rect, DlPaint());
@@ -623,7 +627,7 @@ TEST_F(DisplayListTest, ClippedSaveLayerContentAccountsForFilter) {
   DisplayListBuilder builder;
   builder.Save();
   {
-    builder.ClipRect(clip_rect, ClipOp::kIntersect, false);
+    builder.ClipRect(clip_rect, DlClipOp::kIntersect, false);
     builder.SaveLayer(cull_rect, &layer_paint);
     {  //
       builder.DrawRect(draw_rect, DlPaint());
@@ -669,7 +673,7 @@ TEST_F(DisplayListTest, OOBSaveLayerContentCulledWithBlurFilter) {
   EXPECT_EQ(display_list->op_count(), 2u);
   EXPECT_EQ(display_list->total_depth(), 1u);
 
-  EXPECT_TRUE(display_list->bounds().isEmpty()) << display_list->bounds();
+  EXPECT_TRUE(display_list->GetBounds().IsEmpty()) << display_list->GetBounds();
 }
 
 TEST_F(DisplayListTest, OOBSaveLayerContentCulledWithMatrixFilter) {
@@ -699,7 +703,7 @@ TEST_F(DisplayListTest, OOBSaveLayerContentCulledWithMatrixFilter) {
   EXPECT_EQ(display_list->op_count(), 2u);
   EXPECT_EQ(display_list->total_depth(), 1u);
 
-  EXPECT_TRUE(display_list->bounds().isEmpty()) << display_list->bounds();
+  EXPECT_TRUE(display_list->GetBounds().IsEmpty()) << display_list->GetBounds();
 }
 
 TEST_F(DisplayListTest, SingleOpSizes) {
@@ -752,7 +756,7 @@ TEST_F(DisplayListTest, SingleOpDisplayListsRecapturedAreEqual) {
       ASSERT_EQ(copy->op_count(true), dl->op_count(true)) << desc;
       ASSERT_EQ(copy->bytes(true), dl->bytes(true)) << desc;
       ASSERT_EQ(copy->total_depth(), dl->total_depth()) << desc;
-      ASSERT_EQ(copy->bounds(), dl->bounds()) << desc;
+      ASSERT_EQ(copy->GetBounds(), dl->GetBounds()) << desc;
       ASSERT_TRUE(copy->Equals(*dl)) << desc;
       ASSERT_TRUE(dl->Equals(*copy)) << desc;
     }
@@ -783,7 +787,7 @@ TEST_F(DisplayListTest, SingleOpDisplayListsRecapturedByIndexAreEqual) {
       ASSERT_EQ(copy->op_count(true), dl->op_count(true)) << desc;
       ASSERT_EQ(copy->bytes(true), dl->bytes(true)) << desc;
       ASSERT_EQ(copy->total_depth(), dl->total_depth()) << desc;
-      ASSERT_EQ(copy->bounds(), dl->bounds()) << desc;
+      ASSERT_EQ(copy->GetBounds(), dl->GetBounds()) << desc;
       ASSERT_TRUE(copy->Equals(*dl)) << desc;
       ASSERT_TRUE(dl->Equals(*copy)) << desc;
     }
@@ -800,9 +804,9 @@ TEST_F(DisplayListTest, SingleOpDisplayListsCompareToEachOther) {
     }
 
     for (size_t i = 0; i < lists_a.size(); i++) {
-      sk_sp<DisplayList> listA = lists_a[i];
+      const sk_sp<DisplayList>& listA = lists_a[i];
       for (size_t j = 0; j < lists_b.size(); j++) {
-        sk_sp<DisplayList> listB = lists_b[j];
+        const sk_sp<DisplayList>& listB = lists_b[j];
         auto desc = group.op_name + "(variant " + std::to_string(i + 1) +
                     " ==? variant " + std::to_string(j + 1) + ")";
         if (i == j ||
@@ -813,7 +817,7 @@ TEST_F(DisplayListTest, SingleOpDisplayListsCompareToEachOther) {
           ASSERT_EQ(listA->op_count(true), listB->op_count(true)) << desc;
           ASSERT_EQ(listA->bytes(true), listB->bytes(true)) << desc;
           EXPECT_EQ(listA->total_depth(), listB->total_depth()) << desc;
-          ASSERT_EQ(listA->bounds(), listB->bounds()) << desc;
+          ASSERT_EQ(listA->GetBounds(), listB->GetBounds()) << desc;
           ASSERT_TRUE(listA->Equals(*listB)) << desc;
           ASSERT_TRUE(listB->Equals(*listA)) << desc;
         } else {
@@ -843,7 +847,7 @@ TEST_F(DisplayListTest, SingleOpDisplayListsAreEqualWithOrWithoutRtree) {
       ASSERT_EQ(dl1->op_count(true), dl2->op_count(true)) << desc;
       ASSERT_EQ(dl1->bytes(true), dl2->bytes(true)) << desc;
       EXPECT_EQ(dl1->total_depth(), dl2->total_depth()) << desc;
-      ASSERT_EQ(dl1->bounds(), dl2->bounds()) << desc;
+      ASSERT_EQ(dl1->GetBounds(), dl2->GetBounds()) << desc;
       ASSERT_EQ(dl1->total_depth(), dl2->total_depth()) << desc;
       ASSERT_TRUE(DisplayListsEQ_Verbose(dl1, dl2)) << desc;
       ASSERT_TRUE(DisplayListsEQ_Verbose(dl2, dl2)) << desc;
@@ -1177,9 +1181,9 @@ TEST_F(DisplayListTest, SingleOpsMightSupportGroupOpacityBlendMode) {
       paint););
   RUN_TESTS(canvas.DrawArc(DlRect::MakeLTRB(0, 0, 10, 10), 0, math::kPi, true,
                            paint););
-  RUN_TESTS2(
-      canvas.DrawPoints(PointMode::kPoints, TestPointCount, kTestPoints, paint);
-      , false);
+  RUN_TESTS2(canvas.DrawPoints(DlPointMode::kPoints, TestPointCount,
+                               kTestPoints, paint);
+             , false);
   RUN_TESTS2(canvas.DrawVertices(kTestVertices1, DlBlendMode::kSrc, paint);
              , false);
   RUN_TESTS(canvas.DrawImage(kTestImage1, DlPoint(), kLinearSampling, &paint););
@@ -1188,11 +1192,11 @@ TEST_F(DisplayListTest, SingleOpsMightSupportGroupOpacityBlendMode) {
   RUN_TESTS(canvas.DrawImageRect(kTestImage1, DlIRect::MakeLTRB(10, 10, 20, 20),
                                  DlRect::MakeLTRB(0, 0, 10, 10),
                                  kNearestSampling, &paint,
-                                 DlCanvas::SrcRectConstraint::kFast););
+                                 DlSrcRectConstraint::kFast););
   RUN_TESTS2(
       canvas.DrawImageRect(kTestImage1, DlIRect::MakeLTRB(10, 10, 20, 20),
                            DlRect::MakeLTRB(0, 0, 10, 10), kNearestSampling,
-                           nullptr, DlCanvas::SrcRectConstraint::kFast);
+                           nullptr, DlSrcRectConstraint::kFast);
       , true);
   RUN_TESTS(canvas.DrawImageNine(kTestImage2, DlIRect::MakeLTRB(20, 20, 30, 30),
                                  DlRect::MakeLTRB(0, 0, 20, 20),
@@ -1226,7 +1230,13 @@ TEST_F(DisplayListTest, SingleOpsMightSupportGroupOpacityBlendMode) {
     static auto display_list = builder.Build();
     RUN_TESTS2(canvas.DrawDisplayList(display_list);, false);
   }
-  RUN_TESTS2(canvas.DrawTextBlob(GetTestTextBlob(1), 0, 0, paint);, false);
+  RUN_TESTS2(canvas.DrawText(DlTextSkia::Make(GetTestTextBlob(1)), 0, 0, paint);
+             , false);
+#if IMPELLER_SUPPORTS_RENDERING
+  RUN_TESTS2(
+      canvas.DrawText(DlTextImpeller::Make(GetTestTextFrame(1)), 0, 0, paint);
+      , false);
+#endif
   RUN_TESTS2(canvas.DrawShadow(kTestPath1, DlColor::kBlack(), 1.0, false, 1.0);
              , false);
 
@@ -1793,7 +1803,8 @@ TEST_F(DisplayListTest, FlutterSvgIssue661BoundsWereEmpty) {
                              {32.3f, 14.615f},    //
                              {32.3f, 19.34f});
   path_builder1.Close();
-  DlPath dl_path1 = DlPath(path_builder1.TakePath(DlPathFillType::kNonZero));
+  path_builder1.SetFillType(DlPathFillType::kNonZero);
+  DlPath dl_path1 = path_builder1.TakePath();
 
   DlPathBuilder path_builder2;
   path_builder2.MoveTo({37.5f, 19.33f});
@@ -1806,13 +1817,14 @@ TEST_F(DisplayListTest, FlutterSvgIssue661BoundsWereEmpty) {
                              {37.495f, 11.756f},  //
                              {37.5f, 19.33f});
   path_builder2.Close();
-  DlPath dl_path2 = DlPath(path_builder2.TakePath(DlPathFillType::kNonZero));
+  path_builder2.SetFillType(DlPathFillType::kNonZero);
+  DlPath dl_path2 = path_builder2.TakePath();
 
   DisplayListBuilder builder;
   DlPaint paint = DlPaint(DlColor::kWhite()).setAntiAlias(true);
   {
     builder.Save();
-    builder.ClipRect(DlRect::MakeLTRB(0, 0, 100, 100), ClipOp::kIntersect,
+    builder.ClipRect(DlRect::MakeLTRB(0, 0, 100, 100), DlClipOp::kIntersect,
                      true);
     {
       builder.Save();
@@ -1821,7 +1833,7 @@ TEST_F(DisplayListTest, FlutterSvgIssue661BoundsWereEmpty) {
       {
         builder.Save();
         builder.ClipRect(DlRect::MakeLTRB(1172, 245, 1218, 294),
-                         ClipOp::kIntersect, true);
+                         DlClipOp::kIntersect, true);
         {
           builder.SaveLayer(std::nullopt, nullptr, nullptr);
           {
@@ -1848,7 +1860,7 @@ TEST_F(DisplayListTest, FlutterSvgIssue661BoundsWereEmpty) {
   }
   sk_sp<DisplayList> display_list = builder.Build();
   // Prior to the fix, the bounds were empty.
-  EXPECT_FALSE(display_list->bounds().isEmpty());
+  EXPECT_FALSE(display_list->GetBounds().IsEmpty());
   // These are just inside and outside of the expected bounds, but
   // testing float values can be flaky wrt minor changes in the bounds
   // calculations. If these lines have to be revised too often as the DL
@@ -1864,7 +1876,7 @@ TEST_F(DisplayListTest, FlutterSvgIssue661BoundsWereEmpty) {
   EXPECT_EQ(DlIRect::RoundOut(display_list->GetBounds()),
             DlIRect::MakeWH(100, 100));
   EXPECT_EQ(display_list->op_count(), 19u);
-  EXPECT_EQ(display_list->bytes(), sizeof(DisplayList) + 392u);
+  EXPECT_EQ(display_list->bytes(), sizeof(DisplayList) + 408u);
   EXPECT_EQ(display_list->total_depth(), 3u);
 }
 
@@ -1960,7 +1972,7 @@ TEST_F(DisplayListTest, FullTransformAffectsCurrentTransform) {
 TEST_F(DisplayListTest, ClipRectAffectsClipBounds) {
   DisplayListBuilder builder;
   DlRect clip_bounds = DlRect::MakeLTRB(10.2, 11.3, 20.4, 25.7);
-  builder.ClipRect(clip_bounds, ClipOp::kIntersect, false);
+  builder.ClipRect(clip_bounds, DlClipOp::kIntersect, false);
 
   // Save initial return values for testing restored values
   DlRect initial_local_bounds = builder.GetLocalClipCoverage();
@@ -1969,7 +1981,7 @@ TEST_F(DisplayListTest, ClipRectAffectsClipBounds) {
   ASSERT_EQ(initial_destination_bounds, clip_bounds);
 
   builder.Save();
-  builder.ClipRect(DlRect::MakeLTRB(0, 0, 15, 15), ClipOp::kIntersect, false);
+  builder.ClipRect(DlRect::MakeLTRB(0, 0, 15, 15), DlClipOp::kIntersect, false);
   // Both clip bounds have changed
   ASSERT_NE(builder.GetLocalClipCoverage(), clip_bounds);
   ASSERT_NE(builder.GetDestinationClipCoverage(), clip_bounds);
@@ -1999,7 +2011,7 @@ TEST_F(DisplayListTest, ClipRectDoAAAffectsClipBounds) {
   DisplayListBuilder builder;
   DlRect clip_bounds = DlRect::MakeLTRB(10.2, 11.3, 20.4, 25.7);
   DlRect clip_expanded_bounds = DlRect::MakeLTRB(10, 11, 21, 26);
-  builder.ClipRect(clip_bounds, ClipOp::kIntersect, true);
+  builder.ClipRect(clip_bounds, DlClipOp::kIntersect, true);
 
   // Save initial return values for testing restored values
   DlRect initial_local_bounds = builder.GetLocalClipCoverage();
@@ -2008,7 +2020,7 @@ TEST_F(DisplayListTest, ClipRectDoAAAffectsClipBounds) {
   ASSERT_EQ(initial_destination_bounds, clip_expanded_bounds);
 
   builder.Save();
-  builder.ClipRect(DlRect::MakeLTRB(0, 0, 15, 15), ClipOp::kIntersect, true);
+  builder.ClipRect(DlRect::MakeLTRB(0, 0, 15, 15), DlClipOp::kIntersect, true);
   // Both clip bounds have changed
   ASSERT_NE(builder.GetLocalClipCoverage(), clip_expanded_bounds);
   ASSERT_NE(builder.GetDestinationClipCoverage(), clip_expanded_bounds);
@@ -2039,16 +2051,16 @@ TEST_F(DisplayListTest, ClipRectAffectsClipBoundsWithMatrix) {
   DlRect clip_bounds_1 = DlRect::MakeLTRB(0, 0, 10, 10);
   DlRect clip_bounds_2 = DlRect::MakeLTRB(10, 10, 20, 20);
   builder.Save();
-  builder.ClipRect(clip_bounds_1, ClipOp::kIntersect, false);
+  builder.ClipRect(clip_bounds_1, DlClipOp::kIntersect, false);
   builder.Translate(10, 0);
-  builder.ClipRect(clip_bounds_1, ClipOp::kIntersect, false);
+  builder.ClipRect(clip_bounds_1, DlClipOp::kIntersect, false);
   ASSERT_TRUE(builder.GetDestinationClipCoverage().IsEmpty());
   builder.Restore();
 
   builder.Save();
-  builder.ClipRect(clip_bounds_1, ClipOp::kIntersect, false);
+  builder.ClipRect(clip_bounds_1, DlClipOp::kIntersect, false);
   builder.Translate(-10, -10);
-  builder.ClipRect(clip_bounds_2, ClipOp::kIntersect, false);
+  builder.ClipRect(clip_bounds_2, DlClipOp::kIntersect, false);
   ASSERT_EQ(builder.GetDestinationClipCoverage(), clip_bounds_1);
   builder.Restore();
 }
@@ -2057,7 +2069,7 @@ TEST_F(DisplayListTest, ClipRRectAffectsClipBounds) {
   DisplayListBuilder builder;
   DlRect clip_bounds = DlRect::MakeLTRB(10.2, 11.3, 20.4, 25.7);
   DlRoundRect clip = DlRoundRect::MakeRectXY(clip_bounds, 3, 2);
-  builder.ClipRoundRect(clip, ClipOp::kIntersect, false);
+  builder.ClipRoundRect(clip, DlClipOp::kIntersect, false);
 
   // Save initial return values for testing restored values
   DlRect initial_local_bounds = builder.GetLocalClipCoverage();
@@ -2066,7 +2078,7 @@ TEST_F(DisplayListTest, ClipRRectAffectsClipBounds) {
   ASSERT_EQ(initial_destination_bounds, clip_bounds);
 
   builder.Save();
-  builder.ClipRect(DlRect::MakeLTRB(0, 0, 15, 15), ClipOp::kIntersect, false);
+  builder.ClipRect(DlRect::MakeLTRB(0, 0, 15, 15), DlClipOp::kIntersect, false);
   // Both clip bounds have changed
   ASSERT_NE(builder.GetLocalClipCoverage(), clip_bounds);
   ASSERT_NE(builder.GetDestinationClipCoverage(), clip_bounds);
@@ -2097,7 +2109,7 @@ TEST_F(DisplayListTest, ClipRRectDoAAAffectsClipBounds) {
   DlRect clip_bounds = DlRect::MakeLTRB(10.2, 11.3, 20.4, 25.7);
   DlRect clip_expanded_bounds = DlRect::MakeLTRB(10, 11, 21, 26);
   DlRoundRect clip = DlRoundRect::MakeRectXY(clip_bounds, 3, 2);
-  builder.ClipRoundRect(clip, ClipOp::kIntersect, true);
+  builder.ClipRoundRect(clip, DlClipOp::kIntersect, true);
 
   // Save initial return values for testing restored values
   DlRect initial_local_bounds = builder.GetLocalClipCoverage();
@@ -2106,7 +2118,7 @@ TEST_F(DisplayListTest, ClipRRectDoAAAffectsClipBounds) {
   ASSERT_EQ(initial_destination_bounds, clip_expanded_bounds);
 
   builder.Save();
-  builder.ClipRect(DlRect::MakeLTRB(0, 0, 15, 15), ClipOp::kIntersect, true);
+  builder.ClipRect(DlRect::MakeLTRB(0, 0, 15, 15), DlClipOp::kIntersect, true);
   // Both clip bounds have changed
   ASSERT_NE(builder.GetLocalClipCoverage(), clip_expanded_bounds);
   ASSERT_NE(builder.GetDestinationClipCoverage(), clip_expanded_bounds);
@@ -2140,16 +2152,16 @@ TEST_F(DisplayListTest, ClipRRectAffectsClipBoundsWithMatrix) {
   DlRoundRect clip2 = DlRoundRect::MakeRectXY(clip_bounds_2, 3, 2);
 
   builder.Save();
-  builder.ClipRoundRect(clip1, ClipOp::kIntersect, false);
+  builder.ClipRoundRect(clip1, DlClipOp::kIntersect, false);
   builder.Translate(10, 0);
-  builder.ClipRoundRect(clip1, ClipOp::kIntersect, false);
+  builder.ClipRoundRect(clip1, DlClipOp::kIntersect, false);
   ASSERT_TRUE(builder.GetDestinationClipCoverage().IsEmpty());
   builder.Restore();
 
   builder.Save();
-  builder.ClipRoundRect(clip1, ClipOp::kIntersect, false);
+  builder.ClipRoundRect(clip1, DlClipOp::kIntersect, false);
   builder.Translate(-10, -10);
-  builder.ClipRoundRect(clip2, ClipOp::kIntersect, false);
+  builder.ClipRoundRect(clip2, DlClipOp::kIntersect, false);
   ASSERT_EQ(builder.GetDestinationClipCoverage(), clip_bounds_1);
   builder.Restore();
 }
@@ -2159,7 +2171,7 @@ TEST_F(DisplayListTest, ClipPathAffectsClipBounds) {
   DlPath clip = DlPath::MakeCircle(DlPoint(10.2f, 11.3f), 2.0f) +
                 DlPath::MakeCircle(DlPoint(20.4f, 25.7f), 2.0f);
   DlRect clip_bounds = DlRect::MakeLTRB(8.2, 9.3, 22.4, 27.7);
-  builder.ClipPath(clip, ClipOp::kIntersect, false);
+  builder.ClipPath(clip, DlClipOp::kIntersect, false);
 
   // Save initial return values for testing restored values
   DlRect initial_local_bounds = builder.GetLocalClipCoverage();
@@ -2168,7 +2180,7 @@ TEST_F(DisplayListTest, ClipPathAffectsClipBounds) {
   ASSERT_EQ(initial_destination_bounds, clip_bounds);
 
   builder.Save();
-  builder.ClipRect(DlRect::MakeLTRB(0, 0, 15, 15), ClipOp::kIntersect, false);
+  builder.ClipRect(DlRect::MakeLTRB(0, 0, 15, 15), DlClipOp::kIntersect, false);
   // Both clip bounds have changed
   ASSERT_NE(builder.GetLocalClipCoverage(), clip_bounds);
   ASSERT_NE(builder.GetDestinationClipCoverage(), clip_bounds);
@@ -2199,7 +2211,7 @@ TEST_F(DisplayListTest, ClipPathDoAAAffectsClipBounds) {
   DlPath clip = DlPath::MakeCircle(DlPoint(10.2f, 11.3f), 2.0f) +
                 DlPath::MakeCircle(DlPoint(20.4f, 25.7f), 2.0f);
   DlRect clip_expanded_bounds = DlRect::MakeLTRB(8, 9, 23, 28);
-  builder.ClipPath(clip, ClipOp::kIntersect, true);
+  builder.ClipPath(clip, DlClipOp::kIntersect, true);
 
   // Save initial return values for testing restored values
   DlRect initial_local_bounds = builder.GetLocalClipCoverage();
@@ -2208,7 +2220,7 @@ TEST_F(DisplayListTest, ClipPathDoAAAffectsClipBounds) {
   ASSERT_EQ(initial_destination_bounds, clip_expanded_bounds);
 
   builder.Save();
-  builder.ClipRect(DlRect::MakeLTRB(0, 0, 15, 15), ClipOp::kIntersect, true);
+  builder.ClipRect(DlRect::MakeLTRB(0, 0, 15, 15), DlClipOp::kIntersect, true);
   // Both clip bounds have changed
   ASSERT_NE(builder.GetLocalClipCoverage(), clip_expanded_bounds);
   ASSERT_NE(builder.GetDestinationClipCoverage(), clip_expanded_bounds);
@@ -2243,16 +2255,16 @@ TEST_F(DisplayListTest, ClipPathAffectsClipBoundsWithMatrix) {
                  DlPath::MakeCircle(DlPoint(17.5f, 17.5f), 2.5);
 
   builder.Save();
-  builder.ClipPath(clip1, ClipOp::kIntersect, false);
+  builder.ClipPath(clip1, DlClipOp::kIntersect, false);
   builder.Translate(10, 0);
-  builder.ClipPath(clip1, ClipOp::kIntersect, false);
+  builder.ClipPath(clip1, DlClipOp::kIntersect, false);
   ASSERT_TRUE(builder.GetDestinationClipCoverage().IsEmpty());
   builder.Restore();
 
   builder.Save();
-  builder.ClipPath(clip1, ClipOp::kIntersect, false);
+  builder.ClipPath(clip1, DlClipOp::kIntersect, false);
   builder.Translate(-10, -10);
-  builder.ClipPath(clip2, ClipOp::kIntersect, false);
+  builder.ClipPath(clip2, DlClipOp::kIntersect, false);
   ASSERT_EQ(builder.GetDestinationClipCoverage(), clip_bounds);
   builder.Restore();
 }
@@ -2261,7 +2273,7 @@ TEST_F(DisplayListTest, DiffClipRectDoesNotAffectClipBounds) {
   DisplayListBuilder builder;
   DlRect diff_clip = DlRect::MakeLTRB(0, 0, 15, 15);
   DlRect clip_bounds = DlRect::MakeLTRB(10.2, 11.3, 20.4, 25.7);
-  builder.ClipRect(clip_bounds, ClipOp::kIntersect, false);
+  builder.ClipRect(clip_bounds, DlClipOp::kIntersect, false);
 
   // Save initial return values for testing after kDifference clip
   DlRect initial_local_bounds = builder.GetLocalClipCoverage();
@@ -2269,7 +2281,7 @@ TEST_F(DisplayListTest, DiffClipRectDoesNotAffectClipBounds) {
   ASSERT_EQ(initial_local_bounds, clip_bounds);
   ASSERT_EQ(initial_destination_bounds, clip_bounds);
 
-  builder.ClipRect(diff_clip, ClipOp::kDifference, false);
+  builder.ClipRect(diff_clip, DlClipOp::kDifference, false);
   ASSERT_EQ(builder.GetLocalClipCoverage(), initial_local_bounds);
   ASSERT_EQ(builder.GetDestinationClipCoverage(), initial_destination_bounds);
 }
@@ -2281,7 +2293,7 @@ TEST_F(DisplayListTest, DiffClipRRectDoesNotAffectClipBounds) {
   DlRect clip_bounds = DlRect::MakeLTRB(10.2, 11.3, 20.4, 25.7);
   DlRoundRect clip =
       DlRoundRect::MakeRectXY(DlRect::MakeLTRB(10.2, 11.3, 20.4, 25.7), 3, 2);
-  builder.ClipRoundRect(clip, ClipOp::kIntersect, false);
+  builder.ClipRoundRect(clip, DlClipOp::kIntersect, false);
 
   // Save initial return values for testing after kDifference clip
   DlRect initial_local_bounds = builder.GetLocalClipCoverage();
@@ -2289,7 +2301,7 @@ TEST_F(DisplayListTest, DiffClipRRectDoesNotAffectClipBounds) {
   ASSERT_EQ(initial_local_bounds, clip_bounds);
   ASSERT_EQ(initial_destination_bounds, clip_bounds);
 
-  builder.ClipRoundRect(diff_clip, ClipOp::kDifference, false);
+  builder.ClipRoundRect(diff_clip, DlClipOp::kDifference, false);
   ASSERT_EQ(builder.GetLocalClipCoverage(), initial_local_bounds);
   ASSERT_EQ(builder.GetDestinationClipCoverage(), initial_destination_bounds);
 }
@@ -2300,7 +2312,7 @@ TEST_F(DisplayListTest, DiffClipPathDoesNotAffectClipBounds) {
   DlPath clip = DlPath::MakeCircle(DlPoint(10.2, 11.3), 2) +
                 DlPath::MakeCircle(DlPoint(20.4, 25.7), 2);
   DlRect clip_bounds = DlRect::MakeLTRB(8.2, 9.3, 22.4, 27.7);
-  builder.ClipPath(clip, ClipOp::kIntersect, false);
+  builder.ClipPath(clip, DlClipOp::kIntersect, false);
 
   // Save initial return values for testing after kDifference clip
   DlRect initial_local_bounds = builder.GetLocalClipCoverage();
@@ -2308,7 +2320,7 @@ TEST_F(DisplayListTest, DiffClipPathDoesNotAffectClipBounds) {
   ASSERT_EQ(initial_local_bounds, clip_bounds);
   ASSERT_EQ(initial_destination_bounds, clip_bounds);
 
-  builder.ClipPath(diff_clip, ClipOp::kDifference, false);
+  builder.ClipPath(diff_clip, DlClipOp::kDifference, false);
   ASSERT_EQ(builder.GetLocalClipCoverage(), initial_local_bounds);
   ASSERT_EQ(builder.GetDestinationClipCoverage(), initial_destination_bounds);
 }
@@ -2318,7 +2330,7 @@ TEST_F(DisplayListTest, FlatDrawPointsProducesBounds) {
   DlPoint vertical_points[2] = {DlPoint(10, 10), DlPoint(10, 20)};
   {
     DisplayListBuilder builder;
-    builder.DrawPoints(PointMode::kPolygon, 2, horizontal_points, DlPaint());
+    builder.DrawPoints(DlPointMode::kPolygon, 2, horizontal_points, DlPaint());
     DlRect bounds = builder.Build()->GetBounds();
     EXPECT_TRUE(bounds.Contains(DlPoint(10, 10)));
     EXPECT_TRUE(bounds.Contains(DlPoint(20, 10)));
@@ -2326,7 +2338,7 @@ TEST_F(DisplayListTest, FlatDrawPointsProducesBounds) {
   }
   {
     DisplayListBuilder builder;
-    builder.DrawPoints(PointMode::kPolygon, 2, vertical_points, DlPaint());
+    builder.DrawPoints(DlPointMode::kPolygon, 2, vertical_points, DlPaint());
     DlRect bounds = builder.Build()->GetBounds();
     EXPECT_TRUE(bounds.Contains(DlPoint(10, 10)));
     EXPECT_TRUE(bounds.Contains(DlPoint(10, 20)));
@@ -2334,7 +2346,7 @@ TEST_F(DisplayListTest, FlatDrawPointsProducesBounds) {
   }
   {
     DisplayListBuilder builder;
-    builder.DrawPoints(PointMode::kPoints, 1, horizontal_points, DlPaint());
+    builder.DrawPoints(DlPointMode::kPoints, 1, horizontal_points, DlPaint());
     DlRect bounds = builder.Build()->GetBounds();
     EXPECT_TRUE(bounds.Contains(DlPoint(10, 10)));
   }
@@ -2342,7 +2354,7 @@ TEST_F(DisplayListTest, FlatDrawPointsProducesBounds) {
     DisplayListBuilder builder;
     DlPaint paint;
     paint.setStrokeWidth(2);
-    builder.DrawPoints(PointMode::kPolygon, 2, horizontal_points, paint);
+    builder.DrawPoints(DlPointMode::kPolygon, 2, horizontal_points, paint);
     DlRect bounds = builder.Build()->GetBounds();
     EXPECT_TRUE(bounds.Contains(DlPoint(10, 10)));
     EXPECT_TRUE(bounds.Contains(DlPoint(20, 10)));
@@ -2352,7 +2364,7 @@ TEST_F(DisplayListTest, FlatDrawPointsProducesBounds) {
     DisplayListBuilder builder;
     DlPaint paint;
     paint.setStrokeWidth(2);
-    builder.DrawPoints(PointMode::kPolygon, 2, vertical_points, paint);
+    builder.DrawPoints(DlPointMode::kPolygon, 2, vertical_points, paint);
     DlRect bounds = builder.Build()->GetBounds();
     EXPECT_TRUE(bounds.Contains(DlPoint(10, 10)));
     EXPECT_TRUE(bounds.Contains(DlPoint(10, 20)));
@@ -2362,7 +2374,7 @@ TEST_F(DisplayListTest, FlatDrawPointsProducesBounds) {
     DisplayListBuilder builder;
     DlPaint paint;
     paint.setStrokeWidth(2);
-    builder.DrawPoints(PointMode::kPoints, 1, horizontal_points, paint);
+    builder.DrawPoints(DlPointMode::kPoints, 1, horizontal_points, paint);
     DlRect bounds = builder.Build()->GetBounds();
     EXPECT_TRUE(bounds.Contains(DlPoint(10, 10)));
     EXPECT_EQ(bounds, DlRect::MakeLTRB(9, 9, 11, 11));
@@ -2559,8 +2571,8 @@ TEST_F(DisplayListTest, CollapseMultipleNestedSaveRestore) {
       {
         builder1.Translate(10, 10);
         builder1.Scale(2, 2);
-        builder1.ClipRect(DlRect::MakeLTRB(10, 10, 20, 20), ClipOp::kIntersect,
-                          false);
+        builder1.ClipRect(DlRect::MakeLTRB(10, 10, 20, 20),
+                          DlClipOp::kIntersect, false);
         builder1.DrawRect(DlRect::MakeLTRB(0, 0, 100, 100), DlPaint());
       }
       builder1.Restore();
@@ -2575,7 +2587,7 @@ TEST_F(DisplayListTest, CollapseMultipleNestedSaveRestore) {
   {
     builder2.Translate(10, 10);
     builder2.Scale(2, 2);
-    builder2.ClipRect(DlRect::MakeLTRB(10, 10, 20, 20), ClipOp::kIntersect,
+    builder2.ClipRect(DlRect::MakeLTRB(10, 10, 20, 20), DlClipOp::kIntersect,
                       false);
     builder2.DrawRect(DlRect::MakeLTRB(0, 0, 100, 100), DlPaint());
   }
@@ -2880,7 +2892,7 @@ TEST_F(DisplayListTest, ClipRectTriggersDeferredSave) {
   {
     builder1.Save();
     {
-      builder1.ClipRect(DlRect::MakeLTRB(0, 0, 100, 100), ClipOp::kIntersect,
+      builder1.ClipRect(DlRect::MakeLTRB(0, 0, 100, 100), DlClipOp::kIntersect,
                         true);
       builder1.DrawRect(DlRect::MakeLTRB(0, 0, 100, 100), DlPaint());
     }
@@ -2897,7 +2909,7 @@ TEST_F(DisplayListTest, ClipRectTriggersDeferredSave) {
   DisplayListBuilder builder2;
   builder2.Save();
   {
-    builder2.ClipRect(DlRect::MakeLTRB(0, 0, 100, 100), ClipOp::kIntersect,
+    builder2.ClipRect(DlRect::MakeLTRB(0, 0, 100, 100), DlClipOp::kIntersect,
                       true);
     builder2.DrawRect(DlRect::MakeLTRB(0, 0, 100, 100), DlPaint());
   }
@@ -2918,7 +2930,7 @@ TEST_F(DisplayListTest, ClipRRectTriggersDeferredSave) {
   {
     builder1.Save();
     {
-      builder1.ClipRoundRect(kTestRRect, ClipOp::kIntersect, true);
+      builder1.ClipRoundRect(kTestRRect, DlClipOp::kIntersect, true);
 
       builder1.DrawRect(DlRect::MakeLTRB(0, 0, 100, 100), DlPaint());
     }
@@ -2934,7 +2946,7 @@ TEST_F(DisplayListTest, ClipRRectTriggersDeferredSave) {
 
   DisplayListBuilder builder2;
   builder2.Save();
-  builder2.ClipRoundRect(kTestRRect, ClipOp::kIntersect, true);
+  builder2.ClipRoundRect(kTestRRect, DlClipOp::kIntersect, true);
 
   builder2.DrawRect(DlRect::MakeLTRB(0, 0, 100, 100), DlPaint());
   builder2.Restore();
@@ -2954,7 +2966,7 @@ TEST_F(DisplayListTest, ClipPathTriggersDeferredSave) {
   {
     builder1.Save();
     {
-      builder1.ClipPath(kTestPath1, ClipOp::kIntersect, true);
+      builder1.ClipPath(kTestPath1, DlClipOp::kIntersect, true);
       builder1.DrawRect(DlRect::MakeLTRB(0, 0, 100, 100), DlPaint());
     }
     builder1.Restore();
@@ -2970,7 +2982,7 @@ TEST_F(DisplayListTest, ClipPathTriggersDeferredSave) {
   DisplayListBuilder builder2;
   builder2.Save();
   {
-    builder2.ClipPath(kTestPath1, ClipOp::kIntersect, true);
+    builder2.ClipPath(kTestPath1, DlClipOp::kIntersect, true);
     builder2.DrawRect(DlRect::MakeLTRB(0, 0, 100, 100), DlPaint());
   }
   builder2.Restore();
@@ -3196,7 +3208,7 @@ TEST_F(DisplayListTest, NOPClipDoesNotTriggerDeferredSave) {
   {
     builder1.Save();
     {
-      builder1.ClipRect(DlRect::MakeLTRB(0, NaN, NaN, 0), ClipOp::kIntersect,
+      builder1.ClipRect(DlRect::MakeLTRB(0, NaN, NaN, 0), DlClipOp::kIntersect,
                         true);
       builder1.DrawRect(DlRect::MakeLTRB(0, 0, 100, 100), DlPaint());
     }
@@ -3221,7 +3233,8 @@ TEST_F(DisplayListTest, RTreeOfClippedSaveLayerFilterScene) {
   DlPaint default_paint = DlPaint();
   DlPaint filter_paint = DlPaint().setImageFilter(&filter);
   builder.DrawRect(DlRect::MakeLTRB(10, 10, 20, 20), default_paint);
-  builder.ClipRect(DlRect::MakeLTRB(50, 50, 60, 60), ClipOp::kIntersect, false);
+  builder.ClipRect(DlRect::MakeLTRB(50, 50, 60, 60), DlClipOp::kIntersect,
+                   false);
   builder.SaveLayer(std::nullopt, &filter_paint);
   // the following rectangle will be expanded to 23,23,87,87
   // by the SaveLayer filter during the restore operation
@@ -3377,8 +3390,7 @@ TEST_F(DisplayListTest, DrawSaveDrawCannotInheritOpacity) {
   DisplayListBuilder builder;
   builder.DrawCircle(DlPoint(10, 10), 5, DlPaint());
   builder.Save();
-  builder.ClipRect(DlRect::MakeLTRB(0, 0, 20, 20), DlCanvas::ClipOp::kIntersect,
-                   false);
+  builder.ClipRect(DlRect::MakeLTRB(0, 0, 20, 20), DlClipOp::kIntersect, false);
   builder.DrawRect(DlRect::MakeLTRB(5, 5, 15, 15), DlPaint());
   builder.Restore();
   auto display_list = builder.Build();
@@ -3457,7 +3469,7 @@ TEST_F(DisplayListTest, NopOperationsOmittedFromRecords) {
           }
           ASSERT_EQ(list->op_count(), expected_op_count) << name;
           EXPECT_EQ(list->total_depth(), expected_total_depth) << name;
-          ASSERT_TRUE(list->bounds().isEmpty()) << name;
+          ASSERT_TRUE(list->GetBounds().IsEmpty()) << name;
         };
     run_one_test(
         name + " DrawColor",
@@ -3494,7 +3506,7 @@ TEST_F(DisplayListTest, NopOperationsOmittedFromRecords) {
           builder.DrawArc(DlRect::MakeLTRB(10, 10, 20, 20), 45, 90, true,
                           paint);
           DlPoint pts[] = {DlPoint(10, 10), DlPoint(20, 20)};
-          builder.DrawPoints(PointMode::kLines, 2, pts, paint);
+          builder.DrawPoints(DlPointMode::kLines, 2, pts, paint);
           builder.DrawVertices(kTestVertices1, DlBlendMode::kSrcOver, paint);
           builder.DrawImage(kTestImage1, DlPoint(10, 10),
                             DlImageSampling::kLinear, &paint);
@@ -3516,7 +3528,11 @@ TEST_F(DisplayListTest, NopOperationsOmittedFromRecords) {
           builder.DrawAtlas(kTestImage1, xforms, rects, nullptr, 2,
                             DlBlendMode::kSrcOver, DlImageSampling::kLinear,
                             nullptr, &paint);
-          builder.DrawTextBlob(GetTestTextBlob(1), 10, 10, paint);
+          builder.DrawText(DlTextSkia::Make(GetTestTextBlob(1)), 10, 10, paint);
+#if IMPELLER_SUPPORTS_RENDERING
+          builder.DrawText(DlTextImpeller::Make(GetTestTextFrame(1)), 10, 10,
+                           paint);
+#endif
 
           // Dst mode eliminates most rendering ops except for
           // the following two, so we'll prune those manually...
@@ -3561,15 +3577,15 @@ TEST_F(DisplayListTest, NopOperationsOmittedFromRecords) {
             });
   run_tests("Empty rect clip",  //
             [](DisplayListBuilder& builder, DlPaint& paint) {
-              builder.ClipRect(DlRect(), ClipOp::kIntersect, false);
+              builder.ClipRect(DlRect(), DlClipOp::kIntersect, false);
             });
   run_tests("Empty rrect clip",  //
             [](DisplayListBuilder& builder, DlPaint& paint) {
-              builder.ClipRoundRect(DlRoundRect(), ClipOp::kIntersect, false);
+              builder.ClipRoundRect(DlRoundRect(), DlClipOp::kIntersect, false);
             });
   run_tests("Empty path clip",  //
             [](DisplayListBuilder& builder, DlPaint& paint) {
-              builder.ClipPath(DlPath(), ClipOp::kIntersect, false);
+              builder.ClipPath(DlPath(), DlClipOp::kIntersect, false);
             });
   run_tests("Transparent SaveLayer",  //
             [](DisplayListBuilder& builder, DlPaint& paint) {
@@ -4515,9 +4531,9 @@ TEST_F(DisplayListTest, DrawDisplayListForwardsBackdropFlag) {
 #define CLIP_EXPECTOR(name) ClipExpector name(__FILE__, __LINE__)
 
 struct ClipExpectation {
-  std::variant<DlRect, DlRoundRect, DlPath> shape;
+  std::variant<DlRect, DlRoundRect, DlRoundSuperellipse, DlPath> shape;
   bool is_oval;
-  ClipOp clip_op;
+  DlClipOp clip_op;
   bool is_aa;
 
   std::string shape_name() {
@@ -4527,6 +4543,8 @@ struct ClipExpectation {
       case 1:
         return "DlRoundRect";
       case 2:
+        return "DlRoundSuperellipse";
+      case 3:
         return "DlPath";
       default:
         return "Unknown";
@@ -4577,7 +4595,7 @@ class ClipExpector : public virtual DlOpReceiver,
   }
 
   ClipExpector& addExpectation(const DlRect& rect,
-                               ClipOp clip_op = ClipOp::kIntersect,
+                               DlClipOp clip_op = DlClipOp::kIntersect,
                                bool is_aa = false) {
     clip_expectations_.push_back({
         .shape = rect,
@@ -4589,7 +4607,7 @@ class ClipExpector : public virtual DlOpReceiver,
   }
 
   ClipExpector& addOvalExpectation(const DlRect& rect,
-                                   ClipOp clip_op = ClipOp::kIntersect,
+                                   DlClipOp clip_op = DlClipOp::kIntersect,
                                    bool is_aa = false) {
     clip_expectations_.push_back({
         .shape = rect,
@@ -4601,7 +4619,7 @@ class ClipExpector : public virtual DlOpReceiver,
   }
 
   ClipExpector& addExpectation(const DlRoundRect& rrect,
-                               ClipOp clip_op = ClipOp::kIntersect,
+                               DlClipOp clip_op = DlClipOp::kIntersect,
                                bool is_aa = false) {
     clip_expectations_.push_back({
         .shape = rrect,
@@ -4613,7 +4631,7 @@ class ClipExpector : public virtual DlOpReceiver,
   }
 
   ClipExpector& addExpectation(const DlPath& path,
-                               ClipOp clip_op = ClipOp::kIntersect,
+                               DlClipOp clip_op = DlClipOp::kIntersect,
                                bool is_aa = false) {
     clip_expectations_.push_back({
         .shape = path,
@@ -4624,24 +4642,23 @@ class ClipExpector : public virtual DlOpReceiver,
     return *this;
   }
 
-  void clipRect(const DlRect& rect,
-                DlCanvas::ClipOp clip_op,
-                bool is_aa) override {
+  void clipRect(const DlRect& rect, DlClipOp clip_op, bool is_aa) override {
     check(rect, clip_op, is_aa);
   }
-  void clipOval(const DlRect& bounds,
-                DlCanvas::ClipOp clip_op,
-                bool is_aa) override {
+  void clipOval(const DlRect& bounds, DlClipOp clip_op, bool is_aa) override {
     check(bounds, clip_op, is_aa, true);
   }
   void clipRoundRect(const DlRoundRect& rrect,
-                     DlCanvas::ClipOp clip_op,
+                     DlClipOp clip_op,
                      bool is_aa) override {
     check(rrect, clip_op, is_aa);
   }
-  void clipPath(const DlPath& path,
-                DlCanvas::ClipOp clip_op,
-                bool is_aa) override {
+  void clipRoundSuperellipse(const DlRoundSuperellipse& rse,
+                             DlClipOp clip_op,
+                             bool is_aa) override {
+    check(rse, clip_op, is_aa);
+  }
+  void clipPath(const DlPath& path, DlClipOp clip_op, bool is_aa) override {
     check(path, clip_op, is_aa);
   }
 
@@ -4650,7 +4667,10 @@ class ClipExpector : public virtual DlOpReceiver,
   std::vector<ClipExpectation> clip_expectations_;
 
   template <typename T>
-  void check(T shape, ClipOp clip_op, bool is_aa, bool is_oval = false) {
+  void check(const T& shape,
+             DlClipOp clip_op,
+             bool is_aa,
+             bool is_oval = false) {
     ASSERT_LT(index_, clip_expectations_.size())
         << label() << std::endl
         << "extra clip shape = " << shape << (is_oval ? " (oval)" : "");
@@ -4691,13 +4711,13 @@ TEST_F(DisplayListTest, ClipRectCullingPixel6a) {
   auto clip = DlRect::MakeLTRB(0.0f, 0.0f, 1080.0f / DPR, 2400.0f / DPR);
 
   DisplayListBuilder cull_builder;
-  cull_builder.ClipRect(frame, ClipOp::kIntersect, false);
+  cull_builder.ClipRect(frame, DlClipOp::kIntersect, false);
   cull_builder.Scale(DPR, DPR);
-  cull_builder.ClipRect(clip, ClipOp::kIntersect, false);
+  cull_builder.ClipRect(clip, DlClipOp::kIntersect, false);
   auto cull_dl = cull_builder.Build();
 
   CLIP_EXPECTOR(expector);
-  expector.addExpectation(frame, ClipOp::kIntersect, false);
+  expector.addExpectation(frame, DlClipOp::kIntersect, false);
   cull_dl->Dispatch(expector);
 }
 
@@ -4705,12 +4725,12 @@ TEST_F(DisplayListTest, ClipRectCulling) {
   auto clip = DlRect::MakeLTRB(10.0f, 10.0f, 20.0f, 20.0f);
 
   DisplayListBuilder cull_builder;
-  cull_builder.ClipRect(clip, ClipOp::kIntersect, false);
-  cull_builder.ClipRect(clip.Expand(1.0f, 1.0f), ClipOp::kIntersect, false);
+  cull_builder.ClipRect(clip, DlClipOp::kIntersect, false);
+  cull_builder.ClipRect(clip.Expand(1.0f, 1.0f), DlClipOp::kIntersect, false);
   auto cull_dl = cull_builder.Build();
 
   CLIP_EXPECTOR(expector);
-  expector.addExpectation(clip, ClipOp::kIntersect, false);
+  expector.addExpectation(clip, DlClipOp::kIntersect, false);
   cull_dl->Dispatch(expector);
 }
 
@@ -4719,13 +4739,13 @@ TEST_F(DisplayListTest, ClipRectNonCulling) {
   auto smaller_clip = clip.Expand(-1.0f, -1.0f);
 
   DisplayListBuilder cull_builder;
-  cull_builder.ClipRect(clip, ClipOp::kIntersect, false);
-  cull_builder.ClipRect(smaller_clip, ClipOp::kIntersect, false);
+  cull_builder.ClipRect(clip, DlClipOp::kIntersect, false);
+  cull_builder.ClipRect(smaller_clip, DlClipOp::kIntersect, false);
   auto cull_dl = cull_builder.Build();
 
   CLIP_EXPECTOR(expector);
-  expector.addExpectation(clip, ClipOp::kIntersect, false);
-  expector.addExpectation(smaller_clip, ClipOp::kIntersect, false);
+  expector.addExpectation(clip, DlClipOp::kIntersect, false);
+  expector.addExpectation(smaller_clip, DlClipOp::kIntersect, false);
   cull_dl->Dispatch(expector);
 }
 
@@ -4734,14 +4754,14 @@ TEST_F(DisplayListTest, ClipRectNestedCulling) {
   auto larger_clip = clip.Expand(1.0f, 1.0f);
 
   DisplayListBuilder cull_builder;
-  cull_builder.ClipRect(clip, ClipOp::kIntersect, false);
+  cull_builder.ClipRect(clip, DlClipOp::kIntersect, false);
   cull_builder.Save();
-  cull_builder.ClipRect(larger_clip, ClipOp::kIntersect, false);
+  cull_builder.ClipRect(larger_clip, DlClipOp::kIntersect, false);
   cull_builder.Restore();
   auto cull_dl = cull_builder.Build();
 
   CLIP_EXPECTOR(expector);
-  expector.addExpectation(clip, ClipOp::kIntersect, false);
+  expector.addExpectation(clip, DlClipOp::kIntersect, false);
   cull_dl->Dispatch(expector);
 }
 
@@ -4751,15 +4771,15 @@ TEST_F(DisplayListTest, ClipRectNestedNonCulling) {
 
   DisplayListBuilder cull_builder;
   cull_builder.Save();
-  cull_builder.ClipRect(clip, ClipOp::kIntersect, false);
+  cull_builder.ClipRect(clip, DlClipOp::kIntersect, false);
   cull_builder.Restore();
   // Should not be culled because we have restored the prior clip
-  cull_builder.ClipRect(larger_clip, ClipOp::kIntersect, false);
+  cull_builder.ClipRect(larger_clip, DlClipOp::kIntersect, false);
   auto cull_dl = cull_builder.Build();
 
   CLIP_EXPECTOR(expector);
-  expector.addExpectation(clip, ClipOp::kIntersect, false);
-  expector.addExpectation(larger_clip, ClipOp::kIntersect, false);
+  expector.addExpectation(clip, DlClipOp::kIntersect, false);
+  expector.addExpectation(larger_clip, DlClipOp::kIntersect, false);
   cull_dl->Dispatch(expector);
 }
 
@@ -4769,16 +4789,16 @@ TEST_F(DisplayListTest, ClipRectNestedCullingComplex) {
   auto smallest_clip = clip.Expand(-2.0f, -2.0f);
 
   DisplayListBuilder cull_builder;
-  cull_builder.ClipRect(clip, ClipOp::kIntersect, false);
+  cull_builder.ClipRect(clip, DlClipOp::kIntersect, false);
   cull_builder.Save();
-  cull_builder.ClipRect(smallest_clip, ClipOp::kIntersect, false);
-  cull_builder.ClipRect(smaller_clip, ClipOp::kIntersect, false);
+  cull_builder.ClipRect(smallest_clip, DlClipOp::kIntersect, false);
+  cull_builder.ClipRect(smaller_clip, DlClipOp::kIntersect, false);
   cull_builder.Restore();
   auto cull_dl = cull_builder.Build();
 
   CLIP_EXPECTOR(expector);
-  expector.addExpectation(clip, ClipOp::kIntersect, false);
-  expector.addExpectation(smallest_clip, ClipOp::kIntersect, false);
+  expector.addExpectation(clip, DlClipOp::kIntersect, false);
+  expector.addExpectation(smallest_clip, DlClipOp::kIntersect, false);
   cull_dl->Dispatch(expector);
 }
 
@@ -4788,18 +4808,18 @@ TEST_F(DisplayListTest, ClipRectNestedNonCullingComplex) {
   auto smallest_clip = clip.Expand(-2.0f, -2.0f);
 
   DisplayListBuilder cull_builder;
-  cull_builder.ClipRect(clip, ClipOp::kIntersect, false);
+  cull_builder.ClipRect(clip, DlClipOp::kIntersect, false);
   cull_builder.Save();
-  cull_builder.ClipRect(smallest_clip, ClipOp::kIntersect, false);
+  cull_builder.ClipRect(smallest_clip, DlClipOp::kIntersect, false);
   cull_builder.Restore();
   // Would not be culled if it was inside the clip
-  cull_builder.ClipRect(smaller_clip, ClipOp::kIntersect, false);
+  cull_builder.ClipRect(smaller_clip, DlClipOp::kIntersect, false);
   auto cull_dl = cull_builder.Build();
 
   CLIP_EXPECTOR(expector);
-  expector.addExpectation(clip, ClipOp::kIntersect, false);
-  expector.addExpectation(smallest_clip, ClipOp::kIntersect, false);
-  expector.addExpectation(smaller_clip, ClipOp::kIntersect, false);
+  expector.addExpectation(clip, DlClipOp::kIntersect, false);
+  expector.addExpectation(smallest_clip, DlClipOp::kIntersect, false);
+  expector.addExpectation(smaller_clip, DlClipOp::kIntersect, false);
   cull_dl->Dispatch(expector);
 }
 
@@ -4812,12 +4832,12 @@ TEST_F(DisplayListTest, ClipOvalCulling) {
   auto encompassing_oval = clip.Expand(2.072f, 2.072f);
 
   DisplayListBuilder cull_builder;
-  cull_builder.ClipRect(clip, ClipOp::kIntersect, false);
-  cull_builder.ClipOval(encompassing_oval, ClipOp::kIntersect, false);
+  cull_builder.ClipRect(clip, DlClipOp::kIntersect, false);
+  cull_builder.ClipOval(encompassing_oval, DlClipOp::kIntersect, false);
   auto cull_dl = cull_builder.Build();
 
   CLIP_EXPECTOR(expector);
-  expector.addExpectation(clip, ClipOp::kIntersect, false);
+  expector.addExpectation(clip, DlClipOp::kIntersect, false);
   cull_dl->Dispatch(expector);
 }
 
@@ -4830,13 +4850,14 @@ TEST_F(DisplayListTest, ClipOvalNonCulling) {
   auto non_encompassing_oval = clip.Expand(2.071f, 2.071f);
 
   DisplayListBuilder cull_builder;
-  cull_builder.ClipRect(clip, ClipOp::kIntersect, false);
-  cull_builder.ClipOval(non_encompassing_oval, ClipOp::kIntersect, false);
+  cull_builder.ClipRect(clip, DlClipOp::kIntersect, false);
+  cull_builder.ClipOval(non_encompassing_oval, DlClipOp::kIntersect, false);
   auto cull_dl = cull_builder.Build();
 
   CLIP_EXPECTOR(expector);
-  expector.addExpectation(clip, ClipOp::kIntersect, false);
-  expector.addOvalExpectation(non_encompassing_oval, ClipOp::kIntersect, false);
+  expector.addExpectation(clip, DlClipOp::kIntersect, false);
+  expector.addOvalExpectation(non_encompassing_oval, DlClipOp::kIntersect,
+                              false);
   cull_dl->Dispatch(expector);
 }
 
@@ -4846,12 +4867,12 @@ TEST_F(DisplayListTest, ClipRRectCulling) {
   ASSERT_FALSE(rrect.IsOval());
 
   DisplayListBuilder cull_builder;
-  cull_builder.ClipRect(clip, ClipOp::kIntersect, false);
-  cull_builder.ClipRoundRect(rrect, ClipOp::kIntersect, false);
+  cull_builder.ClipRect(clip, DlClipOp::kIntersect, false);
+  cull_builder.ClipRoundRect(rrect, DlClipOp::kIntersect, false);
   auto cull_dl = cull_builder.Build();
 
   CLIP_EXPECTOR(expector);
-  expector.addExpectation(clip, ClipOp::kIntersect, false);
+  expector.addExpectation(clip, DlClipOp::kIntersect, false);
   cull_dl->Dispatch(expector);
 }
 
@@ -4861,13 +4882,13 @@ TEST_F(DisplayListTest, ClipRRectNonCulling) {
   ASSERT_FALSE(rrect.IsOval());
 
   DisplayListBuilder cull_builder;
-  cull_builder.ClipRect(clip, ClipOp::kIntersect, false);
-  cull_builder.ClipRoundRect(rrect, ClipOp::kIntersect, false);
+  cull_builder.ClipRect(clip, DlClipOp::kIntersect, false);
+  cull_builder.ClipRoundRect(rrect, DlClipOp::kIntersect, false);
   auto cull_dl = cull_builder.Build();
 
   CLIP_EXPECTOR(expector);
-  expector.addExpectation(clip, ClipOp::kIntersect, false);
-  expector.addExpectation(rrect, ClipOp::kIntersect, false);
+  expector.addExpectation(clip, DlClipOp::kIntersect, false);
+  expector.addExpectation(rrect, DlClipOp::kIntersect, false);
   cull_dl->Dispatch(expector);
 }
 
@@ -4878,7 +4899,7 @@ TEST_F(DisplayListTest, ClipPathNonCulling) {
   path_builder.LineTo({1000.0f, 0.0f});
   path_builder.LineTo({0.0f, 1000.0f});
   path_builder.Close();
-  DlPath path = DlPath(path_builder.TakePath());
+  DlPath path = path_builder.TakePath();
 
   // Double checking that the path does indeed contain the clip. But,
   // sadly, the Builder will not check paths for coverage to this level
@@ -4891,13 +4912,13 @@ TEST_F(DisplayListTest, ClipPathNonCulling) {
   ASSERT_TRUE(path.Contains(clip.GetLeftBottom()));
 
   DisplayListBuilder cull_builder;
-  cull_builder.ClipRect(clip, ClipOp::kIntersect, false);
-  cull_builder.ClipPath(path, ClipOp::kIntersect, false);
+  cull_builder.ClipRect(clip, DlClipOp::kIntersect, false);
+  cull_builder.ClipPath(path, DlClipOp::kIntersect, false);
   auto cull_dl = cull_builder.Build();
 
   CLIP_EXPECTOR(expector);
-  expector.addExpectation(clip, ClipOp::kIntersect, false);
-  expector.addExpectation(path, ClipOp::kIntersect, false);
+  expector.addExpectation(clip, DlClipOp::kIntersect, false);
+  expector.addExpectation(path, DlClipOp::kIntersect, false);
   cull_dl->Dispatch(expector);
 }
 
@@ -4906,12 +4927,12 @@ TEST_F(DisplayListTest, ClipPathRectCulling) {
   DlPath path = DlPath::MakeRect(clip.Expand(1.0f, 1.0f));
 
   DisplayListBuilder cull_builder;
-  cull_builder.ClipRect(clip, ClipOp::kIntersect, false);
-  cull_builder.ClipPath(path, ClipOp::kIntersect, false);
+  cull_builder.ClipRect(clip, DlClipOp::kIntersect, false);
+  cull_builder.ClipPath(path, DlClipOp::kIntersect, false);
   auto cull_dl = cull_builder.Build();
 
   CLIP_EXPECTOR(expector);
-  expector.addExpectation(clip, ClipOp::kIntersect, false);
+  expector.addExpectation(clip, DlClipOp::kIntersect, false);
   cull_dl->Dispatch(expector);
 }
 
@@ -4921,14 +4942,14 @@ TEST_F(DisplayListTest, ClipPathRectNonCulling) {
   DlPath path = DlPath::MakeRect(smaller_clip);
 
   DisplayListBuilder cull_builder;
-  cull_builder.ClipRect(clip, ClipOp::kIntersect, false);
-  cull_builder.ClipPath(path, ClipOp::kIntersect, false);
+  cull_builder.ClipRect(clip, DlClipOp::kIntersect, false);
+  cull_builder.ClipPath(path, DlClipOp::kIntersect, false);
   auto cull_dl = cull_builder.Build();
 
   CLIP_EXPECTOR(expector);
-  expector.addExpectation(clip, ClipOp::kIntersect, false);
+  expector.addExpectation(clip, DlClipOp::kIntersect, false);
   // Builder will not cull this clip, but it will turn it into a ClipRect
-  expector.addExpectation(smaller_clip, ClipOp::kIntersect, false);
+  expector.addExpectation(smaller_clip, DlClipOp::kIntersect, false);
   cull_dl->Dispatch(expector);
 }
 
@@ -4942,12 +4963,12 @@ TEST_F(DisplayListTest, ClipPathOvalCulling) {
   DlPath path = DlPath::MakeOval(encompassing_oval);
 
   DisplayListBuilder cull_builder;
-  cull_builder.ClipRect(clip, ClipOp::kIntersect, false);
-  cull_builder.ClipPath(path, ClipOp::kIntersect, false);
+  cull_builder.ClipRect(clip, DlClipOp::kIntersect, false);
+  cull_builder.ClipPath(path, DlClipOp::kIntersect, false);
   auto cull_dl = cull_builder.Build();
 
   CLIP_EXPECTOR(expector);
-  expector.addExpectation(clip, ClipOp::kIntersect, false);
+  expector.addExpectation(clip, DlClipOp::kIntersect, false);
   cull_dl->Dispatch(expector);
 }
 
@@ -4961,14 +4982,15 @@ TEST_F(DisplayListTest, ClipPathOvalNonCulling) {
   DlPath path = DlPath::MakeOval(non_encompassing_oval);
 
   DisplayListBuilder cull_builder;
-  cull_builder.ClipRect(clip, ClipOp::kIntersect, false);
-  cull_builder.ClipPath(path, ClipOp::kIntersect, false);
+  cull_builder.ClipRect(clip, DlClipOp::kIntersect, false);
+  cull_builder.ClipPath(path, DlClipOp::kIntersect, false);
   auto cull_dl = cull_builder.Build();
 
   CLIP_EXPECTOR(expector);
-  expector.addExpectation(clip, ClipOp::kIntersect, false);
+  expector.addExpectation(clip, DlClipOp::kIntersect, false);
   // Builder will not cull this clip, but it will turn it into a ClipOval
-  expector.addOvalExpectation(non_encompassing_oval, ClipOp::kIntersect, false);
+  expector.addOvalExpectation(non_encompassing_oval, DlClipOp::kIntersect,
+                              false);
   cull_dl->Dispatch(expector);
 }
 
@@ -4978,12 +5000,12 @@ TEST_F(DisplayListTest, ClipPathRRectCulling) {
   ASSERT_FALSE(path.IsOval());
 
   DisplayListBuilder cull_builder;
-  cull_builder.ClipRect(clip, ClipOp::kIntersect, false);
-  cull_builder.ClipPath(path, ClipOp::kIntersect, false);
+  cull_builder.ClipRect(clip, DlClipOp::kIntersect, false);
+  cull_builder.ClipPath(path, DlClipOp::kIntersect, false);
   auto cull_dl = cull_builder.Build();
 
   CLIP_EXPECTOR(expector);
-  expector.addExpectation(clip, ClipOp::kIntersect, false);
+  expector.addExpectation(clip, DlClipOp::kIntersect, false);
   cull_dl->Dispatch(expector);
 }
 
@@ -4994,14 +5016,14 @@ TEST_F(DisplayListTest, ClipPathRRectNonCulling) {
   DlPath path = DlPath::MakeRoundRect(rrect);
 
   DisplayListBuilder cull_builder;
-  cull_builder.ClipRect(clip, ClipOp::kIntersect, false);
-  cull_builder.ClipPath(path, ClipOp::kIntersect, false);
+  cull_builder.ClipRect(clip, DlClipOp::kIntersect, false);
+  cull_builder.ClipPath(path, DlClipOp::kIntersect, false);
   auto cull_dl = cull_builder.Build();
 
   CLIP_EXPECTOR(expector);
-  expector.addExpectation(clip, ClipOp::kIntersect, false);
+  expector.addExpectation(clip, DlClipOp::kIntersect, false);
   // Builder will not cull this clip, but it will turn it into a ClipRRect
-  expector.addExpectation(rrect, ClipOp::kIntersect, false);
+  expector.addExpectation(rrect, DlClipOp::kIntersect, false);
   cull_dl->Dispatch(expector);
 }
 
@@ -5149,14 +5171,14 @@ TEST_F(DisplayListTest, ClipRectRRectPromoteToClipRect) {
   DlRect draw_rect = clip_rect.Expand(2.0f, 2.0f);
 
   DisplayListBuilder builder;
-  builder.ClipRoundRect(DlRoundRect::MakeRect(clip_rect), ClipOp::kIntersect,
+  builder.ClipRoundRect(DlRoundRect::MakeRect(clip_rect), DlClipOp::kIntersect,
                         false);
   // Include a rendering op in case DlBuilder ever removes unneeded clips
   builder.DrawRect(draw_rect, DlPaint());
   auto dl = builder.Build();
 
   DisplayListBuilder expected;
-  expected.ClipRect(clip_rect, ClipOp::kIntersect, false);
+  expected.ClipRect(clip_rect, DlClipOp::kIntersect, false);
   expected.DrawRect(draw_rect, DlPaint());
   auto expect_dl = expected.Build();
 
@@ -5168,14 +5190,14 @@ TEST_F(DisplayListTest, ClipOvalRRectPromoteToClipOval) {
   DlRect draw_rect = clip_rect.Expand(2.0f, 2.0f);
 
   DisplayListBuilder builder;
-  builder.ClipRoundRect(DlRoundRect::MakeOval(clip_rect), ClipOp::kIntersect,
+  builder.ClipRoundRect(DlRoundRect::MakeOval(clip_rect), DlClipOp::kIntersect,
                         false);
   // Include a rendering op in case DlBuilder ever removes unneeded clips
   builder.DrawRect(draw_rect, DlPaint());
   auto dl = builder.Build();
 
   DisplayListBuilder expected;
-  expected.ClipOval(clip_rect, ClipOp::kIntersect, false);
+  expected.ClipOval(clip_rect, DlClipOp::kIntersect, false);
   expected.DrawRect(draw_rect, DlPaint());
   auto expect_dl = expected.Build();
 
@@ -5189,13 +5211,13 @@ TEST_F(DisplayListTest, ClipRectPathPromoteToClipRect) {
   ASSERT_TRUE(clip_path.IsRect(nullptr));
 
   DisplayListBuilder builder;
-  builder.ClipPath(clip_path, ClipOp::kIntersect, false);
+  builder.ClipPath(clip_path, DlClipOp::kIntersect, false);
   // Include a rendering op in case DlBuilder ever removes unneeded clips
   builder.DrawRect(draw_rect, DlPaint());
   auto dl = builder.Build();
 
   DisplayListBuilder expected;
-  expected.ClipRect(clip_rect, ClipOp::kIntersect, false);
+  expected.ClipRect(clip_rect, DlClipOp::kIntersect, false);
   expected.DrawRect(draw_rect, DlPaint());
   auto expect_dl = expected.Build();
 
@@ -5209,13 +5231,13 @@ TEST_F(DisplayListTest, ClipOvalPathPromoteToClipOval) {
   ASSERT_TRUE(clip_path.IsOval(nullptr));
 
   DisplayListBuilder builder;
-  builder.ClipPath(clip_path, ClipOp::kIntersect, false);
+  builder.ClipPath(clip_path, DlClipOp::kIntersect, false);
   // Include a rendering op in case DlBuilder ever removes unneeded clips
   builder.DrawRect(draw_rect, DlPaint());
   auto dl = builder.Build();
 
   DisplayListBuilder expected;
-  expected.ClipOval(clip_rect, ClipOp::kIntersect, false);
+  expected.ClipOval(clip_rect, DlClipOp::kIntersect, false);
   expected.DrawRect(draw_rect, DlPaint());
   auto expect_dl = expected.Build();
 
@@ -5230,13 +5252,13 @@ TEST_F(DisplayListTest, ClipRRectPathPromoteToClipRRect) {
   ASSERT_TRUE(clip_path.IsRoundRect());
 
   DisplayListBuilder builder;
-  builder.ClipPath(clip_path, ClipOp::kIntersect, false);
+  builder.ClipPath(clip_path, DlClipOp::kIntersect, false);
   // Include a rendering op in case DlBuilder ever removes unneeded clips
   builder.DrawRect(draw_rect, DlPaint());
   auto dl = builder.Build();
 
   DisplayListBuilder expected;
-  expected.ClipRoundRect(clip_rrect, ClipOp::kIntersect, false);
+  expected.ClipRoundRect(clip_rrect, DlClipOp::kIntersect, false);
   expected.DrawRect(draw_rect, DlPaint());
   auto expect_dl = expected.Build();
 
@@ -5248,16 +5270,15 @@ TEST_F(DisplayListTest, ClipRectRRectPathPromoteToClipRect) {
   DlRoundRect clip_rrect = DlRoundRect::MakeRect(clip_rect);
   DlRect draw_rect = clip_rect.Expand(2.0f, 2.0f);
   DlPath clip_path = DlPath::MakeRoundRect(clip_rrect);
-  ASSERT_TRUE(clip_path.IsRoundRect());
 
   DisplayListBuilder builder;
-  builder.ClipPath(clip_path, ClipOp::kIntersect, false);
+  builder.ClipPath(clip_path, DlClipOp::kIntersect, false);
   // Include a rendering op in case DlBuilder ever removes unneeded clips
   builder.DrawRect(draw_rect, DlPaint());
   auto dl = builder.Build();
 
   DisplayListBuilder expected;
-  expected.ClipRect(clip_rect, ClipOp::kIntersect, false);
+  expected.ClipRect(clip_rect, DlClipOp::kIntersect, false);
   expected.DrawRect(draw_rect, DlPaint());
   auto expect_dl = expected.Build();
 
@@ -5269,16 +5290,15 @@ TEST_F(DisplayListTest, ClipOvalRRectPathPromoteToClipOval) {
   DlRoundRect clip_rrect = DlRoundRect::MakeOval(clip_rect);
   DlRect draw_rect = clip_rect.Expand(2.0f, 2.0f);
   DlPath clip_path = DlPath::MakeRoundRect(clip_rrect);
-  ASSERT_TRUE(clip_path.IsRoundRect());
 
   DisplayListBuilder builder;
-  builder.ClipPath(clip_path, ClipOp::kIntersect, false);
+  builder.ClipPath(clip_path, DlClipOp::kIntersect, false);
   // Include a rendering op in case DlBuilder ever removes unneeded clips
   builder.DrawRect(draw_rect, DlPaint());
   auto dl = builder.Build();
 
   DisplayListBuilder expected;
-  expected.ClipOval(clip_rect, ClipOp::kIntersect, false);
+  expected.ClipOval(clip_rect, DlClipOp::kIntersect, false);
   expected.DrawRect(draw_rect, DlPaint());
   auto expect_dl = expected.Build();
 
@@ -5391,7 +5411,7 @@ TEST_F(DisplayListTest, BoundedRenderOpsDoNotReportUnbounded) {
     builder.DrawPath(path, DlPaint());
   });
 
-  auto test_draw_points = [&test_bounded](PointMode mode) {
+  auto test_draw_points = [&test_bounded](DlPointMode mode) {
     std::stringstream ss;
     ss << "DrawPoints(" << mode << ")";
     test_bounded(ss.str(), [mode](DlCanvas& builder) {
@@ -5413,9 +5433,9 @@ TEST_F(DisplayListTest, BoundedRenderOpsDoNotReportUnbounded) {
     });
   };
 
-  test_draw_points(PointMode::kPoints);
-  test_draw_points(PointMode::kLines);
-  test_draw_points(PointMode::kPolygon);
+  test_draw_points(DlPointMode::kPoints);
+  test_draw_points(DlPointMode::kLines);
+  test_draw_points(DlPointMode::kPolygon);
 
   test_bounded("DrawVerticesTriangles", [](DlCanvas& builder) {
     DlPoint points[6] = {
@@ -5485,29 +5505,33 @@ TEST_F(DisplayListTest, BoundedRenderOpsDoNotReportUnbounded) {
     ASSERT_LT(blob->bounds().width(), draw_rect.GetWidth());
     ASSERT_LT(blob->bounds().height(), draw_rect.GetHeight());
 
+    auto text = DlTextSkia::Make(blob);
     // Draw once at upper left and again at lower right to fill the bounds.
-    builder.DrawTextBlob(blob, draw_rect.GetLeft() - blob->bounds().left(),
-                         draw_rect.GetTop() - blob->bounds().top(), DlPaint());
-    builder.DrawTextBlob(blob, draw_rect.GetRight() - blob->bounds().right(),
-                         draw_rect.GetBottom() - blob->bounds().bottom(),
-                         DlPaint());
+    builder.DrawText(text, draw_rect.GetLeft() - blob->bounds().left(),
+                     draw_rect.GetTop() - blob->bounds().top(), DlPaint());
+    builder.DrawText(text, draw_rect.GetRight() - blob->bounds().right(),
+                     draw_rect.GetBottom() - blob->bounds().bottom(),
+                     DlPaint());
   });
 
+#if IMPELLER_SUPPORTS_RENDERING
   test_bounded("DrawTextFrame", [](DlCanvas& builder) {
     auto blob = GetTestTextBlob("Hello");
-    auto frame = impeller::MakeTextFrameFromTextBlobSkia(blob);
 
     // Make sure the blob fits within the draw_rect bounds.
     ASSERT_LT(blob->bounds().width(), draw_rect.GetWidth());
     ASSERT_LT(blob->bounds().height(), draw_rect.GetHeight());
 
+    auto text = DlTextImpeller::MakeFromBlob(blob);
+
     // Draw once at upper left and again at lower right to fill the bounds.
-    builder.DrawTextFrame(frame, draw_rect.GetLeft() - blob->bounds().left(),
-                          draw_rect.GetTop() - blob->bounds().top(), DlPaint());
-    builder.DrawTextFrame(frame, draw_rect.GetRight() - blob->bounds().right(),
-                          draw_rect.GetBottom() - blob->bounds().bottom(),
-                          DlPaint());
+    builder.DrawText(text, draw_rect.GetLeft() - blob->bounds().left(),
+                     draw_rect.GetTop() - blob->bounds().top(), DlPaint());
+    builder.DrawText(text, draw_rect.GetRight() - blob->bounds().right(),
+                     draw_rect.GetBottom() - blob->bounds().bottom(),
+                     DlPaint());
   });
+#endif
 
   test_bounded("DrawBoundedDisplayList", [](DlCanvas& builder) {
     DisplayListBuilder nested_builder(root_cull);
@@ -5766,17 +5790,17 @@ TEST_F(DisplayListTest, RecordManyLargeDisplayListOperations) {
   // 2050 points is sizeof(DlPoint) * 2050 = 16400 bytes, this is more
   // than the page size of 16384 bytes.
   std::vector<DlPoint> points(2050);
-  builder.DrawPoints(PointMode::kPoints, points.size(), points.data(),
+  builder.DrawPoints(DlPointMode::kPoints, points.size(), points.data(),
                      DlPaint{});
-  builder.DrawPoints(PointMode::kPoints, points.size(), points.data(),
+  builder.DrawPoints(DlPointMode::kPoints, points.size(), points.data(),
                      DlPaint{});
-  builder.DrawPoints(PointMode::kPoints, points.size(), points.data(),
+  builder.DrawPoints(DlPointMode::kPoints, points.size(), points.data(),
                      DlPaint{});
-  builder.DrawPoints(PointMode::kPoints, points.size(), points.data(),
+  builder.DrawPoints(DlPointMode::kPoints, points.size(), points.data(),
                      DlPaint{});
-  builder.DrawPoints(PointMode::kPoints, points.size(), points.data(),
+  builder.DrawPoints(DlPointMode::kPoints, points.size(), points.data(),
                      DlPaint{});
-  builder.DrawPoints(PointMode::kPoints, points.size(), points.data(),
+  builder.DrawPoints(DlPointMode::kPoints, points.size(), points.data(),
                      DlPaint{});
 
   EXPECT_TRUE(!!builder.Build());
@@ -5786,7 +5810,7 @@ TEST_F(DisplayListTest, RecordSingleLargeDisplayListOperation) {
   DisplayListBuilder builder;
 
   std::vector<DlPoint> points(40000);
-  builder.DrawPoints(PointMode::kPoints, points.size(), points.data(),
+  builder.DrawPoints(DlPointMode::kPoints, points.size(), points.data(),
                      DlPaint{});
 
   EXPECT_TRUE(!!builder.Build());
@@ -5913,6 +5937,67 @@ TEST_F(DisplayListTest, DisplayListDetectsRuntimeEffect) {
     });
     display_list->Dispatch(expector);
   }
+}
+
+namespace {
+typedef void BuilderTransformer(DisplayListBuilder& builder);
+
+sk_sp<DisplayList> TestSaveLayerWithMatrix(BuilderTransformer transform) {
+  const DlScalar xoffset = 50;
+  const DlScalar yoffset = 50;
+  const DlScalar sigma = 10.0;
+
+  DisplayListBuilder builder;
+
+  const auto blur_filter =
+      DlImageFilter::MakeBlur(sigma, sigma, DlTileMode::kClamp);
+
+  builder.Translate(xoffset, yoffset);
+  transform(builder);
+
+  const DlPaint paint;
+  builder.DrawImage(kTestImage1, DlPoint(100.0, 100.0),
+                    DlImageSampling::kNearestNeighbor, &paint);
+
+  DlPaint save_paint;
+  save_paint.setBlendMode(DlBlendMode::kSrc);
+  builder.SaveLayer(std::nullopt, &save_paint, blur_filter.get());
+  builder.Restore();
+
+  return builder.Build();
+}
+}  // namespace
+
+TEST_F(DisplayListTest, SaveLayerWithValidScaleDoesNotCrash) {
+  EXPECT_NE(TestSaveLayerWithMatrix([](DisplayListBuilder& builder) {
+              builder.Scale(0.7, 0.7);
+              EXPECT_TRUE(builder.GetMatrix().IsInvertible());
+            }),
+            nullptr);
+}
+
+TEST_F(DisplayListTest, SaveLayerWithZeroXScaleDoesNotCrash) {
+  EXPECT_NE(TestSaveLayerWithMatrix([](DisplayListBuilder& builder) {
+              builder.Scale(0.0, 0.7);
+              EXPECT_FALSE(builder.GetMatrix().IsInvertible());
+            }),
+            nullptr);
+}
+
+TEST_F(DisplayListTest, SaveLayerWithZeroYScaleDoesNotCrash) {
+  EXPECT_NE(TestSaveLayerWithMatrix([](DisplayListBuilder& builder) {
+              builder.Scale(0.7, 0.0);
+              EXPECT_FALSE(builder.GetMatrix().IsInvertible());
+            }),
+            nullptr);
+}
+
+TEST_F(DisplayListTest, SaveLayerWithLinearSkewDoesNotCrash) {
+  EXPECT_NE(TestSaveLayerWithMatrix([](DisplayListBuilder& builder) {
+              builder.Skew(1.0f, 1.0f);
+              EXPECT_FALSE(builder.GetMatrix().IsInvertible());
+            }),
+            nullptr);
 }
 
 }  // namespace testing

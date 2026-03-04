@@ -15,8 +15,13 @@ class _CustomEndDrawerIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final MaterialLocalizations localization = MaterialLocalizations.of(context);
-    return Icon(Icons.more_horiz, semanticLabel: localization.openAppDrawerTooltip);
+    final MaterialLocalizations localization = MaterialLocalizations.of(
+      context,
+    );
+    return Icon(
+      Icons.more_horiz,
+      semanticLabel: localization.openAppDrawerTooltip,
+    );
   }
 }
 
@@ -25,8 +30,13 @@ class _CustomDrawerIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final MaterialLocalizations localization = MaterialLocalizations.of(context);
-    return Icon(Icons.segment, semanticLabel: localization.openAppDrawerTooltip);
+    final MaterialLocalizations localization = MaterialLocalizations.of(
+      context,
+    );
+    return Icon(
+      Icons.segment,
+      semanticLabel: localization.openAppDrawerTooltip,
+    );
   }
 }
 
@@ -38,7 +48,6 @@ class ActionIconThemeExampleApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        useMaterial3: true,
         actionIconTheme: ActionIconThemeData(
           backButtonIconBuilder: (BuildContext context) {
             return const Icon(Icons.arrow_back_ios_new_rounded);
@@ -67,7 +76,9 @@ class MyHomePage extends StatelessWidget {
       appBar: AppBar(title: Text(title)),
       drawer: Drawer(
         child: Column(
-          children: <Widget>[TextButton(child: const Text('Drawer Item'), onPressed: () {})],
+          children: <Widget>[
+            TextButton(child: const Text('Drawer Item'), onPressed: () {}),
+          ],
         ),
       ),
       body: const Center(child: NextPageButton()),
@@ -101,6 +112,9 @@ class MySecondPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(appBar: AppBar(title: const Text('Second page')), endDrawer: const Drawer());
+    return Scaffold(
+      appBar: AppBar(title: const Text('Second page')),
+      endDrawer: const Drawer(),
+    );
   }
 }

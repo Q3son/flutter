@@ -18,6 +18,7 @@ import 'focus_scope.dart';
 import 'framework.dart';
 import 'notification_listener.dart';
 import 'primary_scroll_controller.dart';
+import 'scroll_configuration.dart';
 import 'scroll_controller.dart';
 import 'scroll_notification.dart';
 import 'scroll_physics.dart';
@@ -158,7 +159,7 @@ class SingleChildScrollView extends StatelessWidget {
     this.clipBehavior = Clip.hardEdge,
     this.hitTestBehavior = HitTestBehavior.opaque,
     this.restorationId,
-    this.keyboardDismissBehavior = ScrollViewKeyboardDismissBehavior.manual,
+    this.keyboardDismissBehavior,
   }) : assert(
          !(controller != null && (primary ?? false)),
          'Primary ScrollViews obtain their ScrollController via inheritance '
@@ -233,7 +234,10 @@ class SingleChildScrollView extends StatelessWidget {
   final String? restorationId;
 
   /// {@macro flutter.widgets.scroll_view.keyboardDismissBehavior}
-  final ScrollViewKeyboardDismissBehavior keyboardDismissBehavior;
+  ///
+  /// If [keyboardDismissBehavior] is null then it will fallback to the inherited
+  /// [ScrollBehavior.getKeyboardDismissBehavior].
+  final ScrollViewKeyboardDismissBehavior? keyboardDismissBehavior;
 
   AxisDirection _getDirection(BuildContext context) {
     return getAxisDirectionFromAxisReverseAndDirectionality(context, scrollDirection, reverse);
@@ -250,8 +254,9 @@ class SingleChildScrollView extends StatelessWidget {
         primary ??
         controller == null && PrimaryScrollController.shouldInherit(context, scrollDirection);
 
-    final ScrollController? scrollController =
-        effectivePrimary ? PrimaryScrollController.maybeOf(context) : controller;
+    final ScrollController? scrollController = effectivePrimary
+        ? PrimaryScrollController.maybeOf(context)
+        : controller;
 
     Widget scrollable = Scrollable(
       dragStartBehavior: dragStartBehavior,
@@ -271,7 +276,11 @@ class SingleChildScrollView extends StatelessWidget {
       },
     );
 
-    if (keyboardDismissBehavior == ScrollViewKeyboardDismissBehavior.onDrag) {
+    final ScrollViewKeyboardDismissBehavior effectiveKeyboardDismissBehavior =
+        keyboardDismissBehavior ??
+        ScrollConfiguration.of(context).getKeyboardDismissBehavior(context);
+
+    if (effectiveKeyboardDismissBehavior == ScrollViewKeyboardDismissBehavior.onDrag) {
       scrollable = NotificationListener<ScrollUpdateNotification>(
         child: scrollable,
         onNotification: (ScrollUpdateNotification notification) {
@@ -568,7 +577,7 @@ class _RenderSingleChildViewport extends RenderBox
   @override
   void applyPaintTransform(RenderBox child, Matrix4 transform) {
     final Offset paintOffset = _paintOffset;
-    transform.translate(paintOffset.dx, paintOffset.dy);
+    transform.translateByDouble(paintOffset.dx, paintOffset.dy, 0, 1);
   }
 
   @override

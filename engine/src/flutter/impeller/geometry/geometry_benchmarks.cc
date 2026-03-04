@@ -4,9 +4,10 @@
 
 #include "flutter/benchmarking/benchmarking.h"
 
+#include "flutter/display_list/geometry/dl_path.h"
+#include "flutter/display_list/geometry/dl_path_builder.h"
+#include "impeller/entity/geometry/shadow_path_geometry.h"
 #include "impeller/entity/geometry/stroke_path_geometry.h"
-#include "impeller/geometry/path.h"
-#include "impeller/geometry/path_builder.h"
 #include "impeller/tessellator/tessellator_libtess.h"
 
 namespace impeller {
@@ -14,78 +15,65 @@ namespace impeller {
 class ImpellerBenchmarkAccessor {
  public:
   static std::vector<Point> GenerateSolidStrokeVertices(
-      const Path::Polyline& polyline,
-      Scalar stroke_width,
-      Scalar miter_limit,
-      Join stroke_join,
-      Cap stroke_cap,
+      Tessellator& tessellator,
+      const PathSource& path,
+      const StrokeParameters& stroke,
       Scalar scale) {
-    return StrokePathGeometry::GenerateSolidStrokeVertices(
-        polyline, stroke_width, miter_limit, stroke_join, stroke_cap, scale);
+    return StrokePathGeometry::GenerateSolidStrokeVertices(  //
+        tessellator, path, stroke, scale);
   }
 };
 
 namespace {
 /// A path with many connected cubic components, including
 /// overlaps/self-intersections/multi-contour.
-Path CreateCubic(bool closed);
+flutter::DlPath CreateCubic(bool closed);
 /// Similar to the path above, but with all cubics replaced by quadratics.
-Path CreateQuadratic(bool closed);
+flutter::DlPath CreateQuadratic(bool closed);
 /// Create a rounded rect.
-Path CreateRRect();
+flutter::DlPath CreateRRect();
+/// Create a rounded superellipse.
+flutter::DlPath CreateRSuperellipse();
+/// Create a clockwise triangle path.
+flutter::DlPath CreateClockwiseTriangle();
+/// Create a counter-clockwise triangle path.
+flutter::DlPath CreateCounterClockwiseTriangle();
+/// Create a clockwise rect path.
+flutter::DlPath CreateClockwiseRect();
+/// Create a counter-clockwise rect path.
+flutter::DlPath CreateCounterClockwiseRect();
+/// Create a clockwise multi-radii round rect path.
+flutter::DlPath CreateClockwiseMultiRadiiRoundRect();
+/// Create a counter-clockwise multi-radii round rect path.
+flutter::DlPath CreateCounterClockwiseMultiRadiiRoundRect();
+/// Create a clockwise polygonal path.
+flutter::DlPath CreateClockwisePolygon();
+/// Create a counter-clockwise polygonal path.
+flutter::DlPath CreateCounterClockwisePolygon();
 }  // namespace
 
 static TessellatorLibtess tess;
 
 template <class... Args>
-static void BM_Polyline(benchmark::State& state, Args&&... args) {
+static void BM_StrokePath(benchmark::State& state, Args&&... args) {
   auto args_tuple = std::make_tuple(std::move(args)...);
-  auto path = std::get<Path>(args_tuple);
+  auto path = std::get<flutter::DlPath>(args_tuple);
 
-  size_t point_count = 0u;
-  size_t single_point_count = 0u;
-  auto points = std::make_unique<std::vector<Point>>();
-  points->reserve(2048);
-  while (state.KeepRunning()) {
-    auto polyline = path.CreatePolyline(
-        // Clang-tidy doesn't know that the points get moved back before
-        // getting moved again in this loop.
-        // NOLINTNEXTLINE(clang-analyzer-cplusplus.Move)
-        1.0f, std::move(points),
-        [&points](Path::Polyline::PointBufferPtr reclaimed) {
-          points = std::move(reclaimed);
-        });
-    single_point_count = polyline.points->size();
-    point_count += single_point_count;
-  }
-  state.counters["SinglePointCount"] = single_point_count;
-  state.counters["TotalPointCount"] = point_count;
-}
+  Tessellator tessellator;
+  StrokeParameters stroke{
+      .width = 5.0f,
+      .cap = std::get<Cap>(args_tuple),
+      .join = std::get<Join>(args_tuple),
+      .miter_limit = 10.0f,
+  };
 
-template <class... Args>
-static void BM_StrokePolyline(benchmark::State& state, Args&&... args) {
-  auto args_tuple = std::make_tuple(std::move(args)...);
-  auto path = std::get<Path>(args_tuple);
-  auto cap = std::get<Cap>(args_tuple);
-  auto join = std::get<Join>(args_tuple);
-
-  const Scalar stroke_width = 5.0f;
-  const Scalar miter_limit = 10.0f;
   const Scalar scale = 1.0f;
-
-  auto points = std::make_unique<std::vector<Point>>();
-  points->reserve(2048);
-  auto polyline =
-      path.CreatePolyline(1.0f, std::move(points),
-                          [&points](Path::Polyline::PointBufferPtr reclaimed) {
-                            points = std::move(reclaimed);
-                          });
 
   size_t point_count = 0u;
   size_t single_point_count = 0u;
   while (state.KeepRunning()) {
     auto vertices = ImpellerBenchmarkAccessor::GenerateSolidStrokeVertices(
-        polyline, stroke_width, miter_limit, join, cap, scale);
+        tessellator, path, stroke, scale);
     single_point_count = vertices.size();
     point_count += single_point_count;
   }
@@ -96,7 +84,7 @@ static void BM_StrokePolyline(benchmark::State& state, Args&&... args) {
 template <class... Args>
 static void BM_Convex(benchmark::State& state, Args&&... args) {
   auto args_tuple = std::make_tuple(std::move(args)...);
-  auto path = std::get<Path>(args_tuple);
+  auto path = flutter::DlPath(std::get<flutter::DlPath>(args_tuple));
 
   size_t point_count = 0u;
   size_t single_point_count = 0u;
@@ -114,44 +102,227 @@ static void BM_Convex(benchmark::State& state, Args&&... args) {
   state.counters["TotalPointCount"] = point_count;
 }
 
-#define MAKE_STROKE_BENCHMARK_CAPTURE(path, cap, join, closed)         \
-  BENCHMARK_CAPTURE(BM_StrokePolyline, stroke_##path##_##cap##_##join, \
+template <class... Args>
+static void BM_ShadowPathVerticesImpeller(benchmark::State& state,
+                                          Args&&... args) {
+  auto args_tuple = std::make_tuple(std::move(args)...);
+  auto path = std::get<flutter::DlPath>(args_tuple);
+  auto height = std::get<Scalar>(args_tuple);
+  auto matrix = std::get<Matrix>(args_tuple);
+
+  Tessellator tessellator;
+
+  while (state.KeepRunning()) {
+    auto result = ShadowPathGeometry::MakeAmbientShadowVertices(
+        tessellator, path, height, matrix);
+    FML_CHECK(result != nullptr);
+  }
+}
+
+#define MAKE_SHADOW_BENCHMARK_CAPTURE(clockwise, shape, backend) \
+  BENCHMARK_CAPTURE(BM_ShadowPathVertices##backend,              \
+                    shadow_##clockwise##_##shape##_##backend,    \
+                    Create##clockwise##shape(), 20.0f, Matrix{})
+
+#define MAKE_SHADOW_BENCHMARK_SHAPE_CAPTURE(shape, backend) \
+  MAKE_SHADOW_BENCHMARK_CAPTURE(Clockwise, shape, backend); \
+  MAKE_SHADOW_BENCHMARK_CAPTURE(CounterClockwise, shape, backend)
+
+#define MAKE_SHADOW_BENCHMARK_CAPTURE_ALL_SHAPES(backend)            \
+  MAKE_SHADOW_BENCHMARK_SHAPE_CAPTURE(Triangle, backend);            \
+  MAKE_SHADOW_BENCHMARK_SHAPE_CAPTURE(Rect, backend);                \
+  MAKE_SHADOW_BENCHMARK_SHAPE_CAPTURE(MultiRadiiRoundRect, backend); \
+  MAKE_SHADOW_BENCHMARK_SHAPE_CAPTURE(Polygon, backend)
+
+MAKE_SHADOW_BENCHMARK_CAPTURE_ALL_SHAPES(Impeller);
+
+#define MAKE_STROKE_PATH_BENCHMARK_CAPTURE(path, cap, join, closed) \
+  BENCHMARK_CAPTURE(BM_StrokePath, stroke_##path##_##cap##_##join,  \
                     Create##path(closed), Cap::k##cap, Join::k##join)
 
 #define MAKE_STROKE_BENCHMARK_CAPTURE_ALL_CAPS_JOINS(path, closed) \
-  MAKE_STROKE_BENCHMARK_CAPTURE(path, Butt, Bevel, closed);        \
-  MAKE_STROKE_BENCHMARK_CAPTURE(path, Butt, Miter, closed);        \
-  MAKE_STROKE_BENCHMARK_CAPTURE(path, Butt, Round, closed);        \
-  MAKE_STROKE_BENCHMARK_CAPTURE(path, Square, Bevel, closed);      \
-  MAKE_STROKE_BENCHMARK_CAPTURE(path, Round, Bevel, closed)
+  MAKE_STROKE_PATH_BENCHMARK_CAPTURE(path, Butt, Bevel, closed);   \
+  MAKE_STROKE_PATH_BENCHMARK_CAPTURE(path, Butt, Miter, closed);   \
+  MAKE_STROKE_PATH_BENCHMARK_CAPTURE(path, Butt, Round, closed);   \
+  MAKE_STROKE_PATH_BENCHMARK_CAPTURE(path, Square, Bevel, closed); \
+  MAKE_STROKE_PATH_BENCHMARK_CAPTURE(path, Round, Bevel, closed)
 
-BENCHMARK_CAPTURE(BM_Polyline, cubic_polyline, CreateCubic(true));
-BENCHMARK_CAPTURE(BM_Polyline, unclosed_cubic_polyline, CreateCubic(false));
 MAKE_STROKE_BENCHMARK_CAPTURE_ALL_CAPS_JOINS(Cubic, false);
 
-BENCHMARK_CAPTURE(BM_Polyline, quad_polyline, CreateQuadratic(true));
-BENCHMARK_CAPTURE(BM_Polyline, unclosed_quad_polyline, CreateQuadratic(false));
 MAKE_STROKE_BENCHMARK_CAPTURE_ALL_CAPS_JOINS(Quadratic, false);
 
 BENCHMARK_CAPTURE(BM_Convex, rrect_convex, CreateRRect(), true);
 // A round rect has no ends so we don't need to try it with all cap values
 // but it does have joins and even though they should all be almost
 // colinear, we run the benchmark against all 3 join values.
-MAKE_STROKE_BENCHMARK_CAPTURE(RRect, Butt, Bevel, );
-MAKE_STROKE_BENCHMARK_CAPTURE(RRect, Butt, Miter, );
-MAKE_STROKE_BENCHMARK_CAPTURE(RRect, Butt, Round, );
+MAKE_STROKE_PATH_BENCHMARK_CAPTURE(RRect, Butt, Bevel, );
+MAKE_STROKE_PATH_BENCHMARK_CAPTURE(RRect, Butt, Miter, );
+MAKE_STROKE_PATH_BENCHMARK_CAPTURE(RRect, Butt, Round, );
+
+// Same as RRect
+BENCHMARK_CAPTURE(BM_Convex, rse_convex, CreateRSuperellipse(), true);
+MAKE_STROKE_PATH_BENCHMARK_CAPTURE(RSuperellipse, Butt, Bevel, );
+MAKE_STROKE_PATH_BENCHMARK_CAPTURE(RSuperellipse, Butt, Miter, );
+MAKE_STROKE_PATH_BENCHMARK_CAPTURE(RSuperellipse, Butt, Round, );
 
 namespace {
 
-Path CreateRRect() {
-  return PathBuilder{}
+flutter::DlPath CreateClockwiseTriangle() {
+  flutter::DlPathBuilder builder;
+  builder.MoveTo(flutter::DlPoint(100, 100));
+  builder.LineTo(flutter::DlPoint(300, 100));
+  builder.LineTo(flutter::DlPoint(200, 300));
+  builder.Close();
+  return builder.TakePath();
+}
+
+flutter::DlPath CreateCounterClockwiseTriangle() {
+  flutter::DlPathBuilder builder;
+  builder.MoveTo(flutter::DlPoint(100, 100));
+  builder.LineTo(flutter::DlPoint(200, 300));
+  builder.LineTo(flutter::DlPoint(300, 100));
+  builder.Close();
+  return builder.TakePath();
+}
+
+flutter::DlPath CreateClockwiseRect() {
+  flutter::DlPathBuilder builder;
+  builder.MoveTo(flutter::DlPoint(100, 100));
+  builder.LineTo(flutter::DlPoint(300, 100));
+  builder.LineTo(flutter::DlPoint(300, 300));
+  builder.LineTo(flutter::DlPoint(100, 300));
+  builder.Close();
+  return builder.TakePath();
+}
+
+flutter::DlPath CreateCounterClockwiseRect() {
+  flutter::DlPathBuilder builder;
+  builder.MoveTo(flutter::DlPoint(100, 100));
+  builder.LineTo(flutter::DlPoint(100, 300));
+  builder.LineTo(flutter::DlPoint(300, 300));
+  builder.LineTo(flutter::DlPoint(300, 100));
+  builder.Close();
+  return builder.TakePath();
+}
+
+class HorizontalPathFlipper : private flutter::DlPathReceiver {
+ public:
+  HorizontalPathFlipper(const flutter::DlPath& path, Scalar flip_coordinate)
+      : flip_coordinate_(flip_coordinate) {
+    path.Dispatch(*this);
+  }
+
+  flutter::DlPath TakePath() { return builder_.TakePath(); }
+
+ private:
+  const Scalar flip_coordinate_;
+  flutter::DlPathBuilder builder_;
+
+  flutter::DlPoint flip(flutter::DlPoint p) {
+    return flutter::DlPoint(flip_coordinate_ * 2 - p.x, p.y);
+  }
+
+  // |flutter::DlPathReceiver|
+  void MoveTo(const Point& p2, bool will_be_closed) override {
+    builder_.MoveTo(flip(p2));
+  }
+
+  // |flutter::DlPathReceiver|
+  void LineTo(const Point& p2) override {  //
+    builder_.LineTo(flip(p2));
+  }
+
+  // |flutter::DlPathReceiver|
+  void QuadTo(const Point& cp, const Point& p2) override {
+    builder_.QuadraticCurveTo(flip(cp), flip(p2));
+  }
+
+  // |flutter::DlPathReceiver|
+  bool ConicTo(const Point& cp, const Point& p2, Scalar weight) override {
+    builder_.ConicCurveTo(flip(cp), flip(p2), weight);
+    return true;
+  }
+
+  // |flutter::DlPathReceiver|
+  void CubicTo(const Point& cp1, const Point& cp2, const Point& p2) override {
+    builder_.CubicCurveTo(flip(cp1), flip(cp2), flip(p2));
+  }
+
+  // |flutter::DlPathReceiver|
+  void Close() override {}
+};
+
+flutter::DlPath CreateClockwiseMultiRadiiRoundRect() {
+  // Upper left corner: 10 x 15
+  // Upper right corner: 15 x 10
+  // Bottom right corner: 16 x 20
+  // Bottom left corner: 20 x 16
+  flutter::DlPathBuilder builder;
+  builder.MoveTo(flutter::DlPoint(110, 100));
+  builder.LineTo(flutter::DlPoint(285, 100));
+  builder.ConicCurveTo(flutter::DlPoint(300, 100), flutter::DlPoint(300, 110),
+                       kSqrt2);
+  builder.LineTo(flutter::DlPoint(300, 280));
+  builder.ConicCurveTo(flutter::DlPoint(300, 300), flutter::DlPoint(284, 300),
+                       kSqrt2);
+  builder.LineTo(flutter::DlPoint(120, 300));
+  builder.ConicCurveTo(flutter::DlPoint(100, 300), flutter::DlPoint(100, 284),
+                       kSqrt2);
+  builder.LineTo(flutter::DlPoint(100, 115));
+  builder.ConicCurveTo(flutter::DlPoint(100, 100), flutter::DlPoint(110, 100),
+                       kSqrt2);
+  builder.Close();
+  return builder.TakePath();
+}
+
+flutter::DlPath CreateCounterClockwiseMultiRadiiRoundRect() {
+  flutter::DlPath clockwise_path = CreateClockwiseMultiRadiiRoundRect();
+  return HorizontalPathFlipper(clockwise_path, 200.0f).TakePath();
+}
+
+flutter::DlPath CreatePolygon(bool clockwise) {
+  int vertex_count = 40;
+  Scalar direction = clockwise ? 1.0f : -1.0f;
+
+  auto make_point = [](Scalar angle) {
+    return flutter::DlPoint(200 + 100 * std::cos(angle),
+                            200 + 100 * std::sin(angle));
+  };
+
+  flutter::DlPathBuilder builder;
+  builder.MoveTo(make_point(0.0f));
+  for (int i = 1; i < vertex_count; i++) {
+    Scalar angle = (static_cast<Scalar>(i) / vertex_count) * k2Pi;
+    builder.LineTo(make_point(angle * direction));
+  }
+  builder.Close();
+  return builder.TakePath();
+}
+
+flutter::DlPath CreateClockwisePolygon() {
+  return CreatePolygon(true);
+}
+
+flutter::DlPath CreateCounterClockwisePolygon() {
+  return CreatePolygon(false);
+}
+
+flutter::DlPath CreateRRect() {
+  return flutter::DlPathBuilder{}
       .AddRoundRect(
           RoundRect::MakeRectXY(Rect::MakeLTRB(0, 0, 400, 400), 16, 16))
       .TakePath();
 }
 
-Path CreateCubic(bool closed) {
-  auto builder = PathBuilder{};
+flutter::DlPath CreateRSuperellipse() {
+  return flutter::DlPathBuilder{}
+      .AddRoundSuperellipse(
+          RoundSuperellipse::MakeRectXY(Rect::MakeLTRB(0, 0, 400, 400), 16, 16))
+      .TakePath();
+}
+
+flutter::DlPath CreateCubic(bool closed) {
+  auto builder = flutter::DlPathBuilder{};
   builder  //
       .MoveTo({359.934, 96.6335})
       .CubicCurveTo({358.189, 96.7055}, {356.436, 96.7908}, {354.673, 96.8895})
@@ -300,8 +471,8 @@ Path CreateCubic(bool closed) {
   return builder.TakePath();
 }
 
-Path CreateQuadratic(bool closed) {
-  auto builder = PathBuilder{};
+flutter::DlPath CreateQuadratic(bool closed) {
+  auto builder = flutter::DlPathBuilder{};
   builder  //
       .MoveTo({359.934, 96.6335})
       .QuadraticCurveTo({358.189, 96.7055}, {354.673, 96.8895})

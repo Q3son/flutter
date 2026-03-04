@@ -22,7 +22,7 @@ void main() {
         supportedLocales: const <Locale>[Locale('en', 'US'), Locale('ja'), Locale('zh')],
         home: Builder(
           builder: (BuildContext context) {
-            const String character = '骨';
+            const character = '骨';
             final TextStyle style = Theme.of(context).textTheme.displayMedium!;
             return Scaffold(
               body: Container(
@@ -64,11 +64,10 @@ void main() {
   ) async {
     await tester.pumpWidget(
       MaterialApp(
-        theme: ThemeData(useMaterial3: true),
         supportedLocales: const <Locale>[Locale('en', 'US'), Locale('ja'), Locale('zh')],
         home: Builder(
           builder: (BuildContext context) {
-            const String character = '骨';
+            const character = '骨';
             final TextStyle style = Theme.of(context).textTheme.displayMedium!;
             return Scaffold(
               body: Container(
@@ -114,7 +113,7 @@ void main() {
         supportedLocales: const <Locale>[Locale('en', 'US'), Locale('ja'), Locale('zh')],
         home: Builder(
           builder: (BuildContext context) {
-            const String character = '骨';
+            const character = '骨';
             final TextStyle style = Theme.of(context).textTheme.displayMedium!;
             return Scaffold(
               body: Container(
@@ -157,11 +156,10 @@ void main() {
   ) async {
     await tester.pumpWidget(
       MaterialApp(
-        theme: ThemeData(useMaterial3: true),
         supportedLocales: const <Locale>[Locale('en', 'US'), Locale('ja'), Locale('zh')],
         home: Builder(
           builder: (BuildContext context) {
-            const String character = '骨';
+            const character = '骨';
             final TextStyle style = Theme.of(context).textTheme.displayMedium!;
             return Scaffold(
               body: Container(
@@ -208,7 +206,7 @@ void main() {
         supportedLocales: const <Locale>[Locale('en', 'US'), Locale('ja'), Locale('zh')],
         home: Builder(
           builder: (BuildContext context) {
-            const String character = '骨';
+            const character = '骨';
             final TextStyle style = Theme.of(context).textTheme.displayMedium!;
             return Scaffold(
               body: Container(
@@ -243,11 +241,10 @@ void main() {
   ) async {
     await tester.pumpWidget(
       MaterialApp(
-        theme: ThemeData(useMaterial3: true),
         supportedLocales: const <Locale>[Locale('en', 'US'), Locale('ja'), Locale('zh')],
         home: Builder(
           builder: (BuildContext context) {
-            const String character = '骨';
+            const character = '骨';
             final TextStyle style = Theme.of(context).textTheme.displayMedium!;
             return Scaffold(
               body: Container(

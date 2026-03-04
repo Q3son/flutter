@@ -2,42 +2,47 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import 'dart:async';
 import 'dart:js_interop';
+import 'dart:typed_data';
 
+import 'package:meta/meta.dart';
+import 'package:ui/src/engine.dart';
 import 'package:ui/ui.dart' as ui;
-
-import '../browser_detection.dart';
-import '../configuration.dart';
-import '../display.dart';
-import '../dom.dart';
-import '../platform_dispatcher.dart';
-import '../util.dart';
-import 'canvas.dart';
-import 'canvaskit_api.dart';
-import 'picture.dart';
-import 'rasterizer.dart';
-import 'render_canvas.dart';
-import 'util.dart';
 
 // Only supported in profile/release mode. Allows Flutter to use MSAA but
 // removes the ability for disabling AA on Paint objects.
 const bool _kUsingMSAA = bool.fromEnvironment('flutter.canvaskit.msaa');
 
-typedef SubmitCallback = bool Function(SurfaceFrame, CkCanvas);
+/// The base class for CanvasKit surfaces, containing shared logic for context
+/// management and Skia object creation.
+abstract class CkSurface extends Surface {
+  CkSurface(this._canvasProvider) {
+    _canvas = _canvasProvider.acquireCanvas(_currentSize, onContextLost: onContextLost);
+    _maybeAttachCanvasToDom();
+    _initialize();
+  }
 
-/// A frame which contains a canvas to be drawn into.
-class SurfaceFrame {
-  SurfaceFrame(this.skiaSurface, this.submitCallback) : _submitted = false;
+  final CanvasProvider _canvasProvider;
 
-  final CkSurface skiaSurface;
-  final SubmitCallback submitCallback;
-  final bool _submitted;
+  BitmapSize _currentSize = const BitmapSize(1, 1);
 
-  /// Submit this frame to be drawn.
-  bool submit() {
-    if (_submitted) {
+  /// The underlying Skia surface object.
+  SkSurface? get skSurface => _skSurface;
+  SkSurface? _skSurface;
+
+  /// Whether or not WebGl is supported.
+  ///
+  /// This defaults to true unless `canvasKitForceCpuOnly` is set to true or
+  /// `webGLVersion` is -1. If Skia fails to create a GrContext, this will be
+  /// set to false.
+  @visibleForTesting
+  bool get supportsWebGl {
+    if (configuration.canvasKitForceCpuOnly) {
+      _fallbackToSoftwareReason = 'canvasKitForceCpuOnly is set to true';
       return false;
     }
+<<<<<<< HEAD
     return submitCallback(this, skiaCanvas);
   }
 
@@ -453,120 +458,302 @@ class Surface extends DisplayCanvas {
 
   CkSurface _createNewSurface(BitmapSize size) {
     assert(_offscreenCanvas != null || _canvasElement != null);
+=======
+>>>>>>> 48c32af0345e9ad5747f78ddce828c7f795f7159
     if (webGLVersion == -1) {
-      return _makeSoftwareCanvasSurface('WebGL support not detected', size);
-    } else if (configuration.canvasKitForceCpuOnly) {
-      return _makeSoftwareCanvasSurface('CPU rendering forced by application', size);
-    } else if (_glContext == 0) {
-      return _makeSoftwareCanvasSurface('Failed to initialize WebGL context', size);
-    } else {
-      final SkSurface? skSurface = canvasKit.MakeOnScreenGLSurface(
-        _grContext!,
-        size.width.toDouble(),
-        size.height.toDouble(),
-        SkColorSpaceSRGB,
-        _sampleCount,
-        _stencilBits,
-      );
-
-      if (skSurface == null) {
-        return _makeSoftwareCanvasSurface('Failed to initialize WebGL surface', size);
-      }
-
-      return CkSurface(skSurface, _glContext, size);
+      _fallbackToSoftwareReason = 'webGLVersion is -1';
+      return false;
     }
-  }
-
-  static bool _didWarnAboutWebGlInitializationFailure = false;
-
-  CkSurface _makeSoftwareCanvasSurface(String reason, BitmapSize size) {
-    if (!_didWarnAboutWebGlInitializationFailure) {
-      printWarning('WARNING: Falling back to CPU-only rendering. $reason.');
-      _didWarnAboutWebGlInitializationFailure = true;
+    if (_failedToCreateGrContext) {
+      return false;
     }
-
-    try {
-      assert(!debugThrowOnSoftwareSurfaceCreation);
-
-      SkSurface surface;
-      if (useOffscreenCanvas) {
-        surface = canvasKit.MakeOffscreenSWCanvasSurface(_offscreenCanvas!);
-      } else {
-        surface = canvasKit.MakeSWCanvasSurface(_canvasElement!);
-      }
-      return CkSurface(surface, null, size);
-    } catch (error) {
-      throw CanvasKitError('Failed to create CPU-based surface: $error.');
-    }
-  }
-
-  bool _presentSurface() {
-    _surface!.flush();
     return true;
   }
 
+  String? _fallbackToSoftwareReason;
+
+  /// When true, the surface will fail to create a GL context and fall back to
+  /// software rendering. This is useful for testing.
+  @visibleForTesting
+  static bool debugForceGLFailure = false;
+
+  bool _failedToCreateGrContext = false;
+
+  static bool _didWarnAboutWebGlInitializationFailure = false;
+
+  /// The underlying GL context. Returns -1 if the context is not initialized.
   @override
-  bool get isConnected => _canvasElement!.isConnected!;
+  @visibleForTesting
+  int get glContext => _glContext;
+  int _glContext = -1;
+
+  /// The canvas object that this surface is rendering to.
+  @visibleForTesting
+  DomEventTarget get canvas => _canvas;
+  late DomEventTarget _canvas;
+
+  void _maybeAttachCanvasToDom();
+
+  /// A [Future] which completes when the [Surface] is initialized and ready to
+  /// render pictures.
+  @override
+  Future<void> get initialized => _initialized.future;
+  final Completer<void> _initialized = Completer<void>();
+
+  late Completer<void>? _handledContextLostEvent;
+
+  /// Creates the canvas object and initializes the graphics context.
+  Future<void> _initialize() async {
+    _createSkiaObjects();
+    _initialized.complete();
+  }
+
+  /// The underlying Skia graphics context.
+  SkGrContext? _grContext;
+
+  /// Handles the context lost event by acquiring a new canvas and recreating
+  /// the graphics context.
+  void onContextLost() {
+    _handledContextLostEvent?.complete();
+    final DomEventTarget newCanvas = _canvasProvider.acquireCanvas(
+      _currentSize,
+      onContextLost: onContextLost,
+    );
+    recreateContextForCanvas(newCanvas);
+  }
+
+  void _recreateSkSurface() {
+    if (supportsWebGl) {
+      try {
+        _recreateWebGlSkSurface();
+      } catch (e) {
+        _failedToCreateGrContext = true;
+        _fallbackToSoftwareReason = 'failed to create GrContext. Error: $e';
+        _recreateSoftwareSkSurface();
+      }
+    } else {
+      _recreateSoftwareSkSurface();
+    }
+  }
+
+  /// Creates the GL context and the Skia `GrContext`.
+  void _createGrContext() {
+    if (debugForceGLFailure) {
+      _failedToCreateGrContext = true;
+      _fallbackToSoftwareReason = 'debugForceGLFailure is true';
+      return;
+    }
+    final options = SkWebGLContextOptions(
+      antialias: _kUsingMSAA ? 1 : 0,
+      majorVersion: webGLVersion.toDouble(),
+    );
+    _glContext = _getGlContext(options);
+    _grContext = canvasKit.MakeGrContext(_glContext.toDouble());
+    if (_grContext == null) {
+      _failedToCreateGrContext = true;
+      _fallbackToSoftwareReason = 'failed to create GrContext.';
+    }
+  }
+
+  /// Creates the underlying GL context for the canvas.
+  ///
+  /// This method is implemented by subclasses to handle their specific
+  /// canvas types.
+  int _getGlContext(SkWebGLContextOptions options);
+
+  /// Creates the Skia objects that are backed by the canvas.
+  ///
+  /// This method is responsible for creating the `SkGrContext` and the
+  /// `SkSurface`.
+  void _createSkiaObjects() {
+    if (supportsWebGl) {
+      _createGrContext();
+    }
+    _recreateSkSurface();
+  }
+
+  void _recreateWebGlSkSurface() {
+    _skSurface?.dispose();
+    _skSurface = canvasKit.MakeOnScreenGLSurface(
+      _grContext!,
+      _currentSize.width.toDouble(),
+      _currentSize.height.toDouble(),
+      SkColorSpaceSRGB,
+      0,
+      0,
+    );
+    if (_skSurface == null) {
+      throw Exception('Failed to initialize CanvasKit SkSurface.');
+    }
+  }
+
+  void _recreateSoftwareSkSurface() {
+    if (!_didWarnAboutWebGlInitializationFailure) {
+      _didWarnAboutWebGlInitializationFailure = true;
+      printWarning(
+        'WARNING: Falling back to CPU-only rendering. Reason: $_fallbackToSoftwareReason',
+      );
+    }
+    _skSurface?.dispose();
+    _skSurface = _createSoftwareSkSurface();
+    if (_skSurface == null) {
+      throw Exception('Failed to initialize CanvasKit SkSurface.');
+    }
+  }
+
+  /// Creates an SkSurface for software rendering. This is used when WebGl is not
+  /// supported or when it fails to initialize.
+  SkSurface _createSoftwareSkSurface();
+
+  double _currentDevicePixelRatio = -1;
+
+  @override
+  void setSize(BitmapSize size) {
+    final double devicePixelRatio = EngineFlutterDisplay.instance.devicePixelRatio;
+    if (_skSurface != null &&
+        _currentSize == size &&
+        devicePixelRatio == _currentDevicePixelRatio) {
+      return;
+    }
+    _currentDevicePixelRatio = devicePixelRatio;
+    _currentSize = size;
+    _canvasProvider.resizeCanvas(canvas, size);
+    _recreateSkSurface();
+  }
+
+  @override
+  Future<void> recreateContextForCanvas(DomEventTarget newCanvas) async {
+    // The old Skia surface is now invalid and should be disposed.
+    _skSurface?.dispose();
+    _skSurface = null;
+
+    // The GrContext is also invalid and will be recreated by `_createSkiaObjects`.
+    _grContext = null;
+
+    _canvas = newCanvas;
+    _maybeAttachCanvasToDom();
+    _createSkiaObjects();
+  }
+
+  @override
+  void dispose() {
+    _skSurface?.dispose();
+  }
+
+  @override
+  void setSkiaResourceCacheMaxBytes(int bytes) {
+    _grContext?.setResourceCacheLimitBytes(bytes.toDouble());
+  }
+
+  @override
+  Future<ByteData?> rasterizeImage(ui.Image image, ui.ImageByteFormat format) async {
+    await _initialized.future;
+    final ckImage = image as CkImage;
+    final SkSurface skSurface = _skSurface!;
+    final canvas = CkCanvas.fromSkCanvas(skSurface.getCanvas());
+    canvas.drawImage(ckImage, ui.Offset.zero, ui.Paint());
+    final SkImage snapshot = skSurface.makeImageSnapshot();
+    final Uint8List? bytes = snapshot.encodeToBytes();
+    snapshot.delete();
+    return bytes?.buffer.asByteData();
+  }
+
+  @override
+  DomCanvasImageSource get canvasImageSource => canvas as DomCanvasImageSource;
+
+  @override
+  Future<void> rasterizeToCanvas(ui.Picture picture) async {
+    await _initialized.future;
+    final canvas = CkCanvas.fromSkCanvas(_skSurface!.getCanvas());
+    final ckPicture = picture as CkPicture;
+    canvas.clear(const ui.Color(0x00000000));
+    canvas.drawPicture(ckPicture);
+    _skSurface!.flush();
+  }
+
+  @override
+  Future<void> triggerContextLoss();
+
+  @override
+  Future<void> get handledContextLossEvent => _handledContextLostEvent!.future;
+}
+
+/// The CanvasKit implementation of [OffscreenSurface].
+class CkOffscreenSurface extends CkSurface implements OffscreenSurface {
+  CkOffscreenSurface(OffscreenCanvasProvider super.canvasProvider);
+
+  @override
+  int _getGlContext(SkWebGLContextOptions options) {
+    return canvasKit.GetOffscreenWebGLContext(canvas as DomOffscreenCanvas, options).toInt();
+  }
+
+  @override
+  SkSurface _createSoftwareSkSurface() {
+    return canvasKit.MakeOffscreenSWCanvasSurface(canvas as DomOffscreenCanvas);
+  }
+
+  @override
+  Future<List<DomImageBitmap>> rasterizeToImageBitmaps(List<ui.Picture> pictures) async {
+    await _initialized.future;
+    final bitmaps = <DomImageBitmap>[];
+    for (final picture in pictures) {
+      await rasterizeToCanvas(picture);
+      bitmaps.add(await createImageBitmap(_canvas));
+    }
+    return bitmaps;
+  }
+
+  @override
+  void _maybeAttachCanvasToDom() {
+    // Do not attach the OffscreenCanvas to the DOM.
+  }
+
+  @override
+  Future<void> triggerContextLoss() async {
+    _handledContextLostEvent = Completer<void>();
+    final WebGLContext gl = (canvas as DomOffscreenCanvas).getGlContext(webGLVersion);
+    gl.loseContextExtension.loseContext();
+  }
+}
+
+/// The CanvasKit implementation of [OnscreenSurface].
+class CkOnscreenSurface extends CkSurface implements OnscreenSurface {
+  CkOnscreenSurface(OnscreenCanvasProvider super.canvasProvider);
+
+  @override
+  int _getGlContext(SkWebGLContextOptions options) {
+    return canvasKit.GetWebGLContext(canvas as DomHTMLCanvasElement, options).toInt();
+  }
+
+  @override
+  SkSurface _createSoftwareSkSurface() {
+    return canvasKit.MakeSWCanvasSurface(canvas as DomHTMLCanvasElement);
+  }
+
+  final DomElement _hostElement = createDomElement('flt-canvas-container');
+
+  @override
+  DomElement get hostElement => _hostElement;
+
+  @override
+  void _maybeAttachCanvasToDom() {
+    hostElement.appendChild(canvas as DomHTMLCanvasElement);
+  }
+
+  @override
+  bool get isConnected =>
+      ((canvas as JSAny?).isA<DomHTMLCanvasElement>()) &&
+      (canvas as DomHTMLCanvasElement).isConnected!;
 
   @override
   void initialize() {
-    ensureSurface();
+    // No extra initialization is required.
   }
 
   @override
-  void dispose() {
-    _offscreenCanvas?.removeEventListener('webglcontextlost', _cachedContextLostListener, false);
-    _offscreenCanvas?.removeEventListener(
-      'webglcontextrestored',
-      _cachedContextRestoredListener,
-      false,
-    );
-    _cachedContextLostListener = null;
-    _cachedContextRestoredListener = null;
-    _surface?.dispose();
+  Future<void> triggerContextLoss() async {
+    _handledContextLostEvent = Completer<void>();
+    final WebGLContext gl = (canvas as DomHTMLCanvasElement).getGlContext(webGLVersion);
+    gl.loseContextExtension.loseContext();
   }
-
-  /// Safari 15 doesn't support OffscreenCanvas at all. Safari 16 supports
-  /// OffscreenCanvas, but only with the context2d API, not WebGL.
-  static bool get offscreenCanvasSupported => browserSupportsOffscreenCanvas && !isSafari;
-}
-
-/// A Dart wrapper around Skia's SkSurface.
-class CkSurface {
-  CkSurface(this.surface, this._glContext, this._size);
-
-  CkCanvas getCanvas() {
-    assert(!_isDisposed, 'Attempting to use the canvas of a disposed surface');
-    return CkCanvas(surface.getCanvas());
-  }
-
-  /// The underlying CanvasKit surface object.
-  ///
-  /// Only borrow this value temporarily. Do not store it as it may be deleted
-  /// at any moment. Storing it may lead to dangling pointer bugs.
-  final SkSurface surface;
-
-  final BitmapSize _size;
-
-  final int? _glContext;
-
-  /// Flushes the graphics to be rendered on screen.
-  void flush() {
-    surface.flush();
-  }
-
-  int? get context => _glContext;
-
-  int width() => surface.width().ceil();
-  int height() => surface.height().ceil();
-
-  void dispose() {
-    if (_isDisposed) {
-      return;
-    }
-    surface.dispose();
-    _isDisposed = true;
-  }
-
-  bool _isDisposed = false;
 }

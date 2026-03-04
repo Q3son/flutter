@@ -279,10 +279,9 @@ class RestorationManager extends ChangeNotifier {
     }
 
     final RestorationBucket? oldRoot = _rootBucket;
-    _rootBucket =
-        enabled
-            ? RestorationBucket.root(manager: this, rawData: _decodeRestorationData(data))
-            : null;
+    _rootBucket = enabled
+        ? RestorationBucket.root(manager: this, rawData: _decodeRestorationData(data))
+        : null;
     _rootBucketIsValid = true;
     assert(_pendingRootBucket == null || !_pendingRootBucket!.isCompleted);
     _pendingRootBucket?.complete(_rootBucket);
@@ -518,9 +517,7 @@ class RestorationBucket {
       _debugOwner = debugOwner;
       return true;
     }());
-    if (kFlutterMemoryAllocationsEnabled) {
-      _maybeDispatchObjectCreation();
-    }
+    assert(debugMaybeDispatchCreated('services', 'RestorationBucket', this));
   }
 
   /// Creates the root [RestorationBucket] for the provided restoration
@@ -554,9 +551,7 @@ class RestorationBucket {
       _debugOwner = manager;
       return true;
     }());
-    if (kFlutterMemoryAllocationsEnabled) {
-      _maybeDispatchObjectCreation();
-    }
+    assert(debugMaybeDispatchCreated('services', 'RestorationBucket', this));
   }
 
   /// Creates a child bucket initialized with the data that the provided
@@ -580,9 +575,7 @@ class RestorationBucket {
       _debugOwner = debugOwner;
       return true;
     }());
-    if (kFlutterMemoryAllocationsEnabled) {
-      _maybeDispatchObjectCreation();
-    }
+    assert(debugMaybeDispatchCreated('services', 'RestorationBucket', this));
   }
 
   static const String _childrenMapKey = 'c';
@@ -693,7 +686,7 @@ class RestorationBucket {
   P? remove<P>(String restorationId) {
     assert(_debugAssertNotDisposed());
     final bool needsUpdate = _rawValues.containsKey(restorationId);
-    final P? result = _rawValues.remove(restorationId) as P?;
+    final result = _rawValues.remove(restorationId) as P?;
     if (_rawValues.isEmpty) {
       _rawData.remove(_valuesMapKey);
     }
@@ -764,17 +757,14 @@ class RestorationBucket {
 
     // Case 1+2: Adopt and return an empty bucket.
     if (_claimedChildren.containsKey(restorationId) || !_rawChildren.containsKey(restorationId)) {
-      final RestorationBucket child = RestorationBucket.empty(
-        debugOwner: debugOwner,
-        restorationId: restorationId,
-      );
+      final child = RestorationBucket.empty(debugOwner: debugOwner, restorationId: restorationId);
       adoptChild(child);
       return child;
     }
 
     // Case 3: Return bucket wrapping the existing data.
     assert(_rawChildren[restorationId] != null);
-    final RestorationBucket child = RestorationBucket.child(
+    final child = RestorationBucket.child(
       restorationId: restorationId,
       parent: this,
       debugOwner: debugOwner,
@@ -863,7 +853,7 @@ class RestorationBucket {
       if (_childrenToAdd.isEmpty) {
         return true;
       }
-      final List<DiagnosticsNode> error = <DiagnosticsNode>[
+      final error = <DiagnosticsNode>[
         ErrorSummary('Multiple owners claimed child RestorationBuckets with the same IDs.'),
         ErrorDescription('The following IDs were claimed multiple times from the parent $this:'),
       ];
@@ -961,19 +951,6 @@ class RestorationBucket {
     _parent?._addChildData(this);
   }
 
-  // TODO(polina-c): stop duplicating code across disposables
-  // https://github.com/flutter/flutter/issues/137435
-  /// Dispatches event of object creation to [FlutterMemoryAllocations.instance].
-  void _maybeDispatchObjectCreation() {
-    if (kFlutterMemoryAllocationsEnabled) {
-      FlutterMemoryAllocations.instance.dispatchObjectCreated(
-        library: 'package:flutter/services.dart',
-        className: '$RestorationBucket',
-        object: this,
-      );
-    }
-  }
-
   /// Deletes the bucket and all the data stored in it from the bucket
   /// hierarchy.
   ///
@@ -988,11 +965,7 @@ class RestorationBucket {
   /// This method must only be called by the object's owner.
   void dispose() {
     assert(_debugAssertNotDisposed());
-    // TODO(polina-c): stop duplicating code across disposables
-    // https://github.com/flutter/flutter/issues/137435
-    if (kFlutterMemoryAllocationsEnabled) {
-      FlutterMemoryAllocations.instance.dispatchObjectDisposed(object: this);
-    }
+    assert(debugMaybeDispatchDisposed(this));
     _visitChildren(_dropChild, concurrentModification: true);
     _claimedChildren.clear();
     _childrenToAdd.clear();
@@ -1027,7 +1000,7 @@ class RestorationBucket {
 /// Should only be called from within asserts. Always returns false outside
 /// of debug builds.
 bool debugIsSerializableForRestoration(Object? object) {
-  bool result = false;
+  var result = false;
 
   assert(() {
     try {

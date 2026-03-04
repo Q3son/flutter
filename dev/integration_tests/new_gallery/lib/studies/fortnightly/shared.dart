@@ -210,7 +210,7 @@ class HashtagBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Container verticalDivider = Container(
+    final verticalDivider = Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       color: Colors.black.withOpacity(0.1),
       width: 1,
@@ -352,7 +352,7 @@ class StockItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final TextTheme textTheme = Theme.of(context).textTheme;
-    final NumberFormat percentFormat = NumberFormat.decimalPercentPattern(
+    final percentFormat = NumberFormat.decimalPercentPattern(
       locale: GalleryOptions.of(context).locale.toString(),
       decimalDigits: 2,
     );
@@ -509,7 +509,7 @@ List<Widget> buildVideoPreviewItems(BuildContext context) {
 }
 
 ThemeData buildTheme(BuildContext context) {
-  final TextTheme lightTextTheme = ThemeData.light().textTheme;
+  final TextTheme lightTextTheme = ThemeData().textTheme;
   return ThemeData(
     scaffoldBackgroundColor: Colors.white,
     appBarTheme: AppBarTheme(

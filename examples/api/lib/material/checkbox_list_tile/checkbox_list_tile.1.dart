@@ -13,7 +13,7 @@ class CheckboxListTileApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(theme: ThemeData(useMaterial3: true), home: const CheckboxListTileExample());
+    return const MaterialApp(home: CheckboxListTileExample());
   }
 }
 
@@ -21,7 +21,8 @@ class CheckboxListTileExample extends StatefulWidget {
   const CheckboxListTileExample({super.key});
 
   @override
-  State<CheckboxListTileExample> createState() => _CheckboxListTileExampleState();
+  State<CheckboxListTileExample> createState() =>
+      _CheckboxListTileExampleState();
 }
 
 class _CheckboxListTileExampleState extends State<CheckboxListTileExample> {

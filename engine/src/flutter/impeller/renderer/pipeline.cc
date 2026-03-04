@@ -15,7 +15,7 @@
 namespace impeller {
 
 template <typename T>
-Pipeline<T>::Pipeline(std::weak_ptr<PipelineLibrary> library, T desc)
+Pipeline<T>::Pipeline(std::weak_ptr<PipelineLibrary> library, const T& desc)
     : library_(std::move(library)), desc_(std::move(desc)) {}
 
 template <typename T>
@@ -23,13 +23,15 @@ Pipeline<T>::~Pipeline() = default;
 
 PipelineFuture<PipelineDescriptor> CreatePipelineFuture(
     const Context& context,
-    std::optional<PipelineDescriptor> desc) {
+    std::optional<PipelineDescriptor> desc,
+    bool async) {
   if (!context.IsValid()) {
     return {desc, RealizedFuture<std::shared_ptr<Pipeline<PipelineDescriptor>>>(
                       nullptr)};
   }
 
-  return context.GetPipelineLibrary()->GetPipeline(std::move(desc));
+  return context.GetPipelineLibrary()->GetPipeline(std::move(desc),
+                                                   /*async=*/async);
 }
 
 PipelineFuture<ComputePipelineDescriptor> CreatePipelineFuture(
@@ -53,7 +55,7 @@ const T& Pipeline<T>::GetDescriptor() const {
 template <typename T>
 PipelineFuture<T> Pipeline<T>::CreateVariant(
     bool async,
-    std::function<void(T& desc)> descriptor_callback) const {
+    const std::function<void(T& desc)>& descriptor_callback) const {
   if (!descriptor_callback) {
     return {std::nullopt,
             RealizedFuture<std::shared_ptr<Pipeline<T>>>(nullptr)};

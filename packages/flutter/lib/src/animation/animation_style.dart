@@ -13,6 +13,7 @@ import 'tween.dart';
 /// Used to override the default parameters of an animation.
 ///
 /// Currently, this class is used by the following widgets:
+/// - [Expansible]
 /// - [ExpansionTile]
 /// - [MaterialApp]
 /// - [PopupMenuButton]
@@ -28,10 +29,10 @@ import 'tween.dart';
 @immutable
 class AnimationStyle with Diagnosticable {
   /// Creates an instance of Animation Style class.
-  AnimationStyle({this.curve, this.duration, this.reverseCurve, this.reverseDuration});
+  const AnimationStyle({this.curve, this.duration, this.reverseCurve, this.reverseDuration});
 
   /// Creates an instance of Animation Style class with no animation.
-  static AnimationStyle noAnimation = AnimationStyle(
+  static const AnimationStyle noAnimation = AnimationStyle(
     duration: Duration.zero,
     reverseDuration: Duration.zero,
   );

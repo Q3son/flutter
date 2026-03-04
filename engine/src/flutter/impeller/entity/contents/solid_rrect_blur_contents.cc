@@ -14,22 +14,32 @@
 
 namespace impeller {
 
-namespace {
-// Generous padding to make sure blurs with large sigmas are fully visible. Used
-// to expand the geometry around the rrect.  Larger sigmas have more subtle
-// gradients so they need larger padding to avoid hard cutoffs.  Sigma is
-// maximized to 3.5 since that should cover 99.95% of all samples.  3.0 should
-// cover 99.7% but that was seen to be not enough for large sigmas.
-Scalar PadForSigma(Scalar sigma) {
-  Scalar scalar = std::min((1.0f / 47.6f) * sigma + 2.5f, 3.5f);
-  return sigma * scalar;
+bool SolidRRectBlurContents::SetPassInfo(RenderPass& pass,
+                                         const ContentContext& renderer,
+                                         PassContext& pass_context) const {
+  using FS = RRectBlurPipeline::FragmentShader;
+
+  FS::FragInfo frag_info;
+  frag_info.color = GetColor();
+  frag_info.center_adjust = Concat(pass_context.center, pass_context.adjust);
+  frag_info.r1_exponent_exponentInv =
+      Vector3(pass_context.r1, pass_context.exponent, pass_context.exponentInv);
+  frag_info.sInv_minEdge_scale =
+      Vector3(pass_context.sInv, pass_context.minEdge, pass_context.scale);
+
+  auto& data_host_buffer = renderer.GetTransientsDataBuffer();
+  pass.SetCommandLabel("RRect Shadow");
+  pass.SetPipeline(renderer.GetRRectBlurPipeline(pass_context.opts));
+
+  FS::BindFragInfo(pass, data_host_buffer.EmplaceUniform(frag_info));
+  return true;
 }
-}  // namespace
 
 SolidRRectBlurContents::SolidRRectBlurContents() = default;
 
 SolidRRectBlurContents::~SolidRRectBlurContents() = default;
 
+<<<<<<< HEAD
 void SolidRRectBlurContents::SetRRect(std::optional<Rect> rect,
                                       Size corner_radii) {
   rect_ = rect;
@@ -194,4 +204,6 @@ bool SolidRRectBlurContents::ApplyColorFilter(
   return true;
 }
 
+=======
+>>>>>>> 48c32af0345e9ad5747f78ddce828c7f795f7159
 }  // namespace impeller

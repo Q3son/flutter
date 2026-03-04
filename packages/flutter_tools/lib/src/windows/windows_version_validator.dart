@@ -10,16 +10,20 @@ import '../base/os.dart';
 import '../doctor_validator.dart';
 
 /// Flutter only supports development on Windows host machines version 10 and greater.
-const List<String> kUnsupportedVersions = <String>['6', '7', '8'];
+const kUnsupportedVersions = <String>['6', '7', '8'];
 
 /// Regex pattern for identifying line from systeminfo stdout with windows version
 /// (ie. 10.0.22631.4037)
+<<<<<<< HEAD
 const String kWindowsOSVersionSemVerPattern = r'([0-9]+)\.([0-9]+)\.([0-9]+)\.?([0-9\.]+)?';
+=======
+const kWindowsOSVersionSemVerPattern = r'([0-9]+)\.([0-9]+)\.([0-9]+)\.?([0-9\.]+)?';
+>>>>>>> 48c32af0345e9ad5747f78ddce828c7f795f7159
 
 /// Regex pattern for identifying a running instance of the Topaz OFD process.
 /// This is a known process that interferes with the build toolchain.
 /// See https://github.com/flutter/flutter/issues/121366
-const String kCoreProcessPattern = r'Topaz\s+OFD\\Warsaw\\core\.exe';
+const kCoreProcessPattern = r'Topaz\s+OFD\\Warsaw\\core\.exe';
 
 /// Validator for supported Windows host machine operating system version.
 class WindowsVersionValidator extends DoctorValidator {
@@ -33,7 +37,7 @@ class WindowsVersionValidator extends DoctorValidator {
        super('Windows Version');
 
   // See https://learn.microsoft.com/en-us/windows/release-health/windows11-release-information
-  static const int _lowestWindows11BuildNumber = 22000;
+  static const _lowestWindows11BuildNumber = 22000;
 
   final OperatingSystemUtils _operatingSystemUtils;
   final ProcessLister _processLister;
@@ -53,8 +57,13 @@ class WindowsVersionValidator extends DoctorValidator {
         ValidationMessage.hint('Get-Process failed to complete'),
       ]);
     }
+<<<<<<< HEAD
     final RegExp topazRegex = RegExp(kCoreProcessPattern, caseSensitive: false, multiLine: true);
     final String processes = getProcessesResult.stdout as String;
+=======
+    final topazRegex = RegExp(kCoreProcessPattern, caseSensitive: false, multiLine: true);
+    final processes = getProcessesResult.stdout as String;
+>>>>>>> 48c32af0345e9ad5747f78ddce828c7f795f7159
     final bool topazFound = topazRegex.hasMatch(processes);
     if (topazFound) {
       return ValidationResult(ValidationType.missing, const <ValidationMessage>[
@@ -69,14 +78,18 @@ class WindowsVersionValidator extends DoctorValidator {
 
   @override
   Future<ValidationResult> validateImpl() async {
+<<<<<<< HEAD
     final RegExp regex = RegExp(kWindowsOSVersionSemVerPattern, multiLine: true);
+=======
+    final regex = RegExp(kWindowsOSVersionSemVerPattern, multiLine: true);
+>>>>>>> 48c32af0345e9ad5747f78ddce828c7f795f7159
     final String commandResult = _operatingSystemUtils.name;
     final Iterable<RegExpMatch> matches = regex.allMatches(commandResult);
 
     // Use the string split method to extract the major version
     // and check against the [kUnsupportedVersions] list
     ValidationType windowsVersionStatus;
-    final List<ValidationMessage> messages = <ValidationMessage>[];
+    final messages = <ValidationMessage>[];
     String statusInfo;
     if (matches.length == 1 && !kUnsupportedVersions.contains(matches.elementAt(0).group(1))) {
       windowsVersionStatus = ValidationType.success;
@@ -99,8 +112,13 @@ class WindowsVersionValidator extends DoctorValidator {
 
       // Check if the Topaz OFD security module is running, and warn the user if it is.
       // See https://github.com/flutter/flutter/issues/121366
+<<<<<<< HEAD
       final List<ValidationResult> subResults = <ValidationResult>[await _topazScan()];
       for (final ValidationResult subResult in subResults) {
+=======
+      final subResults = <ValidationResult>[await _topazScan()];
+      for (final subResult in subResults) {
+>>>>>>> 48c32af0345e9ad5747f78ddce828c7f795f7159
         if (subResult.type != ValidationType.success) {
           statusInfo = 'Problem detected with Windows installation';
           windowsVersionStatus = ValidationType.partial;
@@ -121,16 +139,16 @@ class ProcessLister {
 
   final ProcessManager processManager;
 
-  static const String powershell = 'powershell';
-  static const String pwsh = 'pwsh';
+  static const powershell = 'powershell';
+  static const pwsh = 'pwsh';
 
   bool canRunPowershell() {
     return processManager.canRun(powershell) || processManager.canRun(pwsh);
   }
 
   Future<ProcessResult> getProcessesWithPath() async {
-    const String argument = 'Get-Process | Format-List Path';
-    const List<String> psArgs = <String>['-command', argument];
+    const argument = 'Get-Process | Format-List Path';
+    const psArgs = <String>['-command', argument];
     if (processManager.canRun(powershell)) {
       return processManager.run(<String>[powershell, ...psArgs]);
     }
@@ -165,7 +183,7 @@ class WindowsVersionExtractor {
       ]);
 
       if (captionResult.exitCode == 0) {
-        final String? output = captionResult.stdout as String?;
+        final output = captionResult.stdout as String?;
         if (output != null) {
           final List<String> parts = output.split('\n');
           if (parts.length >= 2) {
@@ -187,9 +205,13 @@ class WindowsVersionExtractor {
       ]);
 
       if (osDetails.exitCode == 0) {
-        final String? output = osDetails.stdout as String?;
+        final output = osDetails.stdout as String?;
         if (output != null) {
+<<<<<<< HEAD
           final Map<String, String> data = Map<String, String>.fromEntries(
+=======
+          final data = Map<String, String>.fromEntries(
+>>>>>>> 48c32af0345e9ad5747f78ddce828c7f795f7159
             output.split('\n').where((String line) => line.contains('REG_SZ')).map((String line) {
               final List<String> parts = line.split('REG_SZ');
               return MapEntry<String, String>(parts.first.trim(), parts.last.trim());

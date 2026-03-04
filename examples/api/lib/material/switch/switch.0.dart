@@ -14,7 +14,6 @@ class SwitchApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      theme: ThemeData(useMaterial3: true),
       home: Scaffold(
         appBar: AppBar(title: const Text('Switch Sample')),
         body: const Center(child: SwitchExample()),
@@ -38,7 +37,7 @@ class _SwitchExampleState extends State<SwitchExample> {
     return Switch(
       // This bool value toggles the switch.
       value: light,
-      activeColor: Colors.red,
+      activeThumbColor: Colors.red,
       onChanged: (bool value) {
         // This is called when the user toggles the switch.
         setState(() {

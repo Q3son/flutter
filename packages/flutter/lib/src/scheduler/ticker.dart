@@ -86,18 +86,18 @@ class Ticker {
       _debugCreationStack = StackTrace.current;
       return true;
     }());
-    // TODO(polina-c): stop duplicating code across disposables
-    // https://github.com/flutter/flutter/issues/137435
-    if (kFlutterMemoryAllocationsEnabled) {
-      FlutterMemoryAllocations.instance.dispatchObjectCreated(
-        library: 'package:flutter/scheduler.dart',
-        className: '$Ticker',
-        object: this,
-      );
-    }
+    assert(debugMaybeDispatchCreated('scheduler', 'Ticker', this));
   }
 
   TickerFuture? _future;
+
+  /// If true, this ticker will request frames using
+  /// [SchedulerBinding.scheduleForcedFrame] instead of [SchedulerBinding.scheduleFrame].
+  ///
+  /// This allows granular control to advance frames even when frames are
+  /// typically disabled (e.g. when the app is in the background). This should be
+  /// used sparingly as it can increase battery usage.
+  bool forceFrames = false;
 
   /// Whether this ticker has been silenced.
   ///
@@ -290,9 +290,15 @@ class Ticker {
   void scheduleTick({bool rescheduling = false}) {
     assert(!scheduled);
     assert(shouldScheduleTick);
+    if (forceFrames) {
+      SchedulerBinding.instance.scheduleForcedFrame();
+    } else {
+      SchedulerBinding.instance.scheduleFrame();
+    }
     _animationId = SchedulerBinding.instance.scheduleFrameCallback(
       _tick,
       rescheduling: rescheduling,
+      scheduleNewFrame: false,
     );
   }
 
@@ -354,12 +360,7 @@ class Ticker {
   ///    with a [TickerCanceled] error.
   @mustCallSuper
   void dispose() {
-    // TODO(polina-c): stop duplicating code across disposables
-    // https://github.com/flutter/flutter/issues/137435
-    if (kFlutterMemoryAllocationsEnabled) {
-      FlutterMemoryAllocations.instance.dispatchObjectDisposed(object: this);
-    }
-
+    assert(debugMaybeDispatchDisposed(this));
     if (_future != null) {
       final TickerFuture localFuture = _future!;
       _future = null;
@@ -384,7 +385,7 @@ class Ticker {
 
   @override
   String toString({bool debugIncludeStack = false}) {
-    final StringBuffer buffer = StringBuffer();
+    final buffer = StringBuffer();
     buffer.write('${objectRuntimeType(this, 'Ticker')}(');
     assert(() {
       buffer.write(debugLabel ?? '');

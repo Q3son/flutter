@@ -52,7 +52,7 @@ void main() {
       processRunner: ProcessRunner(defaultWorkingDirectory: tempRoot, processManager: failsCanRun),
     );
 
-    final et = _engineTool(
+    final CommandRunner<int> et = _engineTool(
       RunCommand(
         environment: testEnvironment,
         // Intentionally left blank, none of these builds make it far enough.
@@ -102,7 +102,7 @@ void main() {
         targetDir: 'android_debug_arm64',
       );
 
-      final et = _engineTool(
+      final CommandRunner<int> et = _engineTool(
         RunCommand(
           environment: testEnvironment,
           configs: {
@@ -153,21 +153,21 @@ void main() {
       // Be very permissive on process execution, and check usage below instead.
       final permissiveProcessManager = FakeProcessManager(
         canRun: (_, {workingDirectory}) => true,
-        onRun: (command) {
-          commandsRun.add(command);
+        onRun: (FakeCommandLogEntry entry) {
+          commandsRun.add(entry.command);
           return io.ProcessResult(81, 0, '', '');
         },
-        onStart: (command) {
-          commandsRun.add(command);
-          for (final entry in interceptCommands) {
-            if (command.first.endsWith(entry.$1)) {
-              final result = entry.$2(command);
+        onStart: (FakeCommandLogEntry entry) {
+          commandsRun.add(entry.command);
+          for (final intercept in interceptCommands) {
+            if (entry.command.first.endsWith(intercept.$1)) {
+              final FakeProcess? result = intercept.$2(entry.command);
               if (result != null) {
                 return result;
               }
             }
           }
-          switch (command) {
+          switch (entry.command) {
             case ['flutter', 'devices', '--machine', ..._]:
               return FakeProcess(stdout: jsonEncode(attachedDevices));
             default:

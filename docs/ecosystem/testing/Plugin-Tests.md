@@ -10,7 +10,7 @@ Because of the complexities of having native code, plugins have many more types 
   - The Dart code of an implementation package, if any. Some federated implementations are pure Dart, and would be largely tested via unit tests, and some have Dart code binding to a package-internal method channel.
 
   These should live in `test/`
-- **Integration tests**. These use [the `integration_test` package](https://flutter.dev/docs/testing/integration-tests). Unlike Dart unit tests, integration tests run in the context of a Flutter application (the `example/` app), and can therefore load and exercise native plugin code. Almost all plugin packages other than the platform interface package should have these. The only exceptions would be:
+- **Integration tests**. These use [the `integration_test` package](https://docs.flutter.dev/testing/integration-tests). Unlike Dart unit tests, integration tests run in the context of a Flutter application (the `example/` app), and can therefore load and exercise native plugin code. Almost all plugin packages other than the platform interface package should have these. The only exceptions would be:
   - Plugins that need native UI tests (see below)
   - Plugins that have pure Dart implementations which can be comprehensively tested with Dart unit tests.
 
@@ -90,6 +90,16 @@ once the example app is opened as an Xcode project.
 #### Google Test
 
 For Windows plugins, Visual Studio should auto-detect the tests and allow running them as usual.
+
+#### Filtering Android native tests
+
+The Packages repo's Flutter tool calls Gradle commands in order to run native tests. After running `dart run flutter_plugin_tools.dart native-test`, the output log will contain a line noting the command run, such as:
+
+    /path/to/gradlew app:testDebugUnitTest package_name_here:testDebugUnitTest
+
+Running this command manually with the `--tests` flag allows [test filtering](https://docs.gradle.org/current/userguide/java_testing.html#test_filtering). For example, the following command will run only the tests in `ConvertTest.java` for `google_maps_flutter_android`:
+
+    /path/to/gradlew app:testDebugUnitTest google_maps_flutter_android:testDebugUnitTest --tests "io.flutter.plugins.googlemaps.ConvertTest"
 
 ### Web Tests
 

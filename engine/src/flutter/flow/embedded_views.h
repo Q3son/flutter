@@ -7,18 +7,16 @@
 
 #include <memory>
 #include <utility>
+#include <variant>
 #include <vector>
 
+#include "display_list/geometry/dl_geometry_types.h"
+#include "display_list/geometry/dl_path.h"
 #include "flutter/display_list/dl_builder.h"
-#include "flutter/display_list/skia/dl_sk_canvas.h"
+#include "flutter/display_list/geometry/dl_geometry_conversions.h"
 #include "flutter/flow/surface_frame.h"
 #include "flutter/fml/memory/ref_counted.h"
 #include "flutter/fml/raster_thread_merger.h"
-#include "third_party/skia/include/core/SkMatrix.h"
-#include "third_party/skia/include/core/SkPath.h"
-#include "third_party/skia/include/core/SkRRect.h"
-#include "third_party/skia/include/core/SkRect.h"
-#include "third_party/skia/include/core/SkSize.h"
 
 #if IMPELLER_SUPPORTS_RENDERING
 #include "flutter/impeller/display_list/aiks_context.h"  // nogncheck
@@ -34,40 +32,75 @@ class GrDirectContext;
 
 namespace flutter {
 
-enum MutatorType {
+enum class MutatorType {
   kClipRect,
   kClipRRect,
+  kClipRSE,
   kClipPath,
   kTransform,
   kOpacity,
-  kBackdropFilter
+  kBackdropFilter,
+  kBackdropClipRect,
+  kBackdropClipRRect,
+  kBackdropClipRSuperellipse,
+  kBackdropClipPath,
 };
 
 // Represents an image filter mutation.
 //
 // Should be used for image_filter_layer and backdrop_filter_layer.
-// TODO(cyanglaz): Refactor this into a ImageFilterMutator class.
-// https://github.com/flutter/flutter/issues/108470
 class ImageFilterMutation {
  public:
   ImageFilterMutation(std::shared_ptr<DlImageFilter> filter,
-                      const SkRect& filter_rect)
+                      const DlRect& filter_rect)
       : filter_(std::move(filter)), filter_rect_(filter_rect) {}
 
   const DlImageFilter& GetFilter() const { return *filter_; }
-  const SkRect& GetFilterRect() const { return filter_rect_; }
+  const DlRect& GetFilterRect() const { return filter_rect_; }
 
   bool operator==(const ImageFilterMutation& other) const {
     return *filter_ == *other.filter_ && filter_rect_ == other.filter_rect_;
   }
 
-  bool operator!=(const ImageFilterMutation& other) const {
-    return !operator==(other);
-  }
-
  private:
   std::shared_ptr<DlImageFilter> filter_;
-  const SkRect filter_rect_;
+  const DlRect filter_rect_;
+};
+
+struct BackdropClipRect {
+  DlRect rect;
+  explicit BackdropClipRect(const DlRect& r) : rect(r) {}
+
+  bool operator==(const BackdropClipRect& other) const {
+    return rect == other.rect;
+  }
+};
+
+struct BackdropClipRRect {
+  DlRoundRect rrect;
+  explicit BackdropClipRRect(const DlRoundRect& r) : rrect(r) {}
+
+  bool operator==(const BackdropClipRRect& other) const {
+    return rrect == other.rrect;
+  }
+};
+
+struct BackdropClipRSuperellipse {
+  DlRoundSuperellipse rse;
+  explicit BackdropClipRSuperellipse(const DlRoundSuperellipse& r) : rse(r) {}
+
+  bool operator==(const BackdropClipRSuperellipse& other) const {
+    return rse == other.rse;
+  }
+};
+
+struct BackdropClipPath {
+  DlPath path;
+  explicit BackdropClipPath(const DlPath& r) : path(r) {}
+
+  bool operator==(const BackdropClipPath& other) const {
+    return path == other.path;
+  }
 };
 
 // Stores mutation information like clipping or kTransform.
@@ -78,112 +111,92 @@ class ImageFilterMutation {
 // clipped. One mutation object must only contain one type of mutation.
 class Mutator {
  public:
-  Mutator(const Mutator& other) {
-    type_ = other.type_;
-    switch (other.type_) {
-      case kClipRect:
-        rect_ = other.rect_;
-        break;
-      case kClipRRect:
-        rrect_ = other.rrect_;
-        break;
-      case kClipPath:
-        path_ = new SkPath(*other.path_);
-        break;
-      case kTransform:
-        matrix_ = other.matrix_;
-        break;
-      case kOpacity:
-        alpha_ = other.alpha_;
-        break;
-      case kBackdropFilter:
-        filter_mutation_ = other.filter_mutation_;
-        break;
-      default:
-        break;
-    }
-  }
+  Mutator(const Mutator& other) : data_(other.data_) {}
 
-  explicit Mutator(const SkRect& rect) : type_(kClipRect), rect_(rect) {}
-  explicit Mutator(const SkRRect& rrect) : type_(kClipRRect), rrect_(rrect) {}
-  explicit Mutator(const SkPath& path)
-      : type_(kClipPath), path_(new SkPath(path)) {}
-  explicit Mutator(const SkMatrix& matrix)
-      : type_(kTransform), matrix_(matrix) {}
-  explicit Mutator(const int& alpha) : type_(kOpacity), alpha_(alpha) {}
-  explicit Mutator(const std::shared_ptr<DlImageFilter>& filter,
-                   const SkRect& filter_rect)
-      : type_(kBackdropFilter),
-        filter_mutation_(
-            std::make_shared<ImageFilterMutation>(filter, filter_rect)) {}
-
-  explicit Mutator(const DlRect& rect) : Mutator(ToSkRect(rect)) {}
-  explicit Mutator(const DlRoundRect& rrect) : Mutator(ToSkRRect(rrect)) {}
-  explicit Mutator(const DlPath& path) : Mutator(path.GetSkPath()) {}
-  explicit Mutator(const DlMatrix& matrix) : Mutator(ToSkMatrix(matrix)) {}
+  explicit Mutator(const DlRect& rect) : data_(rect) {}
+  explicit Mutator(const DlRoundRect& rrect) : data_(rrect) {}
+  explicit Mutator(const DlRoundSuperellipse& rrect) : data_(rrect) {}
+  explicit Mutator(const DlPath& path) : data_(path) {}
+  explicit Mutator(const DlMatrix& matrix) : data_(matrix) {}
+  explicit Mutator(const uint8_t& alpha) : data_(alpha) {}
   explicit Mutator(const std::shared_ptr<DlImageFilter>& filter,
                    const DlRect& filter_rect)
-      : Mutator(filter, ToSkRect(filter_rect)) {}
+      : data_(ImageFilterMutation(filter, filter_rect)) {}
 
-  const MutatorType& GetType() const { return type_; }
-  const SkRect& GetRect() const { return rect_; }
-  const SkRRect& GetRRect() const { return rrect_; }
-  const SkPath& GetPath() const { return *path_; }
-  const SkMatrix& GetMatrix() const { return matrix_; }
+  explicit Mutator(const BackdropClipRect& backdrop_rect)
+      : data_(backdrop_rect) {}
+  explicit Mutator(const BackdropClipRRect& backdrop_rrect)
+      : data_(backdrop_rrect) {}
+  explicit Mutator(const BackdropClipRSuperellipse& backdrop_rse)
+      : data_(backdrop_rse) {}
+  explicit Mutator(const BackdropClipPath& backdrop_path)
+      : data_(backdrop_path) {}
+
+  MutatorType GetType() const {
+    return static_cast<MutatorType>(data_.index());
+  }
+
+  const DlRect& GetRect() const { return std::get<DlRect>(data_); }
+  const DlRoundRect& GetRRect() const { return std::get<DlRoundRect>(data_); }
+  const DlRoundSuperellipse& GetRSE() const {
+    return std::get<DlRoundSuperellipse>(data_);
+  }
+  const DlRoundRect GetRSEApproximation() const {
+    return GetRSE().ToApproximateRoundRect();
+  }
+  const DlPath& GetPath() const { return std::get<DlPath>(data_); }
+  const DlMatrix& GetMatrix() const { return std::get<DlMatrix>(data_); }
   const ImageFilterMutation& GetFilterMutation() const {
-    return *filter_mutation_;
+    return std::get<ImageFilterMutation>(data_);
   }
-  const int& GetAlpha() const { return alpha_; }
-  float GetAlphaFloat() const { return (alpha_ / 255.0f); }
-
-  bool operator==(const Mutator& other) const {
-    if (type_ != other.type_) {
-      return false;
-    }
-    switch (type_) {
-      case kClipRect:
-        return rect_ == other.rect_;
-      case kClipRRect:
-        return rrect_ == other.rrect_;
-      case kClipPath:
-        return *path_ == *other.path_;
-      case kTransform:
-        return matrix_ == other.matrix_;
-      case kOpacity:
-        return alpha_ == other.alpha_;
-      case kBackdropFilter:
-        return *filter_mutation_ == *other.filter_mutation_;
-    }
-
-    return false;
+  const BackdropClipRect& GetBackdropClipRect() const {
+    return std::get<BackdropClipRect>(data_);
   }
+  const BackdropClipRRect& GetBackdropClipRRect() const {
+    return std::get<BackdropClipRRect>(data_);
+  }
+  const BackdropClipRSuperellipse& GetBackdropClipRSuperellipse() const {
+    return std::get<BackdropClipRSuperellipse>(data_);
+  }
+  const BackdropClipPath& GetBackdropClipPath() const {
+    return std::get<BackdropClipPath>(data_);
+  }
+  const uint8_t& GetAlpha() const { return std::get<uint8_t>(data_); }
+  float GetAlphaFloat() const { return DlColor::toOpacity(GetAlpha()); }
 
-  bool operator!=(const Mutator& other) const { return !operator==(other); }
+  bool operator==(const Mutator& other) const { return data_ == other.data_; }
 
   bool IsClipType() {
-    return type_ == kClipRect || type_ == kClipRRect || type_ == kClipPath;
+    switch (GetType()) {
+      case MutatorType::kClipRect:
+      case MutatorType::kClipPath:
+      case MutatorType::kClipRRect:
+      case MutatorType::kClipRSE:
+        return true;
+      case MutatorType::kBackdropClipRect:
+      case MutatorType::kBackdropClipRRect:
+      case MutatorType::kBackdropClipRSuperellipse:
+      case MutatorType::kBackdropClipPath:
+      case MutatorType::kOpacity:
+      case MutatorType::kTransform:
+      case MutatorType::kBackdropFilter:
+        return false;
+    }
   }
 
-  ~Mutator() {
-    if (type_ == kClipPath) {
-      delete path_;
-    }
-  };
-
  private:
-  MutatorType type_;
-
-  // TODO(cyanglaz): Remove union.
-  //  https://github.com/flutter/flutter/issues/108470
-  union {
-    SkRect rect_;
-    SkRRect rrect_;
-    SkMatrix matrix_;
-    SkPath* path_;
-    int alpha_;
-  };
-
-  std::shared_ptr<ImageFilterMutation> filter_mutation_;
+  std::variant<DlRect,
+               DlRoundRect,
+               DlRoundSuperellipse,
+               DlPath,
+               DlMatrix,
+               uint8_t,
+               ImageFilterMutation,
+               BackdropClipRect,
+               BackdropClipRRect,
+               BackdropClipRSuperellipse,
+               BackdropClipPath>
+      data_;
 };  // Mutator
 
 // A stack of mutators that can be applied to an embedded platform view.
@@ -199,14 +212,19 @@ class MutatorsStack {
  public:
   MutatorsStack() = default;
 
-  void PushClipRect(const SkRect& rect);
-  void PushClipRRect(const SkRRect& rrect);
-  void PushClipPath(const SkPath& path);
-  void PushTransform(const SkMatrix& matrix);
-  void PushOpacity(const int& alpha);
+  void PushClipRect(const DlRect& rect);
+  void PushClipRRect(const DlRoundRect& rrect);
+  void PushClipRSE(const DlRoundSuperellipse& rrect);
+  void PushClipPath(const DlPath& path);
+  void PushTransform(const DlMatrix& matrix);
+  void PushOpacity(const uint8_t& alpha);
   // `filter_rect` is in global coordinates.
   void PushBackdropFilter(const std::shared_ptr<DlImageFilter>& filter,
-                          const SkRect& filter_rect);
+                          const DlRect& filter_rect);
+  void PushPlatformViewClipRect(const DlRect& rect);
+  void PushPlatformViewClipRRect(const DlRoundRect& rrect);
+  void PushPlatformViewClipRSuperellipse(const DlRoundSuperellipse& rse);
+  void PushPlatformViewClipPath(const DlPath& path);
 
   // Removes the `Mutator` on the top of the stack
   // and destroys it.
@@ -274,39 +292,52 @@ class EmbeddedViewParams {
  public:
   EmbeddedViewParams() = default;
 
-  EmbeddedViewParams(SkMatrix matrix,
-                     SkSize size_points,
+  EmbeddedViewParams(DlMatrix matrix,
+                     DlSize size_points,
                      MutatorsStack mutators_stack)
       : matrix_(matrix),
         size_points_(size_points),
         mutators_stack_(std::move(mutators_stack)) {
-    SkPath path;
-    SkRect starting_rect = SkRect::MakeSize(size_points);
-    path.addRect(starting_rect);
-    path.transform(matrix);
-    final_bounding_rect_ = path.getBounds();
+    final_bounding_rect_ =
+        DlRect::MakeSize(size_points).TransformAndClipBounds(matrix);
   }
 
   // The transformation Matrix corresponding to the sum of all the
   // transformations in the platform view's mutator stack.
-  const SkMatrix& transformMatrix() const { return matrix_; };
+  const DlMatrix& transformMatrix() const { return matrix_; };
   // The original size of the platform view before any mutation matrix is
   // applied.
-  const SkSize& sizePoints() const { return size_points_; };
+  const DlSize& sizePoints() const { return size_points_; };
   // The mutators stack contains the detailed step by step mutations for this
   // platform view.
   const MutatorsStack& mutatorsStack() const { return mutators_stack_; };
   // The bounding rect of the platform view after applying all the mutations.
   //
   // Clippings are ignored.
-  const SkRect& finalBoundingRect() const { return final_bounding_rect_; }
+  const DlRect& finalBoundingRect() const { return final_bounding_rect_; }
 
   // Pushes the stored DlImageFilter object to the mutators stack.
   //
   // `filter_rect` is in global coordinates.
   void PushImageFilter(const std::shared_ptr<DlImageFilter>& filter,
-                       const SkRect& filter_rect) {
+                       const DlRect& filter_rect) {
     mutators_stack_.PushBackdropFilter(filter, filter_rect);
+  }
+
+  void PushPlatformViewClipRect(const DlRect& clip_rect) {
+    mutators_stack_.PushPlatformViewClipRect(clip_rect);
+  }
+
+  void PushPlatformViewClipRRect(const DlRoundRect& clip_rrect) {
+    mutators_stack_.PushPlatformViewClipRRect(clip_rrect);
+  }
+
+  void PushPlatformViewClipRSuperellipse(const DlRoundSuperellipse& clip_rse) {
+    mutators_stack_.PushPlatformViewClipRSuperellipse(clip_rse);
+  }
+
+  void PushPlatformViewClipPath(const DlPath& clip_path) {
+    mutators_stack_.PushPlatformViewClipPath(clip_path);
   }
 
   bool operator==(const EmbeddedViewParams& other) const {
@@ -317,10 +348,10 @@ class EmbeddedViewParams {
   }
 
  private:
-  SkMatrix matrix_;
-  SkSize size_points_;
+  DlMatrix matrix_;
+  DlSize size_points_;
   MutatorsStack mutators_stack_;
-  SkRect final_bounding_rect_;
+  DlRect final_bounding_rect_;
 };
 
 enum class PostPrerollResult {
@@ -336,11 +367,8 @@ enum class PostPrerollResult {
 };
 
 // The |EmbedderViewSlice| represents the details of recording all of
-// the layer tree rendering operations that appear between before, after
-// and between the embedded views. The Slice used to abstract away
-// implementations that were based on either an SkPicture or a
-// DisplayListBuilder but more recently all of the embedder recordings
-// have standardized on the DisplayList.
+// the layer tree rendering operations that appear before, after
+// and between the embedded views.
 class EmbedderViewSlice {
  public:
   virtual ~EmbedderViewSlice() = default;
@@ -357,7 +385,7 @@ class EmbedderViewSlice {
 
 class DisplayListEmbedderViewSlice : public EmbedderViewSlice {
  public:
-  explicit DisplayListEmbedderViewSlice(SkRect view_bounds);
+  explicit DisplayListEmbedderViewSlice(DlRect view_bounds);
   ~DisplayListEmbedderViewSlice() override = default;
 
   DlCanvas* canvas() override;
@@ -453,7 +481,7 @@ class ExternalViewEmbedder {
   virtual DlCanvas* CompositeEmbeddedView(int64_t platform_view_id) = 0;
 
   // Prepare for a view to be drawn.
-  virtual void PrepareFlutterView(SkISize frame_size,
+  virtual void PrepareFlutterView(DlISize frame_size,
                                   double device_pixel_ratio) = 0;
 
   // Submits the content stored since |PrepareFlutterView| to the specified
@@ -461,7 +489,7 @@ class ExternalViewEmbedder {
   //
   // Implementers must submit the frame by calling frame.Submit().
   //
-  // This method can mutate the root Skia canvas before submitting the frame.
+  // This method can mutate the root canvas before submitting the frame.
   //
   // It can also allocate frames for overlay surfaces to compose hybrid views.
   virtual void SubmitFlutterView(
@@ -520,7 +548,14 @@ class ExternalViewEmbedder {
   // visited platform views list.
   virtual void PushFilterToVisitedPlatformViews(
       const std::shared_ptr<DlImageFilter>& filter,
-      const SkRect& filter_rect) {}
+      const DlRect& filter_rect) {}
+
+  virtual void PushClipRectToVisitedPlatformViews(const DlRect& clip_rect) {}
+  virtual void PushClipRRectToVisitedPlatformViews(
+      const DlRoundRect& clip_rrect) {}
+  virtual void PushClipRSuperellipseToVisitedPlatformViews(
+      const DlRoundSuperellipse& clip_rse) {}
+  virtual void PushClipPathToVisitedPlatformViews(const DlPath& clip_path) {}
 
  private:
   bool used_this_frame_ = false;

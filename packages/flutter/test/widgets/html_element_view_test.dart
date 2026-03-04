@@ -6,16 +6,16 @@
 library;
 
 import 'dart:async';
+import 'dart:ui' show PointerDeviceKind;
 import 'dart:ui_web' as ui_web;
 
-import 'package:collection/collection.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter/src/widgets/_html_element_view_web.dart'
-    show debugOverridePlatformViewRegistry;
-import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:web/web.dart' as web;
+
+import 'web_platform_view_registry_utils.dart';
 
 final Object _mockHtmlElement = Object();
 Object _mockViewFactory(int id, {Object? params}) {
@@ -45,6 +45,17 @@ void main() {
         return web.document.createElement(params['tagName']! as String);
       },
     );
+    fakePlatformViewRegistry.registerViewFactory('Browser__WebContextMenuViewType__', (
+      int viewId, {
+      Object? params,
+    }) {
+      final htmlElement = web.document.createElement('div') as web.HTMLElement;
+      htmlElement
+        ..style.width = '100%'
+        ..style.height = '100%'
+        ..classList.add('web-selectable-region-context-menu');
+      return htmlElement;
+    });
   });
 
   group('HtmlElementView', () {
@@ -70,7 +81,7 @@ void main() {
       final int currentViewId = platformViewsRegistry.getNextPlatformViewId();
       fakePlatformViewRegistry.registerViewFactory('webview', _mockViewFactory);
 
-      bool hasPlatformViewCreated = false;
+      var hasPlatformViewCreated = false;
       void onPlatformViewCreatedCallBack(int id) {
         hasPlatformViewCreated = true;
       }
@@ -142,7 +153,7 @@ void main() {
         ),
       );
 
-      final Completer<void> resizeCompleter = Completer<void>();
+      final resizeCompleter = Completer<void>();
 
       await tester.pumpWidget(
         const Center(
@@ -268,11 +279,11 @@ void main() {
 
   group('HtmlElementView.fromTagName', () {
     setUp(() {
-      debugOverridePlatformViewRegistry = fakePlatformViewRegistry;
+      ui_web.debugOverridePlatformViewRegistry(fakePlatformViewRegistry);
     });
 
     tearDown(() {
-      debugOverridePlatformViewRegistry = null;
+      ui_web.debugOverridePlatformViewRegistry(null);
     });
 
     testWidgets('Create platform view from tagName', (WidgetTester tester) async {
@@ -296,7 +307,7 @@ void main() {
       expect(fakePlatformView.params, <dynamic, dynamic>{'tagName': 'div'});
 
       // The HTML element should be a div.
-      final web.HTMLElement htmlElement = fakePlatformView.htmlElement as web.HTMLElement;
+      final htmlElement = fakePlatformView.htmlElement as web.HTMLElement;
       expect(htmlElement.tagName, equalsIgnoringCase('div'));
     });
 
@@ -322,12 +333,12 @@ void main() {
       expect(fakePlatformView.params, <dynamic, dynamic>{'tagName': 'script'});
 
       // The HTML element should be a script.
-      final web.HTMLElement htmlElement = fakePlatformView.htmlElement as web.HTMLElement;
+      final htmlElement = fakePlatformView.htmlElement as web.HTMLElement;
       expect(htmlElement.tagName, equalsIgnoringCase('script'));
     });
 
     testWidgets('onElementCreated', (WidgetTester tester) async {
-      final List<Object> createdElements = <Object>[];
+      final createdElements = <Object>[];
       void onElementCreated(Object element) {
         createdElements.add(element);
       }
@@ -358,7 +369,7 @@ void main() {
     group('hitTestBehavior', () {
       testWidgets('opaque by default', (WidgetTester tester) async {
         final Key containerKey = UniqueKey();
-        int taps = 0;
+        var taps = 0;
 
         await tester.pumpWidget(
           GestureDetector(
@@ -387,7 +398,7 @@ void main() {
 
       testWidgets('can be set to transparent', (WidgetTester tester) async {
         final Key containerKey = UniqueKey();
-        int taps = 0;
+        var taps = 0;
 
         await tester.pumpWidget(
           GestureDetector(
@@ -418,102 +429,81 @@ void main() {
       });
     });
   });
-}
 
-typedef FakeViewFactory = ({String viewType, bool isVisible, Function viewFactory});
-
-typedef FakePlatformView = ({int id, String viewType, Object? params, Object htmlElement});
-
-class FakePlatformViewRegistry implements ui_web.PlatformViewRegistry {
-  FakePlatformViewRegistry() {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(
-      SystemChannels.platform_views,
-      _onMethodCall,
+  // Regression test for https://github.com/flutter/flutter/issues/174246
+  // There is a control case for non-Web in selection_area_test.dart.
+  testWidgets('SelectionArea applies correct mouse cursors in its empty region on Web', (
+    WidgetTester tester,
+  ) async {
+    final GlobalKey innerRegion = GlobalKey();
+    await tester.pumpWidget(
+      MaterialApp(
+        debugShowCheckedModeBanner: false,
+        home: Scaffold(
+          // Region 1 (fullscreen)
+          body: MouseRegion(
+            cursor: SystemMouseCursors.grab,
+            child: Center(
+              child: Container(
+                decoration: BoxDecoration(border: Border.all()),
+                // Region 2 (SelectionArea)
+                child: SelectionArea(
+                  child: Padding(
+                    padding: const EdgeInsetsGeometry.all(40),
+                    // Region 3 (inner MouseRegion)
+                    child: MouseRegion(
+                      key: innerRegion,
+                      cursor: SystemMouseCursors.forbidden,
+                      onHover: (_) {},
+                      child: Container(color: const Color(0xFFAA9933), width: 200, height: 50),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
     );
-  }
 
-  Set<FakePlatformView> get views => Set<FakePlatformView>.unmodifiable(_views);
-  final Set<FakePlatformView> _views = <FakePlatformView>{};
+    // Initialize the HtmlElementView inside SelectionArea.
+    await tester.pump();
 
-  final Set<FakeViewFactory> _registeredViewTypes = <FakeViewFactory>{};
-
-  @override
-  bool registerViewFactory(String viewType, Function viewFactory, {bool isVisible = true}) {
-    if (_findRegisteredViewFactory(viewType) != null) {
-      return false;
-    }
-    _registeredViewTypes.add((viewType: viewType, isVisible: isVisible, viewFactory: viewFactory));
-    return true;
-  }
-
-  @override
-  Object getViewById(int viewId) {
-    return _findViewById(viewId)!.htmlElement;
-  }
-
-  FakeViewFactory? _findRegisteredViewFactory(String viewType) {
-    return _registeredViewTypes.singleWhereOrNull(
-      (FakeViewFactory registered) => registered.viewType == viewType,
+    // Ensure that the HtmlElementView is initialized.
+    expect(
+      find.byWidgetPredicate(
+        (Widget widget) => widget.toString().contains('_PlatformViewPlaceHolder'),
+      ),
+      findsNothing,
     );
-  }
 
-  FakePlatformView? _findViewById(int viewId) {
-    return _views.singleWhereOrNull((FakePlatformView view) => view.id == viewId);
-  }
+    const region1 = Offset(10, 10);
+    final Offset region2 = tester.getTopLeft(find.byKey(innerRegion)) - const Offset(3, 3);
+    final Offset region3 = tester.getCenter(find.byKey(innerRegion));
 
-  Future<dynamic> _onMethodCall(MethodCall call) {
-    return switch (call.method) {
-      'create' => _create(call),
-      'dispose' => _dispose(call),
-      _ => Future<dynamic>.sync(() => null),
-    };
-  }
+    final TestGesture gesture = await tester.startGesture(region1, kind: PointerDeviceKind.mouse);
+    addTearDown(gesture.removePointer);
+    expect(
+      RendererBinding.instance.mouseTracker.debugDeviceActiveCursor(1),
+      SystemMouseCursors.grab,
+    );
 
-  Future<dynamic> _create(MethodCall call) async {
-    final Map<dynamic, dynamic> args = call.arguments as Map<dynamic, dynamic>;
-    final int id = args['id'] as int;
-    final String viewType = args['viewType'] as String;
-    final Object? params = args['params'];
+    await gesture.moveTo(region2);
+    expect(
+      RendererBinding.instance.mouseTracker.debugDeviceActiveCursor(1),
+      SystemMouseCursors.grab,
+    );
 
-    if (_findViewById(id) != null) {
-      throw PlatformException(
-        code: 'error',
-        message: 'Trying to create an already created platform view, view id: $id',
-      );
-    }
+    await gesture.moveTo(region3);
+    expect(
+      RendererBinding.instance.mouseTracker.debugDeviceActiveCursor(1),
+      SystemMouseCursors.forbidden,
+    );
 
-    final FakeViewFactory? registered = _findRegisteredViewFactory(viewType);
-    if (registered == null) {
-      throw PlatformException(
-        code: 'error',
-        message: 'Trying to create a platform view of unregistered type: $viewType',
-      );
-    }
-
-    final ui_web.ParameterizedPlatformViewFactory viewFactory =
-        registered.viewFactory as ui_web.ParameterizedPlatformViewFactory;
-
-    _views.add((
-      id: id,
-      viewType: viewType,
-      params: params,
-      htmlElement: viewFactory(id, params: params),
-    ));
-    return null;
-  }
-
-  Future<dynamic> _dispose(MethodCall call) async {
-    final int id = call.arguments as int;
-
-    final FakePlatformView? view = _findViewById(id);
-    if (view == null) {
-      throw PlatformException(
-        code: 'error',
-        message: 'Trying to dispose a platform view with unknown id: $id',
-      );
-    }
-
-    _views.remove(view);
-    return null;
-  }
+    await gesture.moveTo(region2);
+    expect(
+      RendererBinding.instance.mouseTracker.debugDeviceActiveCursor(1),
+      SystemMouseCursors.grab,
+    );
+  });
 }

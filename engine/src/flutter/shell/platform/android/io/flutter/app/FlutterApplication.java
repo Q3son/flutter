@@ -11,8 +11,13 @@ import android.app.Application;
  * projects. Flutter projects which need to extend an Application should migrate to extending {@link
  * android.app.Application} instead.
  *
+<<<<<<< HEAD
  * <p>For more information on the removal of Flutter's v1 Android embedding, see:
  * https://docs.flutter.dev/release/breaking-changes/v1-android-embedding.
+=======
+ * <p>For more information on the removal of Flutter's v1 Android embedding, see: <a
+ * href="https://docs.flutter.dev/release/breaking-changes/v1-android-embedding">https://docs.flutter.dev/release/breaking-changes/v1-android-embedding</a>.
+>>>>>>> 48c32af0345e9ad5747f78ddce828c7f795f7159
  */
 @Deprecated
 public class FlutterApplication extends Application {}

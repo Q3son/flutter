@@ -10,6 +10,7 @@ import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.content.res.AssetManager;
 import android.hardware.display.DisplayManager;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -17,6 +18,7 @@ import android.os.SystemClock;
 import android.util.DisplayMetrics;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.annotation.VisibleForTesting;
 import io.flutter.BuildConfig;
 import io.flutter.FlutterInjector;
 import io.flutter.Log;
@@ -26,6 +28,7 @@ import io.flutter.util.PathUtils;
 import io.flutter.util.TraceSection;
 import io.flutter.view.VsyncWaiter;
 import java.io.File;
+import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
@@ -51,6 +54,11 @@ public class FlutterLoader {
       "io.flutter.embedding.android.DisableMergedPlatformUIThread";
   private static final String ENABLE_SURFACE_CONTROL =
       "io.flutter.embedding.android.EnableSurfaceControl";
+  private static final String ENABLE_FLUTTER_GPU = "io.flutter.embedding.android.EnableFlutterGPU";
+  private static final String IMPELLER_LAZY_SHADER_MODE =
+      "io.flutter.embedding.android.ImpellerLazyShaderInitialization";
+  private static final String IMPELLER_ANTIALIAS_LINES =
+      "io.flutter.embedding.android.ImpellerAntialiasLines";
 
   /**
    * Set whether leave or clean up the VM after the last shell shuts down. It can be set from app's
@@ -80,6 +88,9 @@ public class FlutterLoader {
   private static final String VMSERVICE_SNAPSHOT_LIBRARY = "libvmservice_snapshot.so";
 
   private static FlutterLoader instance;
+
+  @VisibleForTesting
+  static final String aotSharedLibraryNameFlag = "--" + AOT_SHARED_LIBRARY_NAME + "=";
 
   /**
    * Creates a {@code FlutterLoader} that uses a default constructed {@link FlutterJNI} and {@link
@@ -111,7 +122,7 @@ public class FlutterLoader {
     this.executorService = executorService;
   }
 
-  private boolean initialized = false;
+  @VisibleForTesting boolean initialized = false;
   @Nullable private Settings settings;
   private long initStartTimestampMillis;
   private FlutterApplicationInfo flutterApplicationInfo;
@@ -197,8 +208,35 @@ public class FlutterLoader {
                     // cpu architecture.
 
                     String cpuArch = System.getProperty("os.arch");
-                    File nativeLibsDir = new File(flutterApplicationInfo.nativeLibraryDir);
+                    File nativeLibsDir = getFileFromPath(flutterApplicationInfo.nativeLibraryDir);
                     String[] nativeLibsContents = nativeLibsDir.list();
+
+                    // To gather more information for
+                    // https://github.com/flutter/flutter/issues/151638,
+                    // log the contents of the split libraries directory as well.
+
+                    List<String> splitAndSourceDirs = new ArrayList<>();
+                    // Get supported ABI and prepare path suffix for lib directories
+                    String[] abis = Build.SUPPORTED_ABIS;
+                    for (String abi : abis) {
+                      String libPathSuffix = "!" + File.separator + "lib" + File.separator + abi;
+
+                      // Get split APK lib paths
+                      String[] splitSourceDirs = appContext.getApplicationInfo().splitSourceDirs;
+                      List<String> splitLibPaths = new ArrayList<>();
+                      if (splitSourceDirs != null) {
+                        for (String splitSourceDir : splitSourceDirs) {
+                          splitLibPaths.add(splitSourceDir + libPathSuffix);
+                        }
+                        splitAndSourceDirs.addAll(splitLibPaths);
+                      }
+
+                      String baseApkPath = appContext.getApplicationInfo().sourceDir;
+                      if (baseApkPath != null && !baseApkPath.isEmpty()) {
+                        String baseApkLibDir = baseApkPath + libPathSuffix;
+                        splitAndSourceDirs.add(baseApkLibDir);
+                      }
+                    }
 
                     throw new UnsupportedOperationException(
                         "Could not load libflutter.so this is possibly because the application"
@@ -213,7 +251,13 @@ public class FlutterLoader {
                             + (nativeLibsDir.exists()
                                 ? "contains the following files: "
                                     + Arrays.toString(nativeLibsContents)
-                                : "does not exist."),
+                                : "does not exist")
+                            + (splitAndSourceDirs.isEmpty()
+                                ? ""
+                                : ", and the split and source libraries directory (with path(s) "
+                                    + splitAndSourceDirs
+                                    + ")")
+                            + ".",
                         unsatisfiedLinkError);
                   }
 
@@ -274,8 +318,32 @@ public class FlutterLoader {
               + flutterApplicationInfo.nativeLibraryDir
               + File.separator
               + DEFAULT_LIBRARY);
+
       if (args != null) {
-        Collections.addAll(shellArgs, args);
+        for (String arg : args) {
+          // Perform security check for path containing application's compiled Dart code and
+          // potentially user-provided compiled native code.
+          if (arg.startsWith(aotSharedLibraryNameFlag)) {
+            String safeAotSharedLibraryNameFlag =
+                getSafeAotSharedLibraryNameFlag(applicationContext, arg);
+            if (safeAotSharedLibraryNameFlag != null) {
+              arg = safeAotSharedLibraryNameFlag;
+            } else {
+              // If the library path is not safe, we will skip adding this argument.
+              Log.w(
+                  TAG,
+                  "Skipping unsafe AOT shared library name flag: "
+                      + arg
+                      + ". Please ensure that the library is vetted and placed in your application's internal storage.");
+              continue;
+            }
+          }
+
+          // TODO(camsim99): This is a dangerous pattern that blindly allows potentially malicious
+          // arguments to be used for engine initialization and should be fixed. See
+          // https://github.com/flutter/flutter/issues/172553.
+          shellArgs.add(arg);
+        }
       }
 
       String kernelPath = null;
@@ -288,16 +356,14 @@ public class FlutterLoader {
         shellArgs.add(
             "--" + ISOLATE_SNAPSHOT_DATA_KEY + "=" + flutterApplicationInfo.isolateSnapshotData);
       } else {
-        shellArgs.add(
-            "--" + AOT_SHARED_LIBRARY_NAME + "=" + flutterApplicationInfo.aotSharedLibraryName);
+        // Add default AOT shared library name arg.
+        shellArgs.add(aotSharedLibraryNameFlag + flutterApplicationInfo.aotSharedLibraryName);
 
-        // Most devices can load the AOT shared library based on the library name
-        // with no directory path.  Provide a fully qualified path to the library
+        // Some devices cannot load the an AOT shared library based on the library name
+        // with no directory path. So, we provide a fully qualified path to the default library
         // as a workaround for devices where that fails.
         shellArgs.add(
-            "--"
-                + AOT_SHARED_LIBRARY_NAME
-                + "="
+            aotSharedLibraryNameFlag
                 + flutterApplicationInfo.nativeLibraryDir
                 + File.separator
                 + flutterApplicationInfo.aotSharedLibraryName);
@@ -363,12 +429,13 @@ public class FlutterLoader {
         if (metaData.getBoolean(IMPELLER_VULKAN_GPU_TRACING_DATA_KEY, false)) {
           shellArgs.add("--enable-vulkan-gpu-tracing");
         }
-        if (metaData.containsKey(DISABLE_MERGED_PLATFORM_UI_THREAD_KEY)) {
-          if (metaData.getBoolean(DISABLE_MERGED_PLATFORM_UI_THREAD_KEY)) {
-            shellArgs.add("--no-enable-merged-platform-ui-thread");
-          }
+        if (metaData.getBoolean(DISABLE_MERGED_PLATFORM_UI_THREAD_KEY, false)) {
+          throw new IllegalArgumentException(
+              DISABLE_MERGED_PLATFORM_UI_THREAD_KEY + " is no longer allowed.");
         }
-
+        if (metaData.getBoolean(ENABLE_FLUTTER_GPU, false)) {
+          shellArgs.add("--enable-flutter-gpu");
+        }
         if (metaData.getBoolean(ENABLE_SURFACE_CONTROL, false)) {
           shellArgs.add("--enable-surface-control");
         }
@@ -376,6 +443,12 @@ public class FlutterLoader {
         String backend = metaData.getString(IMPELLER_BACKEND_META_DATA_KEY);
         if (backend != null) {
           shellArgs.add("--impeller-backend=" + backend);
+        }
+        if (metaData.getBoolean(IMPELLER_LAZY_SHADER_MODE)) {
+          shellArgs.add("--impeller-lazy-shader-mode");
+        }
+        if (metaData.getBoolean(IMPELLER_ANTIALIAS_LINES)) {
+          shellArgs.add("--impeller-antialias-lines");
         }
       }
 
@@ -390,13 +463,76 @@ public class FlutterLoader {
           kernelPath,
           result.appStoragePath,
           result.engineCachesPath,
-          initTimeMillis);
+          initTimeMillis,
+          Build.VERSION.SDK_INT);
 
       initialized = true;
     } catch (Exception e) {
       Log.e(TAG, "Flutter initialization failed.", e);
       throw new RuntimeException(e);
     }
+  }
+
+  /**
+   * Returns the AOT shared library name flag with the canonical path to the library that the engine
+   * will use to load application's Dart code if it lives within a path we consider safe, which is a
+   * path within the application's internal storage. Otherwise, returns null.
+   *
+   * <p>If the library lives within the application's internal storage, this means that the
+   * application developer either explicitly placed the library there or set the Android Gradle
+   * Plugin jniLibs packaging option {@code useLegacyPackaging} to true; see
+   * https://developer.android.com/build/releases/past-releases/agp-4-2-0-release-notes#compress-native-libs-dsl
+   * for more information.
+   */
+  private String getSafeAotSharedLibraryNameFlag(
+      @NonNull Context applicationContext, @NonNull String aotSharedLibraryNameArg)
+      throws IOException {
+    // Isolate AOT shared library path.
+    if (!aotSharedLibraryNameArg.startsWith(aotSharedLibraryNameFlag)) {
+      throw new IllegalArgumentException(
+          "AOT shared library name flag was not specified correctly; please use --aot-shared-library-name=<path>.");
+    }
+    String aotSharedLibraryPath =
+        aotSharedLibraryNameArg.substring(aotSharedLibraryNameFlag.length());
+
+    // Canocalize path for safety analysis.
+    File aotSharedLibraryFile = getFileFromPath(aotSharedLibraryPath);
+
+    String aotSharedLibraryPathCanonicalPath;
+    try {
+      aotSharedLibraryPathCanonicalPath = aotSharedLibraryFile.getCanonicalPath();
+    } catch (IOException e) {
+      Log.e(
+          TAG,
+          "External path "
+              + aotSharedLibraryFile.getPath()
+              + " is not a valid path. Please ensure this shared AOT library exists.");
+      return null;
+    }
+
+    // Check if library lives within application's internal storage.
+    File internalStorageDirectory = applicationContext.getApplicationContext().getFilesDir();
+    String internalStorageDirectoryPathCanonicalPath = internalStorageDirectory.getCanonicalPath();
+    boolean livesWithinInternalStorage =
+        aotSharedLibraryPathCanonicalPath.startsWith(
+            internalStorageDirectoryPathCanonicalPath + File.separator);
+    boolean isSoFile = aotSharedLibraryPathCanonicalPath.endsWith(".so");
+
+    if (livesWithinInternalStorage && isSoFile) {
+      return aotSharedLibraryNameFlag + aotSharedLibraryPathCanonicalPath;
+    }
+    // If the library does not live within the application's internal storage, we will not use it.
+    Log.e(
+        TAG,
+        "External path "
+            + aotSharedLibraryPathCanonicalPath
+            + " rejected; not overriding aot-shared-library-name.");
+    return null;
+  }
+
+  @VisibleForTesting
+  File getFileFromPath(String path) {
+    return new File(path);
   }
 
   private static boolean isLeakVM(@Nullable Bundle metaData) {

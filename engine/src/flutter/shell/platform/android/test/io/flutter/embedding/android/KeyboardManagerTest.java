@@ -8,9 +8,11 @@ import static android.view.KeyEvent.*;
 import static io.flutter.embedding.android.KeyData.Type;
 import static io.flutter.util.KeyCodes.*;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.eq;
@@ -43,9 +45,7 @@ import org.junit.runner.RunWith;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.mockito.invocation.InvocationOnMock;
-import org.robolectric.annotation.Config;
 
-@Config(manifest = Config.NONE)
 @RunWith(AndroidJUnit4.class)
 public class KeyboardManagerTest {
   public static final int SCAN_KEY_A = 0x1e;
@@ -170,7 +170,7 @@ public class KeyboardManagerTest {
    * reply callback, which should be called to mock the reply from the framework.
    */
   @FunctionalInterface
-  static interface ChannelCallHandler extends BiConsumer<JSONObject, Consumer<Boolean>> {}
+  interface ChannelCallHandler extends BiConsumer<JSONObject, Consumer<Boolean>> {}
 
   /**
    * Used to configure how to process an embedder message.
@@ -180,7 +180,7 @@ public class KeyboardManagerTest {
    * callback, which should be called to mock the reply from the framework.
    */
   @FunctionalInterface
-  static interface EmbedderCallHandler extends BiConsumer<KeyData, Consumer<Boolean>> {}
+  interface EmbedderCallHandler extends BiConsumer<KeyData, Consumer<Boolean>> {}
 
   static class KeyboardTester {
     public KeyboardTester() {
@@ -189,10 +189,10 @@ public class KeyboardManagerTest {
       respondToTextInputWith(false);
 
       BinaryMessenger mockMessenger = mock(BinaryMessenger.class);
-      doAnswer(invocation -> onMessengerMessage(invocation))
+      doAnswer(this::onMessengerMessage)
           .when(mockMessenger)
           .send(any(String.class), any(ByteBuffer.class), eq(null));
-      doAnswer(invocation -> onMessengerMessage(invocation))
+      doAnswer(this::onMessengerMessage)
           .when(mockMessenger)
           .send(any(String.class), any(ByteBuffer.class), any(BinaryMessenger.BinaryReply.class));
 
@@ -205,7 +205,7 @@ public class KeyboardManagerTest {
               invocation -> {
                 KeyEvent event = invocation.getArgument(0);
                 boolean handled = keyboardManager.handleEvent(event);
-                assertEquals(handled, false);
+                assertFalse(handled);
                 return null;
               })
           .when(mockView)
@@ -288,7 +288,7 @@ public class KeyboardManagerTest {
             reply == null ? null : handled -> reply.reply(buildBinaryResponse(handled));
         embedderHandler.accept(keyData, booleanReply);
       } else {
-        assertTrue(false);
+        fail();
       }
       return null;
     }
@@ -456,8 +456,7 @@ public class KeyboardManagerTest {
     final ByteBuffer data1Buffer = data1.toBytes();
 
     assertEquals(
-        ""
-            + "0100000000000000"
+        "0100000000000000"
             + "0c00000000000000"
             + "0200000000000000"
             + "0a00000000000000"
@@ -475,9 +474,9 @@ public class KeyboardManagerTest {
 
     // Test data2: Empty character, not synthesized.
     final KeyData data2 = new KeyData();
-    data2.physicalKey = 0xaaaabbbbccccl;
-    data2.logicalKey = 0x666677778888l;
-    data2.timestamp = 0x333344445555l;
+    data2.physicalKey = 0xaaaabbbbccccL;
+    data2.logicalKey = 0x666677778888L;
+    data2.timestamp = 0x333344445555L;
     data2.type = Type.kUp;
     data2.character = null;
     data2.synthesized = false;
@@ -486,8 +485,7 @@ public class KeyboardManagerTest {
     final ByteBuffer data2Buffer = data2.toBytes();
 
     assertEquals(
-        ""
-            + "0000000000000000"
+        "0000000000000000"
             + "5555444433330000"
             + "0100000000000000"
             + "ccccbbbbaaaa0000"
@@ -535,8 +533,8 @@ public class KeyboardManagerTest {
 
     final boolean result = tester.keyboardManager.handleEvent(keyEvent);
 
-    assertEquals(true, result);
-    assertEquals(calls.size(), 1);
+    assertTrue(result);
+    assertEquals(1, calls.size());
     assertChannelEventEquals(calls.get(0).channelObject, "keydown", 65);
 
     // Don't send the key event to the text plugin if the only primary responder
@@ -555,8 +553,8 @@ public class KeyboardManagerTest {
 
     final boolean result = tester.keyboardManager.handleEvent(keyEvent);
 
-    assertEquals(true, result);
-    assertEquals(calls.size(), 1);
+    assertTrue(result);
+    assertEquals(1, calls.size());
     assertChannelEventEquals(calls.get(0).channelObject, "keydown", 65);
 
     // Don't send the key event to the text plugin if the only primary responder
@@ -581,8 +579,8 @@ public class KeyboardManagerTest {
 
     final boolean result = tester.keyboardManager.handleEvent(keyEvent);
 
-    assertEquals(true, result);
-    assertEquals(calls.size(), 1);
+    assertTrue(result);
+    assertEquals(1, calls.size());
     assertEmbedderEventEquals(
         calls.get(0).keyData,
         Type.kDown,
@@ -633,7 +631,7 @@ public class KeyboardManagerTest {
       exceptionThrown = true;
     }
 
-    assertEquals(false, exceptionThrown);
+    assertFalse(exceptionThrown);
   }
 
   @Test
@@ -649,8 +647,8 @@ public class KeyboardManagerTest {
         tester.keyboardManager.handleEvent(
             new FakeKeyEvent(ACTION_DOWN, SCAN_KEY_A, KEYCODE_A, 0, 'a', 0));
 
-    assertEquals(true, result);
-    assertEquals(calls.size(), 2);
+    assertTrue(result);
+    assertEquals(2, calls.size());
     assertEmbedderEventEquals(
         calls.get(0).keyData,
         Type.kDown,
@@ -683,8 +681,8 @@ public class KeyboardManagerTest {
 
     final boolean result = tester.keyboardManager.handleEvent(keyEvent);
 
-    assertEquals(true, result);
-    assertEquals(calls.size(), 1);
+    assertTrue(result);
+    assertEquals(1, calls.size());
     assertChannelEventEquals(calls.get(0).channelObject, "keydown", 65);
 
     // Don't send the key event to the text plugin if the only primary responder
@@ -704,7 +702,7 @@ public class KeyboardManagerTest {
   }
 
   @Test
-  public void redispatchEventsIfTextInputDoesntHandle() {
+  public void redispatchEventsIfTextInputDoesNotHandle() {
     final KeyboardTester tester = new KeyboardTester();
     final KeyEvent keyEvent = new FakeKeyEvent(ACTION_DOWN, 65);
     final ArrayList<CallRecord> calls = new ArrayList<>();
@@ -713,8 +711,8 @@ public class KeyboardManagerTest {
 
     final boolean result = tester.keyboardManager.handleEvent(keyEvent);
 
-    assertEquals(true, result);
-    assertEquals(calls.size(), 1);
+    assertTrue(result);
+    assertEquals(1, calls.size());
     assertChannelEventEquals(calls.get(0).channelObject, "keydown", 65);
 
     // Don't send the key event to the text plugin if the only primary responder
@@ -740,8 +738,8 @@ public class KeyboardManagerTest {
     final KeyEvent keyEvent = new FakeKeyEvent(ACTION_DOWN, 65);
     final boolean result = tester.keyboardManager.handleEvent(keyEvent);
 
-    assertEquals(true, result);
-    assertEquals(calls.size(), 1);
+    assertTrue(result);
+    assertEquals(1, calls.size());
     assertChannelEventEquals(calls.get(0).channelObject, "keydown", 65);
 
     // Don't send the key event to the text plugin if the only primary responder
@@ -757,7 +755,7 @@ public class KeyboardManagerTest {
     verify(tester.mockView, times(1)).redispatch(keyEvent);
 
     // It's redispatched to the keyboard manager, but no eventual key calls.
-    assertEquals(calls.size(), 1);
+    assertEquals(1, calls.size());
   }
 
   @Test
@@ -768,8 +766,7 @@ public class KeyboardManagerTest {
     tester.recordEmbedderCallsTo(calls);
     tester.respondToTextInputWith(true); // Suppress redispatching
 
-    assertEquals(
-        true,
+    assertTrue(
         tester.keyboardManager.handleEvent(
             new FakeKeyEvent(ACTION_DOWN, SCAN_KEY_A, KEYCODE_A, 0, 'a', 0)));
 
@@ -780,8 +777,7 @@ public class KeyboardManagerTest {
         });
     calls.clear();
 
-    assertEquals(
-        true,
+    assertTrue(
         tester.keyboardManager.handleEvent(
             new FakeKeyEvent(ACTION_DOWN, SCAN_KEY_A, KEYCODE_A, 1, 'a', 0)));
     verifyEmbedderEvents(
@@ -792,8 +788,7 @@ public class KeyboardManagerTest {
         });
     calls.clear();
 
-    assertEquals(
-        true,
+    assertTrue(
         tester.keyboardManager.handleEvent(
             new FakeKeyEvent(ACTION_UP, SCAN_KEY_A, KEYCODE_A, 0, 'a', 0)));
     verifyEmbedderEvents(
@@ -813,8 +808,7 @@ public class KeyboardManagerTest {
     tester.respondToTextInputWith(true); // Suppress redispatching
 
     // ShiftLeft
-    assertEquals(
-        true,
+    assertTrue(
         tester.keyboardManager.handleEvent(
             new FakeKeyEvent(ACTION_DOWN, SCAN_SHIFT_LEFT, KEYCODE_SHIFT_LEFT, 0, '\0', 0x41)));
     verifyEmbedderEvents(
@@ -830,8 +824,7 @@ public class KeyboardManagerTest {
         });
     calls.clear();
 
-    assertEquals(
-        true,
+    assertTrue(
         tester.keyboardManager.handleEvent(
             new FakeKeyEvent(ACTION_DOWN, SCAN_KEY_A, KEYCODE_A, 0, 'A', 0x41)));
     verifyEmbedderEvents(
@@ -841,8 +834,7 @@ public class KeyboardManagerTest {
         });
     calls.clear();
 
-    assertEquals(
-        true,
+    assertTrue(
         tester.keyboardManager.handleEvent(
             new FakeKeyEvent(ACTION_UP, SCAN_KEY_A, KEYCODE_A, 0, 'A', 0x41)));
     verifyEmbedderEvents(
@@ -853,8 +845,7 @@ public class KeyboardManagerTest {
     calls.clear();
 
     // ShiftLeft
-    assertEquals(
-        true,
+    assertTrue(
         tester.keyboardManager.handleEvent(
             new FakeKeyEvent(ACTION_UP, SCAN_SHIFT_LEFT, KEYCODE_SHIFT_LEFT, 0, '\0', 0)));
     verifyEmbedderEvents(
@@ -875,8 +866,7 @@ public class KeyboardManagerTest {
     tester.respondToTextInputWith(true); // Suppress redispatching
 
     // Zero scan code.
-    assertEquals(
-        true,
+    assertTrue(
         tester.keyboardManager.handleEvent(
             new FakeKeyEvent(ACTION_DOWN, 0, KEYCODE_ENTER, 0, '\n', 0)));
     verifyEmbedderEvents(
@@ -887,8 +877,7 @@ public class KeyboardManagerTest {
     calls.clear();
 
     // Zero scan code and zero key code.
-    assertEquals(
-        true, tester.keyboardManager.handleEvent(new FakeKeyEvent(ACTION_DOWN, 0, 0, 0, '\0', 0)));
+    assertTrue(tester.keyboardManager.handleEvent(new FakeKeyEvent(ACTION_DOWN, 0, 0, 0, '\0', 0)));
     verifyEmbedderEvents(
         calls,
         new KeyData[] {
@@ -897,8 +886,7 @@ public class KeyboardManagerTest {
     calls.clear();
 
     // Unrecognized scan code. (Fictional test)
-    assertEquals(
-        true,
+    assertTrue(
         tester.keyboardManager.handleEvent(
             new FakeKeyEvent(ACTION_DOWN, 0xDEADBEEF, 0, 0, '\0', 0)));
     verifyEmbedderEvents(
@@ -909,8 +897,7 @@ public class KeyboardManagerTest {
     calls.clear();
 
     // Zero key code. (Fictional test; I have yet to find a real case.)
-    assertEquals(
-        true,
+    assertTrue(
         tester.keyboardManager.handleEvent(
             new FakeKeyEvent(ACTION_DOWN, SCAN_ARROW_LEFT, 0, 0, '\0', 0)));
     verifyEmbedderEvents(
@@ -922,8 +909,7 @@ public class KeyboardManagerTest {
     calls.clear();
 
     // Unrecognized key code. (Fictional test)
-    assertEquals(
-        true,
+    assertTrue(
         tester.keyboardManager.handleEvent(
             new FakeKeyEvent(ACTION_DOWN, SCAN_ARROW_RIGHT, 0xDEADBEEF, 0, '\0', 0)));
     verifyEmbedderEvents(
@@ -943,8 +929,7 @@ public class KeyboardManagerTest {
     tester.recordEmbedderCallsTo(calls);
     tester.respondToTextInputWith(true); // Suppress redispatching
 
-    assertEquals(
-        true,
+    assertTrue(
         tester.keyboardManager.handleEvent(
             new FakeKeyEvent(ACTION_DOWN, SCAN_KEY_A, KEYCODE_A, 0, 'a', 0)));
     verifyEmbedderEvents(
@@ -954,11 +939,10 @@ public class KeyboardManagerTest {
         });
     calls.clear();
 
-    assertEquals(
-        true,
+    assertTrue(
         tester.keyboardManager.handleEvent(
             new FakeKeyEvent(ACTION_DOWN, SCAN_KEY_A, KEYCODE_A, 0, 'a', 0)));
-    assertEquals(calls.size(), 2);
+    assertEquals(2, calls.size());
     assertEmbedderEventEquals(
         calls.get(0).keyData,
         Type.kUp,
@@ -986,14 +970,13 @@ public class KeyboardManagerTest {
     tester.recordEmbedderCallsTo(calls);
     tester.respondToTextInputWith(true); // Suppress redispatching
 
-    assertEquals(
-        true,
+    assertTrue(
         tester.keyboardManager.handleEvent(
             new FakeKeyEvent(ACTION_UP, SCAN_KEY_A, KEYCODE_A, 0, 'a', 0)));
     verifyEmbedderEvents(
         calls,
         new KeyData[] {
-          buildKeyData(Type.kDown, 0l, 0l, null, true, DeviceType.kKeyboard),
+          buildKeyData(Type.kDown, 0L, 0L, null, true, DeviceType.kKeyboard),
         });
     calls.clear();
   }
@@ -1257,12 +1240,11 @@ public class KeyboardManagerTest {
 
     final int SHIFT_LEFT_ON = META_SHIFT_LEFT_ON | META_SHIFT_ON;
 
-    assertEquals(
-        true,
+    assertTrue(
         tester.keyboardManager.handleEvent(
             new FakeKeyEvent(
                 ACTION_DOWN, SCAN_ARROW_LEFT, KEYCODE_DPAD_LEFT, 0, '\0', SHIFT_LEFT_ON)));
-    assertEquals(calls.size(), 2);
+    assertEquals(2, calls.size());
     assertEmbedderEventEquals(
         calls.get(0).keyData,
         Type.kDown,
@@ -1273,11 +1255,10 @@ public class KeyboardManagerTest {
         DeviceType.kKeyboard);
     calls.clear();
 
-    assertEquals(
-        true,
+    assertTrue(
         tester.keyboardManager.handleEvent(
             new FakeKeyEvent(ACTION_UP, SCAN_ARROW_LEFT, KEYCODE_DPAD_LEFT, 0, '\0', 0)));
-    assertEquals(calls.size(), 2);
+    assertEquals(2, calls.size());
     assertEmbedderEventEquals(
         calls.get(0).keyData,
         Type.kUp,
@@ -1303,12 +1284,11 @@ public class KeyboardManagerTest {
     // states for each case are the desired states.
 
     // Repeat event when current state is 0.
-    assertEquals(
-        true,
+    assertTrue(
         tester.keyboardManager.handleEvent(
             new FakeKeyEvent(
                 ACTION_DOWN, SCAN_SHIFT_LEFT, KEYCODE_SHIFT_LEFT, 1, '\0', SHIFT_LEFT_ON)));
-    assertEquals(calls.size(), 1);
+    assertEquals(1, calls.size());
     assertEmbedderEventEquals(
         calls.get(0).keyData,
         Type.kDown,
@@ -1320,12 +1300,11 @@ public class KeyboardManagerTest {
     calls.clear();
 
     // Down event when the current state is 1.
-    assertEquals(
-        true,
+    assertTrue(
         tester.keyboardManager.handleEvent(
             new FakeKeyEvent(
                 ACTION_DOWN, SCAN_SHIFT_LEFT, KEYCODE_SHIFT_LEFT, 0, '\0', SHIFT_LEFT_ON)));
-    assertEquals(calls.size(), 2);
+    assertEquals(2, calls.size());
     assertEmbedderEventEquals(
         calls.get(0).keyData,
         Type.kUp,
@@ -1345,11 +1324,10 @@ public class KeyboardManagerTest {
     calls.clear();
 
     // Up event when the current state is 1.
-    assertEquals(
-        true,
+    assertTrue(
         tester.keyboardManager.handleEvent(
             new FakeKeyEvent(ACTION_UP, SCAN_SHIFT_LEFT, KEYCODE_SHIFT_LEFT, 0, '\0', 0)));
-    assertEquals(calls.size(), 1);
+    assertEquals(1, calls.size());
     assertEmbedderEventEquals(
         calls.get(0).keyData,
         Type.kUp,
@@ -1361,22 +1339,20 @@ public class KeyboardManagerTest {
     calls.clear();
 
     // Up event when the current state is 0.
-    assertEquals(
-        true,
+    assertTrue(
         tester.keyboardManager.handleEvent(
             new FakeKeyEvent(ACTION_UP, SCAN_SHIFT_LEFT, KEYCODE_SHIFT_LEFT, 0, '\0', 0)));
-    assertEquals(calls.size(), 1);
+    assertEquals(1, calls.size());
     assertEmbedderEventEquals(
-        calls.get(0).keyData, Type.kDown, 0l, 0l, null, true, DeviceType.kKeyboard);
+        calls.get(0).keyData, Type.kDown, 0L, 0L, null, true, DeviceType.kKeyboard);
     calls.clear();
 
     // Down event when the current state is 0.
-    assertEquals(
-        true,
+    assertTrue(
         tester.keyboardManager.handleEvent(
             new FakeKeyEvent(
                 ACTION_DOWN, SCAN_SHIFT_LEFT, KEYCODE_SHIFT_LEFT, 0, '\0', SHIFT_LEFT_ON)));
-    assertEquals(calls.size(), 1);
+    assertEquals(1, calls.size());
     assertEmbedderEventEquals(
         calls.get(0).keyData,
         Type.kDown,
@@ -1388,12 +1364,11 @@ public class KeyboardManagerTest {
     calls.clear();
 
     // Repeat event when the current state is 1.
-    assertEquals(
-        true,
+    assertTrue(
         tester.keyboardManager.handleEvent(
             new FakeKeyEvent(
                 ACTION_DOWN, SCAN_SHIFT_LEFT, KEYCODE_SHIFT_LEFT, 1, '\0', SHIFT_LEFT_ON)));
-    assertEquals(calls.size(), 1);
+    assertEquals(1, calls.size());
     assertEmbedderEventEquals(
         calls.get(0).keyData,
         Type.kRepeat,
@@ -1489,12 +1464,11 @@ public class KeyboardManagerTest {
     tester.recordEmbedderCallsTo(calls);
     tester.respondToTextInputWith(true); // Suppress redispatching
 
-    assertEquals(
-        true,
+    assertTrue(
         tester.keyboardManager.handleEvent(
             new FakeKeyEvent(
                 ACTION_DOWN, SCAN_ARROW_LEFT, KEYCODE_DPAD_LEFT, 0, '\0', META_CTRL_ON)));
-    assertEquals(calls.size(), 2);
+    assertEquals(2, calls.size());
     assertEmbedderEventEquals(
         calls.get(0).keyData,
         Type.kDown,
@@ -1505,11 +1479,10 @@ public class KeyboardManagerTest {
         DeviceType.kKeyboard);
     calls.clear();
 
-    assertEquals(
-        true,
+    assertTrue(
         tester.keyboardManager.handleEvent(
             new FakeKeyEvent(ACTION_UP, SCAN_ARROW_LEFT, KEYCODE_DPAD_LEFT, 0, '\0', 0)));
-    assertEquals(calls.size(), 2);
+    assertEquals(2, calls.size());
     assertEmbedderEventEquals(
         calls.get(0).keyData,
         Type.kUp,
@@ -1520,12 +1493,11 @@ public class KeyboardManagerTest {
         DeviceType.kKeyboard);
     calls.clear();
 
-    assertEquals(
-        true,
+    assertTrue(
         tester.keyboardManager.handleEvent(
             new FakeKeyEvent(
                 ACTION_DOWN, SCAN_ARROW_LEFT, KEYCODE_DPAD_LEFT, 0, '\0', META_ALT_ON)));
-    assertEquals(calls.size(), 2);
+    assertEquals(2, calls.size());
     assertEmbedderEventEquals(
         calls.get(0).keyData,
         Type.kDown,
@@ -1536,11 +1508,10 @@ public class KeyboardManagerTest {
         DeviceType.kKeyboard);
     calls.clear();
 
-    assertEquals(
-        true,
+    assertTrue(
         tester.keyboardManager.handleEvent(
             new FakeKeyEvent(ACTION_UP, SCAN_ARROW_LEFT, KEYCODE_DPAD_LEFT, 0, '\0', 0)));
-    assertEquals(calls.size(), 2);
+    assertEquals(2, calls.size());
     assertEmbedderEventEquals(
         calls.get(0).keyData,
         Type.kUp,
@@ -1567,11 +1538,10 @@ public class KeyboardManagerTest {
     tester.respondToTextInputWith(true); // Suppress redispatching
 
     // Test: Down event when the current state is 0.
-    assertEquals(
-        true,
+    assertTrue(
         tester.keyboardManager.handleEvent(
             new FakeKeyEvent(ACTION_DOWN, SCAN_SHIFT_LEFT, KEYCODE_SHIFT_LEFT, 0, '\0', 0)));
-    assertEquals(calls.size(), 2);
+    assertEquals(2, calls.size());
     assertEmbedderEventEquals(
         calls.get(0).keyData,
         Type.kDown,
@@ -1591,12 +1561,11 @@ public class KeyboardManagerTest {
     calls.clear();
 
     // A normal down event.
-    assertEquals(
-        true,
+    assertTrue(
         tester.keyboardManager.handleEvent(
             new FakeKeyEvent(
                 ACTION_DOWN, SCAN_SHIFT_LEFT, KEYCODE_SHIFT_LEFT, 0, '\0', SHIFT_LEFT_ON)));
-    assertEquals(calls.size(), 1);
+    assertEquals(1, calls.size());
     assertEmbedderEventEquals(
         calls.get(0).keyData,
         Type.kDown,
@@ -1608,11 +1577,10 @@ public class KeyboardManagerTest {
     calls.clear();
 
     // Test: Repeat event when the current state is 0.
-    assertEquals(
-        true,
+    assertTrue(
         tester.keyboardManager.handleEvent(
             new FakeKeyEvent(ACTION_DOWN, SCAN_SHIFT_LEFT, KEYCODE_SHIFT_LEFT, 1, '\0', 0)));
-    assertEquals(calls.size(), 2);
+    assertEquals(2, calls.size());
     assertEmbedderEventEquals(
         calls.get(0).keyData,
         Type.kRepeat,
@@ -1648,8 +1616,8 @@ public class KeyboardManagerTest {
     // Compute physicalKey in the same way as KeyboardManager.getPhysicalKey.
     final Long physicalKey = KEYCODE_SHIFT_LEFT | KeyboardMap.kAndroidPlane;
 
-    assertEquals(tester.keyboardManager.handleEvent(keyEvent), true);
-    assertEquals(calls.size(), 2);
+    assertTrue(tester.keyboardManager.handleEvent(keyEvent));
+    assertEquals(2, calls.size());
     assertEmbedderEventEquals(
         calls.get(0).keyData,
         Type.kDown,
@@ -1669,6 +1637,68 @@ public class KeyboardManagerTest {
     calls.clear();
   }
 
+  // Regression test for https://github.com/flutter/flutter/issues/164626.
+  @Test
+  public void synchronizeModifiersForZeroedScanCodeOnRepeatEvent() {
+    // Test if ShiftLeft can be correctly synchronized during down events of
+    // ShiftLeft that have 0 for their metaState and 0 for their scanCode.
+    final KeyboardTester tester = new KeyboardTester();
+    final ArrayList<CallRecord> calls = new ArrayList<>();
+
+    tester.recordEmbedderCallsTo(calls);
+    tester.respondToTextInputWith(true); // Suppress redispatching
+
+    // Test: repeat event when the meta state is 0 and scanCode is 0.
+    final KeyEvent shiftLeftKeyEvent =
+        new FakeKeyEvent(ACTION_DOWN, 0, KEYCODE_SHIFT_LEFT, 1, '\0', 0);
+    // Compute physicalKey in the same way as KeyboardManager.getPhysicalKey.
+    final Long shiftLeftPhysicalKey = KEYCODE_SHIFT_LEFT | KeyboardMap.kAndroidPlane;
+
+    assertTrue(tester.keyboardManager.handleEvent(shiftLeftKeyEvent));
+    assertEquals(2, calls.size());
+    assertEmbedderEventEquals(
+        calls.get(0).keyData,
+        Type.kDown,
+        shiftLeftPhysicalKey,
+        LOGICAL_SHIFT_LEFT,
+        null,
+        false,
+        DeviceType.kKeyboard);
+    assertEmbedderEventEquals(
+        calls.get(1).keyData,
+        Type.kUp,
+        shiftLeftPhysicalKey,
+        LOGICAL_SHIFT_LEFT,
+        null,
+        true,
+        DeviceType.kKeyboard);
+    calls.clear();
+
+    // Similar check for AltLeft.
+    final KeyEvent altLeftKeyEvent = new FakeKeyEvent(ACTION_DOWN, 0, KEYCODE_ALT_LEFT, 1, '\0', 0);
+    final Long altLeftPhysicalKey = KEYCODE_ALT_LEFT | KeyboardMap.kAndroidPlane;
+
+    assertTrue(tester.keyboardManager.handleEvent(altLeftKeyEvent));
+    assertEquals(2, calls.size());
+    assertEmbedderEventEquals(
+        calls.get(0).keyData,
+        Type.kDown,
+        altLeftPhysicalKey,
+        LOGICAL_ALT_LEFT,
+        null,
+        false,
+        DeviceType.kKeyboard);
+    assertEmbedderEventEquals(
+        calls.get(1).keyData,
+        Type.kUp,
+        altLeftPhysicalKey,
+        LOGICAL_ALT_LEFT,
+        null,
+        true,
+        DeviceType.kKeyboard);
+    calls.clear();
+  }
+
   @Test
   public void normalCapsLockEvents() {
     final KeyboardTester tester = new KeyboardTester();
@@ -1680,12 +1710,11 @@ public class KeyboardManagerTest {
     // The following two events seem to have weird metaStates that don't follow Android's
     // documentation (CapsLock flag set on down events) but are indeed observed on ChromeOS.
 
-    assertEquals(
-        true,
+    assertTrue(
         tester.keyboardManager.handleEvent(
             new FakeKeyEvent(
                 ACTION_DOWN, SCAN_CAPS_LOCK, KEYCODE_CAPS_LOCK, 0, '\0', META_CAPS_LOCK_ON)));
-    assertEquals(calls.size(), 1);
+    assertEquals(1, calls.size());
     assertEmbedderEventEquals(
         calls.get(0).keyData,
         Type.kDown,
@@ -1696,11 +1725,10 @@ public class KeyboardManagerTest {
         DeviceType.kKeyboard);
     calls.clear();
 
-    assertEquals(
-        true,
+    assertTrue(
         tester.keyboardManager.handleEvent(
             new FakeKeyEvent(ACTION_UP, SCAN_CAPS_LOCK, KEYCODE_CAPS_LOCK, 0, '\0', 0)));
-    assertEquals(calls.size(), 1);
+    assertEquals(1, calls.size());
     assertEmbedderEventEquals(
         calls.get(0).keyData,
         Type.kUp,
@@ -1711,12 +1739,11 @@ public class KeyboardManagerTest {
         DeviceType.kKeyboard);
     calls.clear();
 
-    assertEquals(
-        true,
+    assertTrue(
         tester.keyboardManager.handleEvent(
             new FakeKeyEvent(
                 ACTION_DOWN, SCAN_ARROW_LEFT, KEYCODE_DPAD_LEFT, 0, '\0', META_CAPS_LOCK_ON)));
-    assertEquals(calls.size(), 1);
+    assertEquals(1, calls.size());
     assertEmbedderEventEquals(
         calls.get(0).keyData,
         Type.kDown,
@@ -1727,12 +1754,11 @@ public class KeyboardManagerTest {
         DeviceType.kKeyboard);
     calls.clear();
 
-    assertEquals(
-        true,
+    assertTrue(
         tester.keyboardManager.handleEvent(
             new FakeKeyEvent(
                 ACTION_UP, SCAN_ARROW_LEFT, KEYCODE_DPAD_LEFT, 0, '\0', META_CAPS_LOCK_ON)));
-    assertEquals(calls.size(), 1);
+    assertEquals(1, calls.size());
     assertEmbedderEventEquals(
         calls.get(0).keyData,
         Type.kUp,
@@ -1743,12 +1769,11 @@ public class KeyboardManagerTest {
         DeviceType.kKeyboard);
     calls.clear();
 
-    assertEquals(
-        true,
+    assertTrue(
         tester.keyboardManager.handleEvent(
             new FakeKeyEvent(
                 ACTION_DOWN, SCAN_CAPS_LOCK, KEYCODE_CAPS_LOCK, 0, '\0', META_CAPS_LOCK_ON)));
-    assertEquals(calls.size(), 1);
+    assertEquals(1, calls.size());
     assertEmbedderEventEquals(
         calls.get(0).keyData,
         Type.kDown,
@@ -1759,11 +1784,10 @@ public class KeyboardManagerTest {
         DeviceType.kKeyboard);
     calls.clear();
 
-    assertEquals(
-        true,
+    assertTrue(
         tester.keyboardManager.handleEvent(
             new FakeKeyEvent(ACTION_UP, SCAN_CAPS_LOCK, KEYCODE_CAPS_LOCK, 0, '\0', 0)));
-    assertEquals(calls.size(), 1);
+    assertEquals(1, calls.size());
     assertEmbedderEventEquals(
         calls.get(0).keyData,
         Type.kUp,
@@ -1774,11 +1798,10 @@ public class KeyboardManagerTest {
         DeviceType.kKeyboard);
     calls.clear();
 
-    assertEquals(
-        true,
+    assertTrue(
         tester.keyboardManager.handleEvent(
             new FakeKeyEvent(ACTION_DOWN, SCAN_ARROW_LEFT, KEYCODE_DPAD_LEFT, 0, '\0', 0)));
-    assertEquals(calls.size(), 1);
+    assertEquals(1, calls.size());
     assertEmbedderEventEquals(
         calls.get(0).keyData,
         Type.kDown,
@@ -1789,11 +1812,10 @@ public class KeyboardManagerTest {
         DeviceType.kKeyboard);
     calls.clear();
 
-    assertEquals(
-        true,
+    assertTrue(
         tester.keyboardManager.handleEvent(
             new FakeKeyEvent(ACTION_UP, SCAN_ARROW_LEFT, KEYCODE_DPAD_LEFT, 0, '\0', 0)));
-    assertEquals(calls.size(), 1);
+    assertEquals(1, calls.size());
     assertEmbedderEventEquals(
         calls.get(0).keyData,
         Type.kUp,
@@ -1813,12 +1835,11 @@ public class KeyboardManagerTest {
     tester.recordEmbedderCallsTo(calls);
     tester.respondToTextInputWith(true); // Suppress redispatching
 
-    assertEquals(
-        true,
+    assertTrue(
         tester.keyboardManager.handleEvent(
             new FakeKeyEvent(
                 ACTION_DOWN, SCAN_ARROW_LEFT, KEYCODE_DPAD_LEFT, 0, '\0', META_CAPS_LOCK_ON)));
-    assertEquals(calls.size(), 3);
+    assertEquals(3, calls.size());
     assertEmbedderEventEquals(
         calls.get(0).keyData,
         Type.kDown,
@@ -1845,12 +1866,11 @@ public class KeyboardManagerTest {
         DeviceType.kKeyboard);
     calls.clear();
 
-    assertEquals(
-        true,
+    assertTrue(
         tester.keyboardManager.handleEvent(
             new FakeKeyEvent(
                 ACTION_DOWN, SCAN_CAPS_LOCK, KEYCODE_CAPS_LOCK, 0, '\0', META_CAPS_LOCK_ON)));
-    assertEquals(calls.size(), 1);
+    assertEquals(1, calls.size());
     assertEmbedderEventEquals(
         calls.get(0).keyData,
         Type.kDown,
@@ -1861,12 +1881,11 @@ public class KeyboardManagerTest {
         DeviceType.kKeyboard);
     calls.clear();
 
-    assertEquals(
-        true,
+    assertTrue(
         tester.keyboardManager.handleEvent(
             new FakeKeyEvent(
                 ACTION_UP, SCAN_ARROW_LEFT, KEYCODE_DPAD_LEFT, 0, '\0', META_CAPS_LOCK_ON)));
-    assertEquals(calls.size(), 3);
+    assertEquals(3, calls.size());
     assertEmbedderEventEquals(
         calls.get(0).keyData,
         Type.kUp,
@@ -1893,11 +1912,10 @@ public class KeyboardManagerTest {
         DeviceType.kKeyboard);
     calls.clear();
 
-    assertEquals(
-        true,
+    assertTrue(
         tester.keyboardManager.handleEvent(
             new FakeKeyEvent(ACTION_UP, SCAN_CAPS_LOCK, KEYCODE_CAPS_LOCK, 0, '\0', 0)));
-    assertEquals(calls.size(), 1);
+    assertEquals(1, calls.size());
     assertEmbedderEventEquals(
         calls.get(0).keyData,
         Type.kUp,
@@ -1939,7 +1957,7 @@ public class KeyboardManagerTest {
     final KeyEvent keyboardEvent =
         new FakeKeyEvent(
             ACTION_DOWN, SCAN_KEY_A, KEYCODE_A, 0, 'a', 0, InputDevice.SOURCE_KEYBOARD);
-    assertEquals(true, tester.keyboardManager.handleEvent(keyboardEvent));
+    assertTrue(tester.keyboardManager.handleEvent(keyboardEvent));
     verifyEmbedderEvents(
         calls,
         new KeyData[] {
@@ -1951,7 +1969,7 @@ public class KeyboardManagerTest {
     final KeyEvent directionalPadEvent =
         new FakeKeyEvent(
             ACTION_DOWN, SCAN_ARROW_LEFT, KEYCODE_DPAD_LEFT, 0, '\0', 0, InputDevice.SOURCE_DPAD);
-    assertEquals(true, tester.keyboardManager.handleEvent(directionalPadEvent));
+    assertTrue(tester.keyboardManager.handleEvent(directionalPadEvent));
     verifyEmbedderEvents(
         calls,
         new KeyData[] {
@@ -1969,7 +1987,7 @@ public class KeyboardManagerTest {
     final KeyEvent gamepadEvent =
         new FakeKeyEvent(
             ACTION_DOWN, SCAN_ARROW_LEFT, KEYCODE_BUTTON_A, 0, '\0', 0, InputDevice.SOURCE_GAMEPAD);
-    assertEquals(true, tester.keyboardManager.handleEvent(gamepadEvent));
+    assertTrue(tester.keyboardManager.handleEvent(gamepadEvent));
     verifyEmbedderEvents(
         calls,
         new KeyData[] {
@@ -1989,7 +2007,7 @@ public class KeyboardManagerTest {
     final KeyEvent hdmiEvent =
         new FakeKeyEvent(
             ACTION_DOWN, SCAN_ARROW_LEFT, KEYCODE_BUTTON_A, 0, '\0', 0, InputDevice.SOURCE_HDMI);
-    assertEquals(true, tester.keyboardManager.handleEvent(hdmiEvent));
+    assertTrue(tester.keyboardManager.handleEvent(hdmiEvent));
     verifyEmbedderEvents(
         calls,
         new KeyData[] {

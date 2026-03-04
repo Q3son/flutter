@@ -99,11 +99,8 @@ class SnapshotController extends ChangeNotifier {
 ///   defaults to [SnapshotMode.normal] which will throw an exception if a
 ///   platform view is encountered.
 ///
-/// * The snapshotting functionality of this widget is not supported on the HTML
-///   backend of Flutter for the Web. Setting [SnapshotController.allowSnapshotting] to true
-///   may cause an error to be thrown. On the CanvasKit backend of Flutter, the
-///   performance of using this widget may regress performance due to the fact
-///   that both the UI and engine share a single thread.
+/// * On the CanvasKit backend of Flutter, the performance of using this widget may regress
+///   performance due to the fact that both the UI and engine share a single thread.
 class SnapshotWidget extends SingleChildRenderObjectWidget {
   /// Create a new [SnapshotWidget].
   ///
@@ -298,8 +295,8 @@ class _RenderSnapshotWidget extends RenderProxyBox {
   // Paint [child] with this painting context, then convert to a raster and detach all
   // children from this layer.
   ui.Image? _paintAndDetachToImage() {
-    final OffsetLayer offsetLayer = OffsetLayer();
-    final PaintingContext context = PaintingContext(offsetLayer, Offset.zero & size);
+    final offsetLayer = OffsetLayer();
+    final context = PaintingContext(offsetLayer, Offset.zero & size);
     super.paint(context, Offset.zero);
     // This ignore is here because this method is protected by the `PaintingContext`. Adding a new
     // method that performs the work of `_paintAndDetachToImage` would avoid the need for this, but
@@ -508,9 +505,9 @@ class _DefaultSnapshotPainter implements SnapshotPainter {
     Size sourceSize,
     double pixelRatio,
   ) {
-    final Rect src = Rect.fromLTWH(0, 0, sourceSize.width, sourceSize.height);
-    final Rect dst = Rect.fromLTWH(offset.dx, offset.dy, size.width, size.height);
-    final Paint paint = Paint()..filterQuality = FilterQuality.medium;
+    final src = Rect.fromLTWH(0, 0, sourceSize.width, sourceSize.height);
+    final dst = Rect.fromLTWH(offset.dx, offset.dy, size.width, size.height);
+    final paint = Paint()..filterQuality = FilterQuality.medium;
     context.canvas.drawImageRect(image, src, dst, paint);
   }
 

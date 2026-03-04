@@ -26,14 +26,21 @@ Version get xcodeRequiredVersion => Version(14, null, null);
 /// warning, not error, that users should upgrade Xcode.
 Version get xcodeRecommendedVersion => Version(15, null, null);
 
-/// SDK name passed to `xcrun --sdk`. Corresponds to undocumented Xcode
-/// SUPPORTED_PLATFORMS values.
+/// SDK name passed to `xcrun --sdk`.
 ///
-/// Usage: xcrun [options] <tool name> ... arguments ...
+/// Corresponds to undocumented Xcode `SUPPORTED_PLATFORMS` values.
+///
+/// Usage:
+///
+/// ```text
+/// xcrun [options] <tool name> ... arguments ...
 /// ...
 /// --sdk <sdk name>            find the tool for the given SDK name.
+/// ```
 String getSDKNameForIOSEnvironmentType(EnvironmentType environmentType) {
-  return (environmentType == EnvironmentType.simulator) ? 'iphonesimulator' : 'iphoneos';
+  return (environmentType == EnvironmentType.simulator)
+      ? XcodeSdk.IPhoneSimulator.platformName
+      : XcodeSdk.IPhoneOS.platformName;
 }
 
 /// A utility class for interacting with Xcode command line tools.
@@ -96,8 +103,10 @@ class Xcode {
   String? get xcodeSelectPath {
     if (_xcodeSelectPath == null) {
       try {
-        _xcodeSelectPath =
-            _processUtils.runSync(<String>['/usr/bin/xcode-select', '--print-path']).stdout.trim();
+        _xcodeSelectPath = _processUtils
+            .runSync(<String>['/usr/bin/xcode-select', '--print-path'])
+            .stdout
+            .trim();
       } on ProcessException {
         // Ignored, return null below.
       } on ArgumentError {
@@ -132,7 +141,7 @@ class Xcode {
       'flutter_tools',
     );
 
-    final String filePath = '$flutterToolsAbsolutePath/bin/xcode_debug.js';
+    final filePath = '$flutterToolsAbsolutePath/bin/xcode_debug.js';
     if (!_fileSystem.file(filePath).existsSync()) {
       throwToolExit('Unable to find Xcode automation script at $filePath');
     }
@@ -172,22 +181,15 @@ class Xcode {
 
   /// Verifies that simctl is installed by trying to run it.
   bool get isSimctlInstalled {
-    if (_isSimctlInstalled == null) {
-      try {
-        // This command will error if additional components need to be installed in
-        // xcode 9.2 and above.
-        final RunResult result = _processUtils.runSync(<String>[
-          ...xcrunCommand(),
-          'simctl',
-          'list',
-          'devices',
-          'booted',
-        ]);
-        _isSimctlInstalled = result.exitCode == 0;
-      } on ProcessException {
-        _isSimctlInstalled = false;
-      }
-    }
+    // This command will error if additional components need to be installed in
+    // xcode 9.2 and above.
+    _isSimctlInstalled ??= _processUtils.exitsHappySync(<String>[
+      ...xcrunCommand(),
+      'simctl',
+      'list',
+      'devices',
+      'booted',
+    ]);
     return _isSimctlInstalled ?? false;
   }
 
@@ -197,20 +199,15 @@ class Xcode {
   /// to run it. `devicectl` is made available in Xcode 15.
   bool get isDevicectlInstalled {
     if (_isDevicectlInstalled == null) {
-      try {
-        if (currentVersion == null || currentVersion!.major < 15) {
-          _isDevicectlInstalled = false;
-          return _isDevicectlInstalled!;
-        }
-        final RunResult result = _processUtils.runSync(<String>[
-          ...xcrunCommand(),
-          'devicectl',
-          '--version',
-        ]);
-        _isDevicectlInstalled = result.exitCode == 0;
-      } on ProcessException {
+      if (currentVersion == null || currentVersion!.major < 15) {
         _isDevicectlInstalled = false;
+        return _isDevicectlInstalled!;
       }
+      _isDevicectlInstalled = _processUtils.exitsHappySync(<String>[
+        ...xcrunCommand(),
+        'devicectl',
+        '--version',
+      ]);
     }
     return _isDevicectlInstalled ?? false;
   }

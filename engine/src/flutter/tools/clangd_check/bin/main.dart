@@ -11,49 +11,68 @@ import 'package:path/path.dart' as p;
 
 void main(List<String> args) {
   final Engine? engine = Engine.tryFindWithin();
-  final ArgParser parser =
-      ArgParser()
-        ..addFlag('help', abbr: 'h', help: 'Print this usage information.', negatable: false)
-        ..addOption(
-          'clangd',
-          help: 'Path to clangd. Defaults to deriving the path from compile_commands.json.',
-        )
-        ..addOption(
-          'compile-commands-dir',
-          help: 'Path to a directory containing compile_commands.json.',
-          defaultsTo: engine?.latestOutput()?.compileCommandsJson.parent.path,
-        );
+  final parser = ArgParser()
+    ..addFlag('help', abbr: 'h', help: 'Print this usage information.', negatable: false)
+    ..addOption(
+      'clangd',
+      help: 'Path to clangd. Defaults to deriving the path from compile_commands.json.',
+    )
+    ..addOption(
+      'compile-commands-dir',
+      help: 'Path to a directory containing compile_commands.json.',
+      defaultsTo: engine?.latestOutput()?.compileCommandsJson.parent.path,
+    );
   final ArgResults results = parser.parse(args);
   if (results['help'] as bool) {
     io.stdout.writeln(parser.usage);
     return;
   }
 
-  final String? compileCommandsDir = results['compile-commands-dir'] as String?;
+  final compileCommandsDir = results['compile-commands-dir'] as String?;
   if (compileCommandsDir == null) {
     io.stderr.writeln('Must provide a path to compile_commands.json');
     io.exitCode = 1;
     return;
   }
-  final io.File compileCommandsFile = io.File(p.join(compileCommandsDir, 'compile_commands.json'));
+  final compileCommandsFile = io.File(p.join(compileCommandsDir, 'compile_commands.json'));
   if (!compileCommandsFile.existsSync()) {
     io.stderr.writeln('No compile_commands.json found in $compileCommandsDir');
     io.exitCode = 1;
     return;
   }
 
-  final List<Object?> compileCommands =
-      json.decode(compileCommandsFile.readAsStringSync()) as List<Object?>;
+  final compileCommands = json.decode(compileCommandsFile.readAsStringSync()) as List<Object?>;
   if (compileCommands.isEmpty) {
     io.stderr.writeln('Unexpected: compile_commands.json is empty');
     io.exitCode = 1;
     return;
   }
 
-  String? clangd = results['clangd'] as String?;
-  final Map<String, Object?> entry = compileCommands.first! as Map<String, Object?>;
+  var clangd = results['clangd'] as String?;
+  // To improve determinism, check the first clangd item that matches the asset fixture file.
+  Map<String, Object?>? selectedEntry;
+  for (final entry in compileCommands) {
+    if (entry is Map<String, Object?>) {
+      final file = entry['file'] as String?;
+      if (file != null && file.endsWith('_fl__fl_assets_fixtures.cc')) {
+        selectedEntry = entry;
+        break;
+      }
+    } else {
+      io.stderr.writeln('Unexpected: compile_commands.json has an unexpected format');
+      io.stderr.writeln('First entry: ${const JsonEncoder.withIndent('  ').convert(entry)}');
+      io.exitCode = 1;
+      return;
+    }
+  }
+  if (selectedEntry == null) {
+    io.stderr.writeln('No compile_commands.json entry found for _fl__fl_assets_fixtures.cc');
+    io.exitCode = 1;
+    return;
+  }
+
   final String checkFile;
-  if (entry case {
+  if (selectedEntry case {
     'command': final String command,
     'directory': final String directory,
     'file': final String file,
@@ -78,7 +97,7 @@ void main(List<String> args) {
       final String platform = RegExp(r'buildtools/([^/]+)/').firstMatch(path)!.group(1)!;
 
       // Find the engine root and derive the clangd path from there.
-      final Engine compileCommandsEngineRoot = Engine.findWithin(path);
+      final compileCommandsEngineRoot = Engine.findWithin(path);
       clangd = p.join(
         // engine/src/flutter
         compileCommandsEngineRoot.flutterDir.path,
@@ -94,13 +113,13 @@ void main(List<String> args) {
     }
   } else {
     io.stderr.writeln('Unexpected: compile_commands.json has an unexpected format');
-    io.stderr.writeln('First entry: ${const JsonEncoder.withIndent('  ').convert(entry)}');
+    io.stderr.writeln('First entry: ${const JsonEncoder.withIndent('  ').convert(selectedEntry)}');
     io.exitCode = 1;
     return;
   }
 
-  final Engine engineRoot = Engine.findWithin(p.canonicalize(compileCommandsDir));
-  final io.File clangdConfig = io.File(p.join(engineRoot.flutterDir.path, '.clangd'));
+  final engineRoot = Engine.findWithin(p.canonicalize(compileCommandsDir));
+  final clangdConfig = io.File(p.join(engineRoot.flutterDir.path, '.clangd'));
   try {
     // Write a .clangd file to the engine root directory.
     //
@@ -134,7 +153,7 @@ void main(List<String> args) {
     }
   } on io.ProcessException catch (e) {
     io.stderr.writeln('Failed to run clangd: $e');
-    io.stderr.writeln(const JsonEncoder.withIndent('  ').convert(entry));
+    io.stderr.writeln(const JsonEncoder.withIndent('  ').convert(selectedEntry));
     io.exitCode = 1;
   } finally {
     // Remove the copied .clangd file from the engine root directory.

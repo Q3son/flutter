@@ -75,7 +75,7 @@ class HotEvent extends UsageEvent {
 
   @override
   void send() {
-    final CustomDimensions parameters = CustomDimensions(
+    final parameters = CustomDimensions(
       hotEventTargetPlatform: targetPlatform,
       hotEventSdkName: sdkName,
       hotEventEmulator: emulator,
@@ -118,13 +118,13 @@ class DoctorResultEvent extends UsageEvent {
       flutterUsage.sendEvent(category, parameter, label: label);
       return;
     }
-    final GroupedValidator group = validator as GroupedValidator;
+    final group = validator as GroupedValidator;
     // The validator crashed.
     if (group.subResults.isEmpty) {
       flutterUsage.sendEvent(category, parameter, label: label);
       return;
     }
-    for (int i = 0; i < group.subValidators.length; i++) {
+    for (var i = 0; i < group.subValidators.length; i++) {
       final DoctorValidator v = group.subValidators[i];
       final ValidationResult r = group.subResults[i];
       DoctorResultEvent(validator: v, result: r, flutterUsage: flutterUsage).send();
@@ -165,7 +165,7 @@ class BuildEvent extends UsageEvent {
 
   @override
   void send() {
-    final CustomDimensions parameters = CustomDimensions(
+    final parameters = CustomDimensions(
       buildEventCommand: _command,
       buildEventSettings: _settings,
       buildEventError: _eventError,
@@ -219,72 +219,4 @@ class CodeSizeEvent extends UsageEvent {
 class ErrorHandlingEvent extends UsageEvent {
   ErrorHandlingEvent(String parameter)
     : super('error-handling', parameter, flutterUsage: globals.flutterUsage);
-}
-
-/// Emit various null safety analytic events.
-///
-/// 1. The current null safety runtime mode.
-/// 2. The number of packages that are migrated, along with the total number of packages
-/// 3. The main packages language version.
-class NullSafetyAnalysisEvent implements UsageEvent {
-  NullSafetyAnalysisEvent(
-    this.packageConfig,
-    this.nullSafetyMode,
-    this.currentPackage,
-    this.flutterUsage,
-  );
-
-  /// The category for analytics events related to null safety.
-  static const String kNullSafetyCategory = 'null-safety';
-
-  final PackageConfig packageConfig;
-  final NullSafetyMode nullSafetyMode;
-  final String currentPackage;
-  @override
-  final Usage flutterUsage;
-
-  @override
-  void send() {
-    if (packageConfig.packages.isEmpty) {
-      return;
-    }
-    int migrated = 0;
-    LanguageVersion? languageVersion;
-    for (final Package package in packageConfig.packages) {
-      final LanguageVersion? packageLanguageVersion = package.languageVersion;
-      if (package.name == currentPackage) {
-        languageVersion = packageLanguageVersion;
-      }
-      if (packageLanguageVersion != null &&
-          packageLanguageVersion.major >= nullSafeVersion.major &&
-          packageLanguageVersion.minor >= nullSafeVersion.minor) {
-        migrated += 1;
-      }
-    }
-    flutterUsage.sendEvent(kNullSafetyCategory, 'runtime-mode', label: nullSafetyMode.toString());
-    flutterUsage.sendEvent(
-      kNullSafetyCategory,
-      'stats',
-      parameters: CustomDimensions(
-        nullSafeMigratedLibraries: migrated,
-        nullSafeTotalLibraries: packageConfig.packages.length,
-      ),
-    );
-    if (languageVersion != null) {
-      final String formattedVersion = '${languageVersion.major}.${languageVersion.minor}';
-      flutterUsage.sendEvent(kNullSafetyCategory, 'language-version', label: formattedVersion);
-    }
-  }
-
-  @override
-  String get category => kNullSafetyCategory;
-
-  @override
-  String get label => throw UnsupportedError('');
-
-  @override
-  String get parameter => throw UnsupportedError('');
-
-  @override
-  int get value => throw UnsupportedError('');
 }

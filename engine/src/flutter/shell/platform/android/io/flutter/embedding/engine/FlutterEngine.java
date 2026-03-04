@@ -35,16 +35,21 @@ import io.flutter.embedding.engine.systemchannels.PlatformChannel;
 import io.flutter.embedding.engine.systemchannels.ProcessTextChannel;
 import io.flutter.embedding.engine.systemchannels.RestorationChannel;
 import io.flutter.embedding.engine.systemchannels.ScribeChannel;
+import io.flutter.embedding.engine.systemchannels.SensitiveContentChannel;
 import io.flutter.embedding.engine.systemchannels.SettingsChannel;
 import io.flutter.embedding.engine.systemchannels.SpellCheckChannel;
 import io.flutter.embedding.engine.systemchannels.SystemChannel;
 import io.flutter.embedding.engine.systemchannels.TextInputChannel;
 import io.flutter.plugin.localization.LocalizationPlugin;
 import io.flutter.plugin.platform.PlatformViewsController;
+import io.flutter.plugin.platform.PlatformViewsController2;
+import io.flutter.plugin.platform.PlatformViewsControllerDelegator;
 import io.flutter.plugin.text.ProcessTextPlugin;
 import io.flutter.util.ViewUtils;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -102,6 +107,7 @@ public class FlutterEngine implements ViewUtils.DisplayUpdater {
   @NonNull private final PlatformChannel platformChannel;
   @NonNull private final ProcessTextChannel processTextChannel;
   @NonNull private final ScribeChannel scribeChannel;
+  @NonNull private final SensitiveContentChannel sensitiveContentChannel;
   @NonNull private final SettingsChannel settingsChannel;
   @NonNull private final SpellCheckChannel spellCheckChannel;
   @NonNull private final SystemChannel systemChannel;
@@ -109,9 +115,25 @@ public class FlutterEngine implements ViewUtils.DisplayUpdater {
 
   // Platform Views.
   @NonNull private final PlatformViewsController platformViewsController;
+  @NonNull private final PlatformViewsController2 platformViewsController2;
+  @NonNull private final PlatformViewsControllerDelegator platformViewsControllerDelegator;
 
   // Engine Lifecycle.
   @NonNull private final Set<EngineLifecycleListener> engineLifecycleListeners = new HashSet<>();
+
+  // Unique handle for this engine.
+  @NonNull private final long engineId;
+
+  @VisibleForTesting(otherwise = VisibleForTesting.PACKAGE_PRIVATE)
+  public static void resetNextEngineId() {
+    nextEngineId = 1;
+  }
+
+  // Handle to assign to the next engine created.
+  private static long nextEngineId = 1;
+
+  // Map of engine identifiers to engines.
+  private static final Map<Long, FlutterEngine> idToEngine = new HashMap<>();
 
   @NonNull
   private final EngineLifecycleListener engineLifecycleListener =
@@ -124,6 +146,7 @@ public class FlutterEngine implements ViewUtils.DisplayUpdater {
           }
 
           platformViewsController.onPreEngineRestart();
+          platformViewsController2.onPreEngineRestart();
           restorationChannel.clearData();
         }
 
@@ -309,6 +332,10 @@ public class FlutterEngine implements ViewUtils.DisplayUpdater {
       boolean automaticallyRegisterPlugins,
       boolean waitForRestorationData,
       @Nullable FlutterEngineGroup group) {
+
+    this.engineId = nextEngineId++;
+    idToEngine.put(engineId, this);
+
     AssetManager assetManager;
     try {
       assetManager = context.createPackageContext(context.getPackageName(), 0).getAssets();
@@ -323,7 +350,7 @@ public class FlutterEngine implements ViewUtils.DisplayUpdater {
     }
     this.flutterJNI = flutterJNI;
 
-    this.dartExecutor = new DartExecutor(flutterJNI, assetManager);
+    this.dartExecutor = new DartExecutor(flutterJNI, assetManager, engineId);
     this.dartExecutor.onAttachedToJNI();
 
     DeferredComponentManager deferredComponentManager =
@@ -340,6 +367,7 @@ public class FlutterEngine implements ViewUtils.DisplayUpdater {
     processTextChannel = new ProcessTextChannel(dartExecutor, context.getPackageManager());
     restorationChannel = new RestorationChannel(dartExecutor, waitForRestorationData);
     scribeChannel = new ScribeChannel(dartExecutor);
+    sensitiveContentChannel = new SensitiveContentChannel(dartExecutor);
     settingsChannel = new SettingsChannel(dartExecutor);
     spellCheckChannel = new SpellCheckChannel(dartExecutor);
     systemChannel = new SystemChannel(dartExecutor);
@@ -360,10 +388,18 @@ public class FlutterEngine implements ViewUtils.DisplayUpdater {
       flutterLoader.ensureInitializationComplete(context, dartVmArgs);
     }
 
+    PlatformViewsController2 platformViewsController2 = new PlatformViewsController2();
+    platformViewsController2.setRegistry(platformViewsController.getRegistry());
+    platformViewsController2.setFlutterJNI(flutterJNI);
+
+    platformViewsController.setFlutterJNI(flutterJNI);
+
     flutterJNI.addEngineLifecycleListener(engineLifecycleListener);
     flutterJNI.setPlatformViewsController(platformViewsController);
+    flutterJNI.setPlatformViewsController2(platformViewsController2);
     flutterJNI.setLocalizationPlugin(localizationPlugin);
     flutterJNI.setDeferredComponentManager(injector.deferredComponentManager());
+    flutterJNI.setSettingsChannel(settingsChannel);
 
     // It should typically be a fresh, unattached JNI. But on a spawned engine, the JNI instance
     // is already attached to a native shell. In that case, the Java FlutterEngine is created around
@@ -372,12 +408,12 @@ public class FlutterEngine implements ViewUtils.DisplayUpdater {
       attachToJni();
     }
 
-    // TODO(mattcarroll): FlutterRenderer is temporally coupled to attach(). Remove that coupling if
-    // possible.
     this.renderer = new FlutterRenderer(flutterJNI);
-
     this.platformViewsController = platformViewsController;
-    this.platformViewsController.onAttachedToJNI();
+    this.platformViewsController2 = platformViewsController2;
+
+    this.platformViewsControllerDelegator =
+        new PlatformViewsControllerDelegator(platformViewsController, platformViewsController2);
 
     this.pluginRegistry =
         new FlutterEngineConnectionRegistry(
@@ -446,7 +482,8 @@ public class FlutterEngine implements ViewUtils.DisplayUpdater {
             dartEntrypoint.dartEntrypointFunctionName,
             dartEntrypoint.dartEntrypointLibrary,
             initialRoute,
-            dartEntrypointArgs);
+            dartEntrypointArgs,
+            nextEngineId);
     return new FlutterEngine(
         context, // Context.
         null, // FlutterLoader. A null value passed here causes the constructor to get it from the
@@ -472,6 +509,7 @@ public class FlutterEngine implements ViewUtils.DisplayUpdater {
     // The order that these things are destroyed is important.
     pluginRegistry.destroy();
     platformViewsController.onDetachedFromJNI();
+    platformViewsController2.onDetachedFromJNI();
     dartExecutor.onDetachedFromJNI();
     flutterJNI.removeEngineLifecycleListener(engineLifecycleListener);
     flutterJNI.setDeferredComponentManager(null);
@@ -480,6 +518,7 @@ public class FlutterEngine implements ViewUtils.DisplayUpdater {
       FlutterInjector.instance().deferredComponentManager().destroy();
       deferredComponentChannel.setDeferredComponentManager(null);
     }
+    idToEngine.remove(engineId);
   }
 
   /**
@@ -619,6 +658,12 @@ public class FlutterEngine implements ViewUtils.DisplayUpdater {
     return scribeChannel;
   }
 
+  /** System channel that handles getting and setting content sensitivity. */
+  @NonNull
+  public SensitiveContentChannel getSensitiveContentChannel() {
+    return sensitiveContentChannel;
+  }
+
   /** System channel that sends and receives spell check requests and results. */
   @NonNull
   public SpellCheckChannel getSpellCheckChannel() {
@@ -649,6 +694,16 @@ public class FlutterEngine implements ViewUtils.DisplayUpdater {
   }
 
   @NonNull
+  public PlatformViewsController2 getPlatformViewsController2() {
+    return platformViewsController2;
+  }
+
+  @NonNull
+  public PlatformViewsControllerDelegator getPlatformViewsControllerDelegator() {
+    return platformViewsControllerDelegator;
+  }
+
+  @NonNull
   public ActivityControlSurface getActivityControlSurface() {
     return pluginRegistry;
   }
@@ -666,6 +721,25 @@ public class FlutterEngine implements ViewUtils.DisplayUpdater {
   @NonNull
   public ContentProviderControlSurface getContentProviderControlSurface() {
     return pluginRegistry;
+  }
+
+  /** Returns unique identifier for this engine. */
+  public long getEngineId() {
+    return engineId;
+  }
+
+  /**
+   * Returns engine for the given identifier or null if identifier is not valid. The handle can be
+   * obtained through
+   *
+   * <pre>PlatformDispatcher.instance.engineId</pre>
+   *
+   * <p>Must be called on the UI thread.
+   */
+  @Nullable
+  @VisibleForTesting(otherwise = VisibleForTesting.PACKAGE_PRIVATE)
+  public static FlutterEngine engineForId(long handle) {
+    return idToEngine.get(handle);
   }
 
   /** Lifecycle callbacks for Flutter engine lifecycle events. */

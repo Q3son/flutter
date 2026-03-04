@@ -4,6 +4,7 @@
 
 package io.flutter.embedding.android;
 
+import static io.flutter.Build.API_LEVELS;
 import static io.flutter.embedding.android.FlutterActivityLaunchConfigs.DART_ENTRYPOINT_META_DATA_KEY;
 import static io.flutter.embedding.android.FlutterActivityLaunchConfigs.DART_ENTRYPOINT_URI_META_DATA_KEY;
 import static io.flutter.embedding.android.FlutterActivityLaunchConfigs.DEFAULT_BACKGROUND_MODE;
@@ -27,6 +28,7 @@ import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.graphics.drawable.ColorDrawable;
+import android.os.Build;
 import android.os.Bundle;
 import android.view.View;
 import android.view.ViewGroup;
@@ -600,10 +602,20 @@ public class FlutterFragmentActivity extends FragmentActivity
     }
   }
 
+  /**
+   * @deprecated This method is outdated because it calls {@code setStatusBarColor}, which is
+   *     deprecated in Android 15 and above, meaning calls to this method will have no effect on
+   *     those versions. Consider using the
+   *     [WindowInsetsController](https://developer.android.com/reference/android/view/WindowInsetsController)
+   *     or other Android 15+ APIs for system UI styling.
+   */
+  @Deprecated
   private void configureStatusBarForFullscreenFlutterExperience() {
     Window window = getWindow();
     window.addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS);
-    window.setStatusBarColor(0x40000000);
+    if (Build.VERSION.SDK_INT < API_LEVELS.API_35) {
+      window.setStatusBarColor(0x40000000);
+    }
     window.getDecorView().setSystemUiVisibility(PlatformPlugin.DEFAULT_SYSTEM_UI);
   }
 
@@ -618,6 +630,15 @@ public class FlutterFragmentActivity extends FragmentActivity
     // Forward Intents to our FlutterFragment in case it cares.
     flutterFragment.onNewIntent(intent);
     super.onNewIntent(intent);
+  }
+
+  // Intentionally missing super call to align FlutterFragmentActivity predictive back behavior
+  // with FlutterActivity, with respect to how it responds to the
+  // android:enableOnBackInvokedCallback manifest property.
+  @Override
+  @SuppressWarnings("MissingSuperCall")
+  public void onBackPressed() {
+    flutterFragment.onBackPressed();
   }
 
   @Override

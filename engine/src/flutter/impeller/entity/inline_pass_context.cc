@@ -13,7 +13,7 @@
 #include "impeller/entity/entity_pass_target.h"
 #include "impeller/renderer/command_buffer.h"
 #include "impeller/renderer/render_pass.h"
-#include "impeller/renderer/texture_mipmap.h"
+#include "impeller/renderer/texture_util.h"
 
 namespace impeller {
 
@@ -108,10 +108,7 @@ const std::shared_ptr<RenderPass>& InlinePassContext::GetRenderPass() {
   bool is_msaa = color0.resolve_texture != nullptr;
 
   if (pass_count_ > 0) {
-    // When MSAA is being used, we end up overriding the entire backdrop by
-    // drawing the previous pass texture, and so we don't have to clear it and
-    // can use kDontCare.
-    color0.load_action = is_msaa ? LoadAction::kDontCare : LoadAction::kLoad;
+    color0.load_action = is_msaa ? LoadAction::kClear : LoadAction::kLoad;
   } else {
     color0.load_action = LoadAction::kClear;
   }

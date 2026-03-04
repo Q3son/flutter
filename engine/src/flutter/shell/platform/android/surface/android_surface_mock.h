@@ -27,7 +27,7 @@ class AndroidSurfaceMock final : public GPUSurfaceGLDelegate,
               (GrDirectContext * gr_context),
               (override));
 
-  MOCK_METHOD(bool, OnScreenSurfaceResize, (const SkISize& size), (override));
+  MOCK_METHOD(bool, OnScreenSurfaceResize, (const DlISize& size), (override));
 
   MOCK_METHOD(bool, ResourceContextMakeCurrent, (), (override));
 
@@ -35,7 +35,8 @@ class AndroidSurfaceMock final : public GPUSurfaceGLDelegate,
 
   MOCK_METHOD(bool,
               SetNativeWindow,
-              (fml::RefPtr<AndroidNativeWindow> window),
+              (fml::RefPtr<AndroidNativeWindow> window,
+               const std::shared_ptr<PlatformViewAndroidJNI>& jni_facade),
               (override));
 
   // |GPUSurfaceGLDelegate|

@@ -10,12 +10,15 @@
 #include "flutter/display_list/effects/color_filters/dl_blend_color_filter.h"
 #include "flutter/display_list/effects/dl_color_sources.h"
 #include "flutter/display_list/effects/dl_image_filters.h"
+#include "flutter/display_list/effects/dl_runtime_effect_skia.h"
 #include "flutter/testing/testing.h"
 
-#include "third_party/skia/include/core/SkCanvas.h"
+#include "third_party/skia/include/core/SkPath.h"
+#include "third_party/skia/include/core/SkRRect.h"
 #include "third_party/skia/include/core/SkSurface.h"
 #include "third_party/skia/include/effects/SkGradientShader.h"
 #include "third_party/skia/include/effects/SkImageFilters.h"
+#include "third_party/skia/include/effects/SkRuntimeEffect.h"
 
 namespace flutter {
 namespace testing {
@@ -170,15 +173,17 @@ constexpr DlRect kTestBounds = DlRect::MakeLTRB(10, 10, 50, 60);
 constexpr SkRect kTestSkBounds = SkRect::MakeLTRB(10, 10, 50, 60);
 static const DlRoundRect kTestRRect =
     DlRoundRect::MakeRectXY(kTestBounds, 5, 5);
+static const DlRoundSuperellipse kTestRSuperellipse =
+    DlRoundSuperellipse::MakeRectXY(kTestBounds, 3, 3);
 static const SkRRect kTestSkRRect = SkRRect::MakeRectXY(kTestSkBounds, 5, 5);
 static const SkRRect kTestRRectRect = SkRRect::MakeRect(kTestSkBounds);
 static const DlRoundRect kTestInnerRRect =
     DlRoundRect::MakeRectXY(kTestBounds.Expand(-5, -5), 2, 2);
 static const SkRRect kTestSkInnerRRect =
     SkRRect::MakeRectXY(kTestSkBounds.makeInset(5, 5), 2, 2);
-static const DlPath kTestPathRect = DlPath(SkPath::Rect(kTestSkBounds));
-static const DlPath kTestPathOval = DlPath(SkPath::Oval(kTestSkBounds));
-static const DlPath kTestPathRRect = DlPath(SkPath::RRect(kTestSkRRect));
+static const DlPath kTestPathRect = DlPath::MakeRect(kTestBounds);
+static const DlPath kTestPathOval = DlPath::MakeOval(kTestBounds);
+static const DlPath kTestPathRRect = DlPath::MakeRoundRect(kTestRRect);
 static const DlPath kTestPath1 =
     DlPath(SkPath::Polygon({{0, 0}, {10, 10}, {10, 0}, {0, 10}}, true));
 static const DlPath kTestPath2 =
@@ -201,7 +206,7 @@ static const std::shared_ptr<DlVertices> kTestVertices2 =
 
 static sk_sp<DisplayList> MakeTestDisplayList(int w, int h, SkColor color) {
   DisplayListBuilder builder;
-  builder.DrawRect(SkRect::MakeWH(w, h), DlPaint(DlColor(color)));
+  builder.DrawRect(DlRect::MakeWH(w, h), DlPaint(DlColor(color)));
   return builder.Build();
 }
 static sk_sp<DisplayList> TestDisplayList1 =
@@ -210,12 +215,12 @@ static sk_sp<DisplayList> TestDisplayList2 =
     MakeTestDisplayList(25, 25, SK_ColorBLUE);
 
 static const sk_sp<DlRuntimeEffect> kTestRuntimeEffect1 =
-    DlRuntimeEffect::MakeSkia(
+    DlRuntimeEffectSkia::Make(
         SkRuntimeEffect::MakeForShader(
             SkString("vec4 main(vec2 p) { return vec4(0); }"))
             .effect);
 static const sk_sp<DlRuntimeEffect> kTestRuntimeEffect2 =
-    DlRuntimeEffect::MakeSkia(
+    DlRuntimeEffectSkia::Make(
         SkRuntimeEffect::MakeForShader(
             SkString("vec4 main(vec2 p) { return vec4(1); }"))
             .effect);
@@ -225,6 +230,9 @@ SkFont CreateTestFontOfSize(DlScalar scalar);
 sk_sp<SkTextBlob> GetTestTextBlob(const std::string& str,
                                   DlScalar font_size = 20.0f);
 sk_sp<SkTextBlob> GetTestTextBlob(int index);
+#if IMPELLER_SUPPORTS_RENDERING
+std::shared_ptr<impeller::TextFrame> GetTestTextFrame(int index);
+#endif
 
 struct DisplayListInvocation {
   // ----------------------------------

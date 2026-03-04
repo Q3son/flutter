@@ -19,7 +19,6 @@ import '../globals.dart' as globals;
 import '../platform_plugins.dart';
 import '../plugins.dart';
 import '../project.dart';
-import '../reporting/reporting.dart';
 import '../version.dart';
 import 'compiler_config.dart';
 import 'file_generators/flutter_service_worker_js.dart';
@@ -28,27 +27,31 @@ import 'migrations/scrub_generated_plugin_registrant.dart';
 export 'compiler_config.dart';
 
 /// Whether the application has web plugins.
-const String kHasWebPlugins = 'HasWebPlugins';
+const kHasWebPlugins = 'HasWebPlugins';
 
 /// Base href to set in index.html in flutter build command
-const String kBaseHref = 'baseHref';
+const kBaseHref = 'baseHref';
+
+/// Static assets url to set in index.html in flutter build command
+const kStaticAssetsUrl = 'staticAssetsUrl';
 
 /// The caching strategy to use for service worker generation.
-const String kServiceWorkerStrategy = 'ServiceWorkerStrategy';
+const kServiceWorkerStrategy = 'ServiceWorkerStrategy';
+
+/// Prefix for web-define variables stored in [Environment.defines].
+const kWebDefinePrefix = 'webDefine:';
 
 class WebBuilder {
   WebBuilder({
     required Logger logger,
     required ProcessManager processManager,
     required BuildSystem buildSystem,
-    required Usage usage,
     required Analytics analytics,
     required FlutterVersion flutterVersion,
     required FileSystem fileSystem,
   }) : _logger = logger,
        _processManager = processManager,
        _buildSystem = buildSystem,
-       _flutterUsage = usage,
        _analytics = analytics,
        _flutterVersion = flutterVersion,
        _fileSystem = fileSystem;
@@ -56,44 +59,55 @@ class WebBuilder {
   final Logger _logger;
   final ProcessManager _processManager;
   final BuildSystem _buildSystem;
-  final Usage _flutterUsage;
   final Analytics _analytics;
   final FlutterVersion _flutterVersion;
   final FileSystem _fileSystem;
 
+  /// Builds the web application using the specified compiler configurations
+  /// and generates the necessary web assets in the output directory.
   Future<void> buildWeb(
     FlutterProject flutterProject,
     String target,
     BuildInfo buildInfo,
-    ServiceWorkerStrategy serviceWorkerStrategy, {
+    ServiceWorkerStrategy? serviceWorkerStrategy, {
     required List<WebCompilerConfig> compilerConfigs,
     String? baseHref,
+    String? staticAssetsUrl,
     String? outputDirectoryPath,
+    Map<String, String> webDefines = const <String, String>{},
   }) async {
+    if (serviceWorkerStrategy != null) {
+      _logger.printWarning(
+        'The --pwa-strategy option is deprecated and will be removed in a future Flutter release.\n'
+        'For more information, see: https://github.com/flutter/flutter/issues/156910',
+      );
+    }
+
     final bool hasWebPlugins = (await findPlugins(
       flutterProject,
     )).any((Plugin p) => p.platforms.containsKey(WebPlugin.kConfigKey));
-    final Directory outputDirectory =
-        outputDirectoryPath == null
-            ? _fileSystem.directory(getWebBuildDirectory())
-            : _fileSystem.directory(outputDirectoryPath);
+    final Directory outputDirectory = outputDirectoryPath == null
+        ? _fileSystem.directory(
+            _fileSystem.path.join(flutterProject.directory.path, getWebBuildDirectory()),
+          )
+        : _fileSystem.directory(outputDirectoryPath);
     outputDirectory.createSync(recursive: true);
 
     // The migrators to apply to a Web project.
-    final List<ProjectMigrator> migrators = <ProjectMigrator>[
+    final migrators = <ProjectMigrator>[
       ScrubGeneratedPluginRegistrant(flutterProject.web, _logger),
     ];
 
-    final ProjectMigration migration = ProjectMigration(migrators);
+    final migration = ProjectMigration(migrators);
     await migration.run();
 
     final Status status = _logger.startProgress('Compiling $target for the Web...');
-    final Stopwatch sw = Stopwatch()..start();
+    final sw = Stopwatch()..start();
     try {
       final BuildResult result = await _buildSystem.build(
-        globals.buildTargets.webServiceWorker(_fileSystem, compilerConfigs),
+        globals.buildTargets.webServiceWorker(_fileSystem, compilerConfigs, _analytics),
         Environment(
-          projectDir: _fileSystem.currentDirectory,
+          projectDir: flutterProject.directory,
           outputDir: outputDirectory,
           buildDir: flutterProject.directory
               .childDirectory('.dart_tool')
@@ -101,9 +115,12 @@ class WebBuilder {
           defines: <String, String>{
             kTargetFile: target,
             kHasWebPlugins: hasWebPlugins.toString(),
-            if (baseHref != null) kBaseHref: baseHref,
-            kServiceWorkerStrategy: serviceWorkerStrategy.cliName,
+            kBaseHref: ?baseHref,
+            kStaticAssetsUrl: ?staticAssetsUrl,
+            kServiceWorkerStrategy:
+                serviceWorkerStrategy?.cliName ?? ServiceWorkerStrategy.offlineFirst.cliName,
             ...buildInfo.toBuildSystemEnvironment(),
+            for (final MapEntry(:key, :value) in webDefines.entries) '$kWebDefinePrefix$key': value,
           },
           packageConfigPath: buildInfo.packageConfigPath,
           artifacts: globals.artifacts!,
@@ -111,11 +128,11 @@ class WebBuilder {
           logger: _logger,
           processManager: _processManager,
           platform: globals.platform,
-          usage: _flutterUsage,
           analytics: _analytics,
           cacheDir: globals.cache.getRoot(),
-          engineVersion:
-              globals.artifacts!.usesLocalArtifacts ? null : _flutterVersion.engineRevision,
+          engineVersion: globals.artifacts!.usesLocalArtifacts
+              ? null
+              : _flutterVersion.engineRevision,
           flutterRootDir: _fileSystem.directory(Cache.flutterRoot),
           // Web uses a different Dart plugin registry.
           // https://github.com/flutter/flutter/issues/80406
@@ -147,19 +164,12 @@ class WebBuilder {
 
     final String buildSettingsString = _buildEventAnalyticsSettings(configs: compilerConfigs);
 
-    BuildEvent(
-      'web-compile',
-      type: 'web',
-      settings: buildSettingsString,
-      flutterUsage: _flutterUsage,
-    ).send();
     _analytics.send(
       Event.flutterBuildInfo(label: 'web-compile', buildType: 'web', settings: buildSettingsString),
     );
 
     final Duration elapsedDuration = sw.elapsed;
-    final String variableName = compilerConfigs.length > 1 ? 'dual-compile' : 'dart2js';
-    _flutterUsage.sendTiming('build', variableName, elapsedDuration);
+    final variableName = compilerConfigs.length > 1 ? 'dual-compile' : 'dart2js';
     _analytics.send(
       Event.timing(
         workflow: 'build',
@@ -172,30 +182,19 @@ class WebBuilder {
 
 /// Web rendering backend mode.
 enum WebRendererMode {
-  /// Auto detects which rendering backend to use.
-  auto,
-
   /// Always uses canvaskit.
   canvaskit,
-
-  /// Always uses html.
-  html,
 
   /// Always use skwasm.
   skwasm;
 
   factory WebRendererMode.fromDartDefines(Iterable<String> defines, {required bool useWasm}) {
-    if (defines.contains('FLUTTER_WEB_AUTO_DETECT=true')) {
-      return auto;
-    } else if (defines.contains('FLUTTER_WEB_USE_SKIA=false') &&
+    if (defines.contains('FLUTTER_WEB_USE_SKIA=false') &&
         defines.contains('FLUTTER_WEB_USE_SKWASM=true')) {
       return skwasm;
     } else if (defines.contains('FLUTTER_WEB_USE_SKIA=true') &&
         defines.contains('FLUTTER_WEB_USE_SKWASM=false')) {
       return canvaskit;
-    } else if (defines.contains('FLUTTER_WEB_USE_SKIA=false') &&
-        defines.contains('FLUTTER_WEB_USE_SKWASM=false')) {
-      return html; // The horror!
     }
     return getDefault(useWasm: useWasm);
   }
@@ -207,30 +206,6 @@ enum WebRendererMode {
   static const WebRendererMode defaultForJs = WebRendererMode.canvaskit;
   static const WebRendererMode defaultForWasm = WebRendererMode.skwasm;
 
-  /// Returns whether the WebRendererMode is considered deprecated or not.
-  ///
-  /// Deprecated modes: auto, html.
-  bool get isDeprecated => switch (this) {
-    auto => true,
-    canvaskit => false,
-    html => true,
-    skwasm => false,
-  };
-
-  /// Returns a consistent deprecation warning for the WebRendererMode.
-  String get deprecationWarning =>
-      'The HTML Renderer is deprecated and will be removed. Please, stop using it.'
-      '\nSee: https://docs.flutter.dev/to/web-html-renderer-deprecation';
-
-  String get helpText => switch (this) {
-    auto => 'Use the HTML renderer on mobile devices, and CanvasKit on desktop devices.',
-    canvaskit =>
-      'Always use the CanvasKit renderer. This renderer uses WebGL and WebAssembly to render graphics.',
-    html =>
-      'Always use the HTML renderer. This renderer uses a combination of HTML, CSS, SVG, 2D Canvas, and WebGL.',
-    skwasm => 'Always use the experimental skwasm renderer.',
-  };
-
   /// Returns [dartDefines] in a way usable from the CLI.
   ///
   /// This is used to start integration tests.
@@ -238,9 +213,7 @@ enum WebRendererMode {
       dartDefines.map((String define) => '--dart-define=$define');
 
   Iterable<String> get dartDefines => switch (this) {
-    auto => const <String>{'FLUTTER_WEB_AUTO_DETECT=true'},
     canvaskit => const <String>{'FLUTTER_WEB_USE_SKIA=true', 'FLUTTER_WEB_USE_SKWASM=false'},
-    html => const <String>{'FLUTTER_WEB_USE_SKIA=false', 'FLUTTER_WEB_USE_SKWASM=false'},
     skwasm => const <String>{'FLUTTER_WEB_USE_SKIA=false', 'FLUTTER_WEB_USE_SKWASM=true'},
   };
 
@@ -250,9 +223,7 @@ enum WebRendererMode {
 
     dartDefinesSet
       ..removeWhere((String d) {
-        return d.startsWith('FLUTTER_WEB_AUTO_DETECT=') ||
-            d.startsWith('FLUTTER_WEB_USE_SKIA=') ||
-            d.startsWith('FLUTTER_WEB_USE_SKWASM=');
+        return d.startsWith('FLUTTER_WEB_USE_SKIA=') || d.startsWith('FLUTTER_WEB_USE_SKWASM=');
       })
       ..addAll(dartDefines);
 
@@ -262,78 +233,33 @@ enum WebRendererMode {
 
 /// The correct precompiled artifact to use for each build and render mode for DDC with AMD modules.
 // TODO(markzipan): delete this when DDC's AMD module system is deprecated, https://github.com/flutter/flutter/issues/142060.
-const Map<WebRendererMode, Map<NullSafetyMode, HostArtifact>> kAmdDartSdkJsArtifactMap =
-    <WebRendererMode, Map<NullSafetyMode, HostArtifact>>{
-      WebRendererMode.auto: <NullSafetyMode, HostArtifact>{
-        NullSafetyMode.sound: HostArtifact.webPrecompiledAmdCanvaskitAndHtmlSoundSdk,
-        NullSafetyMode.unsound: HostArtifact.webPrecompiledAmdCanvaskitAndHtmlSdk,
-      },
-      WebRendererMode.canvaskit: <NullSafetyMode, HostArtifact>{
-        NullSafetyMode.sound: HostArtifact.webPrecompiledAmdCanvaskitSoundSdk,
-        NullSafetyMode.unsound: HostArtifact.webPrecompiledAmdCanvaskitSdk,
-      },
-      WebRendererMode.html: <NullSafetyMode, HostArtifact>{
-        NullSafetyMode.sound: HostArtifact.webPrecompiledAmdSoundSdk,
-        NullSafetyMode.unsound: HostArtifact.webPrecompiledAmdSdk,
-      },
-    };
+const kAmdDartSdkJsArtifactMap = <WebRendererMode, HostArtifact>{
+  WebRendererMode.canvaskit: HostArtifact.webPrecompiledAmdCanvaskitSdk,
+};
 
 /// The correct source map artifact to use for each build and render mode for DDC with AMD modules.
 // TODO(markzipan): delete this when DDC's AMD module system is deprecated, https://github.com/flutter/flutter/issues/142060.
-const Map<WebRendererMode, Map<NullSafetyMode, HostArtifact>> kAmdDartSdkJsMapArtifactMap =
-    <WebRendererMode, Map<NullSafetyMode, HostArtifact>>{
-      WebRendererMode.auto: <NullSafetyMode, HostArtifact>{
-        NullSafetyMode.sound: HostArtifact.webPrecompiledAmdCanvaskitAndHtmlSoundSdkSourcemaps,
-        NullSafetyMode.unsound: HostArtifact.webPrecompiledAmdCanvaskitAndHtmlSdkSourcemaps,
-      },
-      WebRendererMode.canvaskit: <NullSafetyMode, HostArtifact>{
-        NullSafetyMode.sound: HostArtifact.webPrecompiledAmdCanvaskitSoundSdkSourcemaps,
-        NullSafetyMode.unsound: HostArtifact.webPrecompiledAmdCanvaskitSdkSourcemaps,
-      },
-      WebRendererMode.html: <NullSafetyMode, HostArtifact>{
-        NullSafetyMode.sound: HostArtifact.webPrecompiledAmdSoundSdkSourcemaps,
-        NullSafetyMode.unsound: HostArtifact.webPrecompiledAmdSdkSourcemaps,
-      },
-    };
+const kAmdDartSdkJsMapArtifactMap = <WebRendererMode, HostArtifact>{
+  WebRendererMode.canvaskit: HostArtifact.webPrecompiledAmdCanvaskitSdkSourcemaps,
+};
 
 /// The correct precompiled artifact to use for each build and render mode for
-/// DDC with DDC library bundle module format. Only artifacts with sound
-/// null-safety are provided.
-const Map<WebRendererMode, Map<NullSafetyMode, HostArtifact>>
-kDdcLibraryBundleDartSdkJsArtifactMap = <WebRendererMode, Map<NullSafetyMode, HostArtifact>>{
-  WebRendererMode.auto: <NullSafetyMode, HostArtifact>{
-    NullSafetyMode.sound: HostArtifact.webPrecompiledDdcLibraryBundleCanvaskitAndHtmlSoundSdk,
-  },
-  WebRendererMode.canvaskit: <NullSafetyMode, HostArtifact>{
-    NullSafetyMode.sound: HostArtifact.webPrecompiledDdcLibraryBundleCanvaskitSoundSdk,
-  },
-  WebRendererMode.html: <NullSafetyMode, HostArtifact>{
-    NullSafetyMode.sound: HostArtifact.webPrecompiledDdcLibraryBundleSoundSdk,
-  },
+/// DDC with DDC library bundle module format.
+const kDdcLibraryBundleDartSdkJsArtifactMap = <WebRendererMode, HostArtifact>{
+  WebRendererMode.canvaskit: HostArtifact.webPrecompiledDdcLibraryBundleCanvaskitSdk,
 };
 
 /// The correct source map artifact to use for each build and render mode for
-/// DDC with DDC library bundle module format. Only artifacts with sound
-/// null-safety are provided.
-const Map<WebRendererMode, Map<NullSafetyMode, HostArtifact>>
-kDdcLibraryBundleDartSdkJsMapArtifactMap = <WebRendererMode, Map<NullSafetyMode, HostArtifact>>{
-  WebRendererMode.auto: <NullSafetyMode, HostArtifact>{
-    NullSafetyMode.sound:
-        HostArtifact.webPrecompiledDdcLibraryBundleCanvaskitAndHtmlSoundSdkSourcemaps,
-  },
-  WebRendererMode.canvaskit: <NullSafetyMode, HostArtifact>{
-    NullSafetyMode.sound: HostArtifact.webPrecompiledDdcLibraryBundleCanvaskitSoundSdkSourcemaps,
-  },
-  WebRendererMode.html: <NullSafetyMode, HostArtifact>{
-    NullSafetyMode.sound: HostArtifact.webPrecompiledDdcLibraryBundleSoundSdkSourcemaps,
-  },
+/// DDC with DDC library bundle module format.
+const kDdcLibraryBundleDartSdkJsMapArtifactMap = <WebRendererMode, HostArtifact>{
+  WebRendererMode.canvaskit: HostArtifact.webPrecompiledDdcLibraryBundleCanvaskitSdkSourcemaps,
 };
 
 String _buildEventAnalyticsSettings({required List<WebCompilerConfig> configs}) {
-  final Map<String, Object> values = <String, Object>{};
-  final List<String> renderers = <String>[];
-  final List<String> targets = <String>[];
-  for (final WebCompilerConfig config in configs) {
+  final values = <String, Object>{};
+  final renderers = <String>[];
+  final targets = <String>[];
+  for (final config in configs) {
     values.addAll(config.buildEventAnalyticsValues);
     renderers.add(config.renderer.name);
     targets.add(config.compileTarget.name);

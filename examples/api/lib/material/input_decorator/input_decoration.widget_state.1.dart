@@ -14,7 +14,6 @@ class MaterialStateExampleApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      theme: ThemeData(useMaterial3: true),
       home: Scaffold(
         appBar: AppBar(title: const Text('InputDecoration Sample')),
         body: const MaterialStateExample(),
@@ -28,17 +27,13 @@ class MaterialStateExample extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ThemeData themeData = Theme.of(context);
-    return Theme(
-      data: themeData.copyWith(
-        inputDecorationTheme: themeData.inputDecorationTheme.copyWith(
-          prefixIconColor: const WidgetStateColor.fromMap(<WidgetStatesConstraint, Color>{
+    return InputDecorationTheme(
+      prefixIconColor:
+          const WidgetStateColor.fromMap(<WidgetStatesConstraint, Color>{
             WidgetState.error: Colors.red,
             WidgetState.focused: Colors.blue,
             WidgetState.any: Colors.grey,
           }),
-        ),
-      ),
       child: TextFormField(
         initialValue: 'example.com',
         decoration: const InputDecoration(prefixIcon: Icon(Icons.web)),

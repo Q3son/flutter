@@ -13,7 +13,7 @@ class TabBarApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(theme: ThemeData(useMaterial3: true), home: const TabBarExample());
+    return const MaterialApp(home: TabBarExample());
   }
 }
 
@@ -26,7 +26,8 @@ class TabBarExample extends StatefulWidget {
 
 /// [AnimationController]s can be created with `vsync: this` because of
 /// [TickerProviderStateMixin].
-class _TabBarExampleState extends State<TabBarExample> with TickerProviderStateMixin {
+class _TabBarExampleState extends State<TabBarExample>
+    with TickerProviderStateMixin {
   late final TabController _tabController;
 
   @override

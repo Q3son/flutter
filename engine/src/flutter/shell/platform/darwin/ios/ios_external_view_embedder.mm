@@ -40,7 +40,7 @@ void IOSExternalViewEmbedder::BeginFrame(
     const fml::RefPtr<fml::RasterThreadMerger>& raster_thread_merger) {}
 
 // |ExternalViewEmbedder|
-void IOSExternalViewEmbedder::PrepareFlutterView(SkISize frame_size, double device_pixel_ratio) {
+void IOSExternalViewEmbedder::PrepareFlutterView(DlISize frame_size, double device_pixel_ratio) {
   FML_CHECK(platform_views_controller_);
   [platform_views_controller_ beginFrameWithSize:frame_size];
 }
@@ -59,10 +59,8 @@ PostPrerollResult IOSExternalViewEmbedder::PostPrerollAction(
     const fml::RefPtr<fml::RasterThreadMerger>& raster_thread_merger) {
   TRACE_EVENT0("flutter", "IOSExternalViewEmbedder::PostPrerollAction");
   FML_CHECK(platform_views_controller_);
-  BOOL impeller_enabled = ios_context_->GetBackend() != IOSRenderingBackend::kSkia;
   PostPrerollResult result =
-      [platform_views_controller_ postPrerollActionWithThreadMerger:raster_thread_merger
-                                                    impellerEnabled:impeller_enabled];
+      [platform_views_controller_ postPrerollActionWithThreadMerger:raster_thread_merger];
   return result;
 }
 
@@ -85,9 +83,7 @@ void IOSExternalViewEmbedder::SubmitFlutterView(
   // Properly support multi-view in the future.
   FML_DCHECK(flutter_view_id == kFlutterImplicitViewId);
   FML_CHECK(platform_views_controller_);
-  [platform_views_controller_ submitFrame:std::move(frame)
-                           withIosContext:ios_context_
-                                grContext:context];
+  [platform_views_controller_ submitFrame:std::move(frame) withIosContext:ios_context_];
   TRACE_EVENT0("flutter", "IOSExternalViewEmbedder::DidSubmitFrame");
 }
 
@@ -96,32 +92,46 @@ void IOSExternalViewEmbedder::EndFrame(
     bool should_resubmit_frame,
     const fml::RefPtr<fml::RasterThreadMerger>& raster_thread_merger) {
   TRACE_EVENT0("flutter", "IOSExternalViewEmbedder::EndFrame");
-  BOOL impeller_enabled = ios_context_->GetBackend() != IOSRenderingBackend::kSkia;
   [platform_views_controller_ endFrameWithResubmit:should_resubmit_frame
-                                      threadMerger:raster_thread_merger
-                                   impellerEnabled:impeller_enabled];
+                                      threadMerger:raster_thread_merger];
 }
 
 // |ExternalViewEmbedder|
 bool IOSExternalViewEmbedder::SupportsDynamicThreadMerging() {
-// TODO(jonahwilliams): remove this once Software backend is removed for iOS Sim.
-#if FML_OS_IOS_SIMULATOR
-  return true;
-#else
-  return ios_context_->GetBackend() == IOSRenderingBackend::kSkia;
-#endif  // FML_OS_IOS_SIMULATOR
+  return false;
 }
 
 // |ExternalViewEmbedder|
 void IOSExternalViewEmbedder::PushFilterToVisitedPlatformViews(
     const std::shared_ptr<DlImageFilter>& filter,
-    const SkRect& filter_rect) {
+    const DlRect& filter_rect) {
   [platform_views_controller_ pushFilterToVisitedPlatformViews:filter withRect:filter_rect];
 }
 
 // |ExternalViewEmbedder|
 void IOSExternalViewEmbedder::PushVisitedPlatformView(int64_t view_id) {
   [platform_views_controller_ pushVisitedPlatformViewId:view_id];
+}
+
+// |ExternalViewEmbedder|
+void IOSExternalViewEmbedder::PushClipRectToVisitedPlatformViews(const DlRect& clip_rect) {
+  [platform_views_controller_ pushClipRectToVisitedPlatformViews:clip_rect];
+}
+
+// |ExternalViewEmbedder|
+void IOSExternalViewEmbedder::PushClipRRectToVisitedPlatformViews(const DlRoundRect& clip_rrect) {
+  [platform_views_controller_ pushClipRRectToVisitedPlatformViews:clip_rrect];
+}
+
+// |ExternalViewEmbedder|
+void IOSExternalViewEmbedder::PushClipRSuperellipseToVisitedPlatformViews(
+    const DlRoundSuperellipse& clip_rse) {
+  [platform_views_controller_ pushClipRSuperellipseToVisitedPlatformViews:clip_rse];
+}
+
+// |ExternalViewEmbedder|
+void IOSExternalViewEmbedder::PushClipPathToVisitedPlatformViews(const DlPath& clip_path) {
+  [platform_views_controller_ pushClipPathToVisitedPlatformViews:clip_path];
 }
 
 }  // namespace flutter

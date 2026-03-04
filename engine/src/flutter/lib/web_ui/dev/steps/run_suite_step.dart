@@ -10,10 +10,8 @@ import 'package:path/path.dart' as pathlib;
 //                https://github.com/dart-lang/test/issues/1521
 import 'package:skia_gold_client/skia_gold_client.dart';
 import 'package:test_api/backend.dart' as hack;
-// TODO(ditman): Fix ignores when https://github.com/flutter/flutter/issues/143599 is resolved.
-import 'package:test_core/src/executable.dart' as test; // ignore: implementation_imports
-import 'package:test_core/src/runner/hack_register_platform.dart'
-    as hack; // ignore: implementation_imports
+import 'package:test_core/src/executable.dart' as test;
+import 'package:test_core/src/runner/hack_register_platform.dart' as hack;
 
 import '../browser.dart';
 import '../common.dart';
@@ -67,6 +65,7 @@ class RunSuiteStep implements PipelineStep {
     final BrowserEnvironment browserEnvironment = getBrowserEnvironment(
       suite.runConfig.browser,
       useDwarf: useDwarf,
+      browserFlags: suite.runConfig.browserFlags,
     );
     await browserEnvironment.prepare();
 
@@ -76,7 +75,7 @@ class RunSuiteStep implements PipelineStep {
       browserEnvironment.packageTestConfigurationYamlFile,
     );
     final String bundleBuildPath = getBundleBuildDirectory(suite.testBundle).path;
-    final List<String> testArgs = <String>[
+    final testArgs = <String>[
       ...<String>['-r', 'compact'],
       // Disable concurrency. Running with concurrency proved to be flaky.
       '--concurrency=1',
@@ -106,7 +105,7 @@ class RunSuiteStep implements PipelineStep {
     print('[${suite.name.ansiCyan}] Running...');
 
     // We want to run tests with the test set's directory as a working directory.
-    final io.Directory testSetDirectory = io.Directory(
+    final testSetDirectory = io.Directory(
       pathlib.join(environment.webUiTestDir.path, suite.testBundle.testSet.directory),
     );
     final dynamic originalCwd = io.Directory.current;
@@ -134,7 +133,7 @@ class RunSuiteStep implements PipelineStep {
   }
 
   io.Directory _prepareTestResultsDirectory() {
-    final io.Directory resultsDirectory = io.Directory(
+    final resultsDirectory = io.Directory(
       pathlib.join(environment.webUiTestResultsDirectory.path, suite.name),
     );
     if (resultsDirectory.existsSync()) {
@@ -146,7 +145,7 @@ class RunSuiteStep implements PipelineStep {
 
   List<String> _collectTestPaths() {
     final io.Directory bundleBuild = getBundleBuildDirectory(suite.testBundle);
-    final io.File resultsJsonFile = io.File(pathlib.join(bundleBuild.path, 'results.json'));
+    final resultsJsonFile = io.File(pathlib.join(bundleBuild.path, 'results.json'));
     if (!resultsJsonFile.existsSync()) {
       throw ToolExit(
         'Could not find built bundle ${suite.testBundle.name.ansiMagenta} for suite ${suite.name.ansiCyan}.',
@@ -155,10 +154,10 @@ class RunSuiteStep implements PipelineStep {
     final String jsonString = resultsJsonFile.readAsStringSync();
     final jsonContents = const JsonDecoder().convert(jsonString) as Map<String, Object?>;
     final results = jsonContents['results']! as Map<String, Object?>;
-    final List<String> testPaths = <String>[];
+    final testPaths = <String>[];
     results.forEach((Object? k, Object? v) {
-      final String result = v! as String;
-      final String testPath = k! as String;
+      final result = v! as String;
+      final testPath = k! as String;
       if (testFiles != null) {
         if (!testFiles!.contains(FilePath.fromTestSet(suite.testBundle.testSet, testPath))) {
           return;
@@ -173,15 +172,21 @@ class RunSuiteStep implements PipelineStep {
 
   Future<SkiaGoldClient?> _createSkiaClient() async {
     if (suite.testBundle.compileConfigs.length > 1) {
-      print('Not creating skia client due to multiple compile configs');
       // Multiple compile configs are only used for our fallback tests, which
       // do not collect goldens.
+      print('Did not create SkiaGoldClient. Reason: Multiple compile configs.');
       return null;
     }
     if (suite.runConfig.browser == BrowserName.safari) {
-      print('Not creating skia client for Safari');
       // Goldens from Safari produce too many diffs, disabled for now.
       // See https://github.com/flutter/flutter/issues/143591
+      print('Did not create SkiaGoldClient. Reason: Safari browser.');
+      return null;
+    }
+    if (suite.runConfig.enableWimp) {
+      // Wimp has various major rendering limitations right now, such
+      // as MSAA being disabled. As a result, we are not going to validate
+      // golden tests until wimp is in a more stable place.
       return null;
     }
     final Renderer renderer = suite.testBundle.compileConfigs.first.renderer;
@@ -190,7 +195,7 @@ class RunSuiteStep implements PipelineStep {
     if (workDirectory.existsSync()) {
       workDirectory.deleteSync(recursive: true);
     }
-    final bool isWasm = suite.testBundle.compileConfigs.first.compiler == Compiler.dart2wasm;
+    final isWasm = suite.testBundle.compileConfigs.first.compiler == Compiler.dart2wasm;
     final bool singleThreaded =
         suite.runConfig.forceSingleThreadedSkwasm || !suite.runConfig.crossOriginIsolated;
     final String rendererName = switch (renderer) {
@@ -202,16 +207,17 @@ class RunSuiteStep implements PipelineStep {
       'Browser': suite.runConfig.browser.name,
       if (isWasm) 'Wasm': 'true',
       'Renderer': rendererName,
-      if (variant != null) 'CanvasKitVariant': variant.name,
+      'CanvasKitVariant': ?variant?.name,
     };
-    print('Created Skia Gold Client. dimensions: $dimensions');
-    final SkiaGoldClient skiaClient = SkiaGoldClient(workDirectory, dimensions: dimensions);
+    final skiaClient = SkiaGoldClient(workDirectory, dimensions: dimensions);
 
-    if (await _checkSkiaClient(skiaClient)) {
-      print('Successfully checked Skia Gold Client');
+    final (bool success, String? reason) = await _checkSkiaClient(skiaClient);
+    if (success) {
+      print('Created SkiaGoldClient. Dimensions: $dimensions');
       return skiaClient;
     }
 
+    print('Did not create SkiaGoldClient. Reason: $reason.');
     if (requireSkiaGold) {
       throw ToolExit('Skia Gold is required but is unavailable.');
     }
@@ -220,13 +226,13 @@ class RunSuiteStep implements PipelineStep {
   }
 
   /// Checks whether the Skia Client is usable in this environment.
-  Future<bool> _checkSkiaClient(SkiaGoldClient skiaClient) async {
+  Future<(bool, String?)> _checkSkiaClient(SkiaGoldClient skiaClient) async {
     // Now let's check whether Skia Gold is reachable or not.
     if (isLuci) {
       if (SkiaGoldClient.isAvailable()) {
         try {
           await skiaClient.auth();
-          return true;
+          return (true, null);
         } catch (e) {
           print(e);
         }
@@ -235,14 +241,14 @@ class RunSuiteStep implements PipelineStep {
       try {
         // Check if we can reach Gold.
         await skiaClient.getExpectationForTest('');
-        return true;
+        return (true, null);
       } on io.OSError catch (_) {
-        print('OSError occurred, could not reach Gold.');
+        return (false, 'OSError occurred, could not reach Gold');
       } on io.SocketException catch (_) {
-        print('SocketException occurred, could not reach Gold.');
+        return (false, 'SocketException occurred, could not reach Gold');
       }
     }
 
-    return false;
+    return (false, 'Unknown');
   }
 }

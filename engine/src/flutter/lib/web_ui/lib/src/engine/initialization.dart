@@ -4,7 +4,6 @@
 
 import 'dart:async';
 import 'dart:developer' as developer;
-import 'dart:js_interop';
 
 import 'package:ui/src/engine.dart';
 import 'package:ui/ui.dart' as ui;
@@ -22,12 +21,11 @@ const bool kProfileMode = bool.fromEnvironment('dart.vm.profile');
 const bool kDebugMode = !kReleaseMode && !kProfileMode;
 
 /// Returns mode of the app is running in as a string.
-String get buildMode =>
-    kReleaseMode
-        ? 'release'
-        : kProfileMode
-        ? 'profile'
-        : 'debug';
+String get buildMode => kReleaseMode
+    ? 'release'
+    : kProfileMode
+    ? 'profile'
+    : 'debug';
 
 /// A benchmark metric that includes frame-related computations prior to
 /// submitting layer and picture operations to the underlying renderer, such as
@@ -58,7 +56,7 @@ void debugEmulateHotRestart() {
   while (_hotRestartListeners.isNotEmpty) {
     final List<ui.VoidCallback> copyOfListeners = _hotRestartListeners.toList();
     _hotRestartListeners.clear();
-    for (final ui.VoidCallback listener in copyOfListeners) {
+    for (final listener in copyOfListeners) {
       listener();
     }
   }
@@ -154,51 +152,6 @@ Future<void> initializeEngineServices({
     Profiler.ensureInitialized();
   }
 
-  bool waitingForAnimation = false;
-  scheduleFrameCallback = () {
-    // We're asked to schedule a frame and call `frameHandler` when the frame
-    // fires.
-    if (!waitingForAnimation) {
-      waitingForAnimation = true;
-      domWindow.requestAnimationFrame((JSNumber highResTime) {
-        FrameTimingRecorder.recordCurrentFrameVsync();
-
-        // In Flutter terminology "building a frame" consists of "beginning
-        // frame" and "drawing frame".
-        //
-        // We do not call `recordBuildFinish` from here because
-        // part of the rasterization process, particularly in the HTML
-        // renderer, takes place in the `SceneBuilder.build()`.
-        FrameTimingRecorder.recordCurrentFrameBuildStart();
-
-        // Reset immediately, because `frameHandler` can schedule more frames.
-        waitingForAnimation = false;
-
-        // We have to convert high-resolution time to `int` so we can construct
-        // a `Duration` out of it. However, high-res time is supplied in
-        // milliseconds as a double value, with sub-millisecond information
-        // hidden in the fraction. So we first multiply it by 1000 to uncover
-        // microsecond precision, and only then convert to `int`.
-        final int highResTimeMicroseconds = (1000 * highResTime.toDartDouble).toInt();
-
-        if (EnginePlatformDispatcher.instance.onBeginFrame != null) {
-          EnginePlatformDispatcher.instance.invokeOnBeginFrame(
-            Duration(microseconds: highResTimeMicroseconds),
-          );
-        }
-
-        if (EnginePlatformDispatcher.instance.onDrawFrame != null) {
-          // TODO(yjbanov): technically Flutter flushes microtasks between
-          //                onBeginFrame and onDrawFrame. We don't, which hasn't
-          //                been an issue yet, but eventually we'll have to
-          //                implement it properly. (Also see the to-do in
-          //                `EnginePlatformDispatcher.scheduleWarmUpFrame`).
-          EnginePlatformDispatcher.instance.invokeOnDrawFrame();
-        }
-      });
-    }
-  };
-
   assetManager ??= ui_web.AssetManager(assetBase: configuration.assetBase);
   _setAssetManager(assetManager);
 
@@ -236,12 +189,7 @@ Future<void> initializeEngineUi() async {
   ensureMetaTag('generator', 'Flutter');
 
   if (!configuration.multiViewEnabled) {
-    final EngineFlutterWindow implicitView = ensureImplicitViewInitialized(
-      hostElement: configuration.hostElement,
-    );
-    if (renderer is HtmlRenderer) {
-      ensureResourceManagerInitialized(implicitView);
-    }
+    ensureImplicitViewInitialized(hostElement: configuration.hostElement);
   }
   _initializationState = DebugEngineInitializationState.initialized;
 }
@@ -263,7 +211,7 @@ void _setAssetManager(ui_web.AssetManager assetManager) {
 Future<void> _downloadAssetFonts() async {
   renderer.fontCollection.clear();
 
-  if (ui_web.debugEmulateFlutterTesterEnvironment) {
+  if (ui_web.TestEnvironment.instance.forceTestFonts) {
     // Load the embedded test font before loading fonts from the assets so that
     // the embedded test font is the default (first) font.
     await renderer.fontCollection.loadFontFromList(
@@ -276,17 +224,3 @@ Future<void> _downloadAssetFonts() async {
     await renderer.fontCollection.loadAssetFonts(await fetchFontManifest(ui_web.assetManager));
   }
 }
-
-/// Whether to disable the font fallback system.
-///
-/// We need to disable font fallbacks for some framework tests because
-/// Flutter error messages may contain an arrow symbol which is not
-/// covered by ASCII fonts. This causes us to try to download the
-/// Noto Sans Symbols font, which kicks off a `Timer` which doesn't
-/// complete before the Widget tree is disposed (this is by design).
-bool get debugDisableFontFallbacks => _debugDisableFontFallbacks;
-set debugDisableFontFallbacks(bool value) {
-  _debugDisableFontFallbacks = value;
-}
-
-bool _debugDisableFontFallbacks = false;

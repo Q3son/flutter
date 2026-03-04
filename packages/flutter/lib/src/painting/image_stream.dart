@@ -16,8 +16,6 @@ import 'dart:ui' as ui show Codec, FrameInfo, Image;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/scheduler.dart';
 
-const String _flutterPaintingLibrary = 'package:flutter/painting.dart';
-
 /// A [dart:ui.Image] object with its corresponding scale.
 ///
 /// ImageInfo objects are used by [ImageStream] objects to represent the
@@ -47,13 +45,7 @@ class ImageInfo {
   ///
   /// See details for disposing contract in the class description.
   ImageInfo({required this.image, this.scale = 1.0, this.debugLabel}) {
-    if (kFlutterMemoryAllocationsEnabled) {
-      MemoryAllocations.instance.dispatchObjectCreated(
-        library: _flutterPaintingLibrary,
-        className: '$ImageInfo',
-        object: this,
-      );
-    }
+    assert(debugMaybeDispatchCreated('painting', 'ImageInfo', this));
   }
 
   /// Creates an [ImageInfo] with a cloned [image].
@@ -144,9 +136,7 @@ class ImageInfo {
   /// and no clones of it or the image it contains can be made.
   void dispose() {
     assert((image.debugGetOpenHandleStackTraces()?.length ?? 1) > 0);
-    if (kFlutterMemoryAllocationsEnabled) {
-      MemoryAllocations.instance.dispatchObjectDisposed(object: this);
-    }
+    assert(debugMaybeDispatchDisposed(this));
     image.dispose();
   }
 
@@ -403,7 +393,7 @@ class ImageStream with Diagnosticable {
       return _completer!.removeListener(listener);
     }
     assert(_listeners != null);
-    for (int i = 0; i < _listeners!.length; i += 1) {
+    for (var i = 0; i < _listeners!.length; i += 1) {
       if (_listeners![i] == listener) {
         _listeners!.removeAt(i);
         break;
@@ -460,15 +450,7 @@ class ImageStream with Diagnosticable {
 class ImageStreamCompleterHandle {
   ImageStreamCompleterHandle._(ImageStreamCompleter this._completer) {
     _completer!._keepAliveHandles += 1;
-    // TODO(polina-c): stop duplicating code across disposables
-    // https://github.com/flutter/flutter/issues/137435
-    if (kFlutterMemoryAllocationsEnabled) {
-      FlutterMemoryAllocations.instance.dispatchObjectCreated(
-        library: _flutterPaintingLibrary,
-        className: '$ImageStreamCompleterHandle',
-        object: this,
-      );
-    }
+    assert(debugMaybeDispatchCreated('painting', 'ImageStreamCompleterHandle', this));
   }
 
   ImageStreamCompleter? _completer;
@@ -485,11 +467,7 @@ class ImageStreamCompleterHandle {
     _completer!._keepAliveHandles -= 1;
     _completer!._maybeDispose();
     _completer = null;
-    // TODO(polina-c): stop duplicating code across disposables
-    // https://github.com/flutter/flutter/issues/137435
-    if (kFlutterMemoryAllocationsEnabled) {
-      FlutterMemoryAllocations.instance.dispatchObjectDisposed(object: this);
-    }
+    assert(debugMaybeDispatchDisposed(this));
   }
 }
 
@@ -530,10 +508,6 @@ abstract class ImageStreamCompleter with Diagnosticable {
   @visibleForTesting
   bool get hasListeners => _listeners.isNotEmpty;
 
-  /// We must avoid disposing a completer if it has never had a listener, even
-  /// if all [keepAlive] handles get disposed.
-  bool _hadAtLeastOneListener = false;
-
   /// Whether the future listeners added to this completer are initial listeners.
   ///
   /// This can be set to true when an [ImageStream] adds its initial listeners to
@@ -559,7 +533,6 @@ abstract class ImageStreamCompleter with Diagnosticable {
   ///    automatically removed after first image load or error.
   void addListener(ImageStreamListener listener) {
     _checkDisposed();
-    _hadAtLeastOneListener = true;
     _listeners.add(listener);
     if (_currentImage != null) {
       try {
@@ -666,7 +639,7 @@ abstract class ImageStreamCompleter with Diagnosticable {
   /// disposed, this image stream is no longer usable.
   void removeListener(ImageStreamListener listener) {
     _checkDisposed();
-    for (int i = 0; i < _listeners.length; i += 1) {
+    for (var i = 0; i < _listeners.length; i += 1) {
       if (_listeners[i] == listener) {
         _listeners.removeAt(i);
         break;
@@ -674,7 +647,7 @@ abstract class ImageStreamCompleter with Diagnosticable {
     }
     if (_listeners.isEmpty) {
       final List<VoidCallback> callbacks = _onLastListenerRemovedCallbacks.toList();
-      for (final VoidCallback callback in callbacks) {
+      for (final callback in callbacks) {
         callback();
       }
       _onLastListenerRemovedCallbacks.clear();
@@ -693,10 +666,10 @@ abstract class ImageStreamCompleter with Diagnosticable {
   void onDisposed() {}
 
   /// Disposes this [ImageStreamCompleter] unless:
-  ///   1. It has never had a listener
-  ///   2. It is already disposed
-  ///   3. It has listeners.
-  ///   4. It has active "keep alive" handles.
+  ///
+  ///   1. It is already disposed
+  ///   2. It has listeners.
+  ///   3. It has active "keep alive" handles.
   @nonVirtual
   void maybeDispose() {
     _maybeDispose();
@@ -704,7 +677,7 @@ abstract class ImageStreamCompleter with Diagnosticable {
 
   @mustCallSuper
   void _maybeDispose() {
-    if (!_hadAtLeastOneListener || _disposed || _listeners.isNotEmpty || _keepAliveHandles != 0) {
+    if (_disposed || _listeners.isNotEmpty || _keepAliveHandles != 0) {
       return;
     }
 
@@ -761,8 +734,8 @@ abstract class ImageStreamCompleter with Diagnosticable {
       return;
     }
     // Make a copy to allow for concurrent modification.
-    final List<ImageStreamListener> localListeners = List<ImageStreamListener>.of(_listeners);
-    for (final ImageStreamListener listener in localListeners) {
+    final localListeners = List<ImageStreamListener>.of(_listeners);
+    for (final listener in localListeners) {
       try {
         listener.onImage(image.clone(), false);
       } catch (exception, stack) {
@@ -823,7 +796,7 @@ abstract class ImageStreamCompleter with Diagnosticable {
     );
 
     // Make a copy to allow for concurrent modification.
-    final List<ImageErrorListener> localErrorListeners = <ImageErrorListener>[
+    final localErrorListeners = <ImageErrorListener>[
       ..._listeners
           .map<ImageErrorListener?>((ImageStreamListener listener) => listener.onError)
           .whereType<ImageErrorListener>(),
@@ -832,8 +805,8 @@ abstract class ImageStreamCompleter with Diagnosticable {
 
     _ephemeralErrorListeners.clear();
 
-    bool handled = false;
-    for (final ImageErrorListener errorListener in localErrorListeners) {
+    var handled = false;
+    for (final errorListener in localErrorListeners) {
       try {
         errorListener(exception, stack);
         handled = true;
@@ -863,12 +836,11 @@ abstract class ImageStreamCompleter with Diagnosticable {
     _checkDisposed();
     if (hasListeners) {
       // Make a copy to allow for concurrent modification.
-      final List<ImageChunkListener> localListeners =
-          _listeners
-              .map<ImageChunkListener?>((ImageStreamListener listener) => listener.onChunk)
-              .whereType<ImageChunkListener>()
-              .toList();
-      for (final ImageChunkListener listener in localListeners) {
+      final List<ImageChunkListener> localListeners = _listeners
+          .map<ImageChunkListener?>((ImageStreamListener listener) => listener.onChunk)
+          .whereType<ImageChunkListener>()
+          .toList();
+      for (final listener in localListeners) {
         listener(event);
       }
     }
@@ -980,7 +952,8 @@ class MultiFrameImageStreamCompleter extends ImageStreamCompleter {
   /// Immediately starts decoding the first image frame when the codec is ready.
   ///
   /// The `codec` parameter is a future for an initialized [ui.Codec] that will
-  /// be used to decode the image.
+  /// be used to decode the image. This completer takes ownership of the passed
+  /// `codec` and will dispose it once it is no longer needed.
   ///
   /// The `scale` parameter is the linear scale factor for drawing this frames
   /// of this image at their intended size.
@@ -1068,10 +1041,18 @@ class MultiFrameImageStreamCompleter extends ImageStreamCompleter {
       _frameDuration = _nextFrame!.duration;
       _nextFrame!.image.dispose();
       _nextFrame = null;
+      if (_codec == null) {
+        // codec was disposed during _emitFrame
+        return;
+      }
       final int completedCycles = _framesEmitted ~/ _codec!.frameCount;
       if (_codec!.repetitionCount == -1 || completedCycles <= _codec!.repetitionCount) {
         _decodeNextFrameAndSchedule();
+        return;
       }
+
+      _codec!.dispose();
+      _codec = null;
       return;
     }
     final Duration delay = _frameDuration! - (timestamp - _shownTimestamp);
@@ -1105,6 +1086,11 @@ class MultiFrameImageStreamCompleter extends ImageStreamCompleter {
       );
       return;
     }
+    if (_codec == null) {
+      // codec was disposed during getNextFrame
+      return;
+    }
+
     if (_codec!.frameCount == 1) {
       // ImageStreamCompleter listeners removed while waiting for next frame to
       // be decoded.
@@ -1119,6 +1105,9 @@ class MultiFrameImageStreamCompleter extends ImageStreamCompleter {
       );
       _nextFrame!.image.dispose();
       _nextFrame = null;
+
+      _codec?.dispose();
+      _codec = null;
       return;
     }
     _scheduleAppFrame();
@@ -1161,6 +1150,9 @@ class MultiFrameImageStreamCompleter extends ImageStreamCompleter {
       _chunkSubscription?.onData(null);
       _chunkSubscription?.cancel();
       _chunkSubscription = null;
+
+      _codec?.dispose();
+      _codec = null;
     }
   }
 }

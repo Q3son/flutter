@@ -15,7 +15,7 @@ namespace {
 void AddSliceOfSize(
     std::unordered_map<int64_t, std::unique_ptr<EmbedderViewSlice>>& slices,
     int64_t id,
-    SkRect rect) {
+    DlRect rect) {
   slices[id] = std::make_unique<DisplayListEmbedderViewSlice>(rect);
   DlPaint paint;
   paint.setColor(DlColor::kBlack());
@@ -24,14 +24,14 @@ void AddSliceOfSize(
 }  // namespace
 
 TEST(ViewSlicerTest, CanSlicerNonOverlappingViews) {
-  DisplayListBuilder builder(SkRect::MakeLTRB(0, 0, 100, 100));
+  DisplayListBuilder builder(DlRect::MakeLTRB(0, 0, 100, 100));
 
   std::vector<int64_t> composition_order = {1};
   std::unordered_map<int64_t, std::unique_ptr<EmbedderViewSlice>> slices;
-  AddSliceOfSize(slices, 1, SkRect::MakeLTRB(99, 99, 100, 100));
+  AddSliceOfSize(slices, 1, DlRect::MakeLTRB(99, 99, 100, 100));
 
-  std::unordered_map<int64_t, SkRect> view_rects = {
-      {1, SkRect::MakeLTRB(50, 50, 60, 60)}};
+  std::unordered_map<int64_t, DlRect> view_rects = {
+      {1, DlRect::MakeLTRB(50, 50, 60, 60)}};
 
   auto computed_overlays =
       SliceViews(&builder, composition_order, slices, view_rects);
@@ -40,14 +40,14 @@ TEST(ViewSlicerTest, CanSlicerNonOverlappingViews) {
 }
 
 TEST(ViewSlicerTest, IgnoresFractionalOverlaps) {
-  DisplayListBuilder builder(SkRect::MakeLTRB(0, 0, 100, 100));
+  DisplayListBuilder builder(DlRect::MakeLTRB(0, 0, 100, 100));
 
   std::vector<int64_t> composition_order = {1};
   std::unordered_map<int64_t, std::unique_ptr<EmbedderViewSlice>> slices;
-  AddSliceOfSize(slices, 1, SkRect::MakeLTRB(0, 0, 50.49, 50.49));
+  AddSliceOfSize(slices, 1, DlRect::MakeLTRB(0, 0, 50.49, 50.49));
 
-  std::unordered_map<int64_t, SkRect> view_rects = {
-      {1, SkRect::MakeLTRB(50.5, 50.5, 100, 100)}};
+  std::unordered_map<int64_t, DlRect> view_rects = {
+      {1, DlRect::MakeLTRB(50.5, 50.5, 100, 100)}};
 
   auto computed_overlays =
       SliceViews(&builder, composition_order, slices, view_rects);
@@ -56,14 +56,14 @@ TEST(ViewSlicerTest, IgnoresFractionalOverlaps) {
 }
 
 TEST(ViewSlicerTest, ComputesOverlapWith1PV) {
-  DisplayListBuilder builder(SkRect::MakeLTRB(0, 0, 100, 100));
+  DisplayListBuilder builder(DlRect::MakeLTRB(0, 0, 100, 100));
 
   std::vector<int64_t> composition_order = {1};
   std::unordered_map<int64_t, std::unique_ptr<EmbedderViewSlice>> slices;
-  AddSliceOfSize(slices, 1, SkRect::MakeLTRB(0, 0, 50, 50));
+  AddSliceOfSize(slices, 1, DlRect::MakeLTRB(0, 0, 50, 50));
 
-  std::unordered_map<int64_t, SkRect> view_rects = {
-      {1, SkRect::MakeLTRB(0, 0, 100, 100)}};
+  std::unordered_map<int64_t, DlRect> view_rects = {
+      {1, DlRect::MakeLTRB(0, 0, 100, 100)}};
 
   auto computed_overlays =
       SliceViews(&builder, composition_order, slices, view_rects);
@@ -72,20 +72,20 @@ TEST(ViewSlicerTest, ComputesOverlapWith1PV) {
   auto overlay = computed_overlays.find(1);
   ASSERT_NE(overlay, computed_overlays.end());
 
-  EXPECT_EQ(overlay->second, SkRect::MakeLTRB(0, 0, 50, 50));
+  EXPECT_EQ(overlay->second, DlRect::MakeLTRB(0, 0, 50, 50));
 }
 
 TEST(ViewSlicerTest, ComputesOverlapWith2PV) {
-  DisplayListBuilder builder(SkRect::MakeLTRB(0, 0, 100, 100));
+  DisplayListBuilder builder(DlRect::MakeLTRB(0, 0, 100, 100));
 
   std::vector<int64_t> composition_order = {1, 2};
   std::unordered_map<int64_t, std::unique_ptr<EmbedderViewSlice>> slices;
-  AddSliceOfSize(slices, 1, SkRect::MakeLTRB(0, 0, 50, 50));
-  AddSliceOfSize(slices, 2, SkRect::MakeLTRB(50, 50, 100, 100));
+  AddSliceOfSize(slices, 1, DlRect::MakeLTRB(0, 0, 50, 50));
+  AddSliceOfSize(slices, 2, DlRect::MakeLTRB(50, 50, 100, 100));
 
-  std::unordered_map<int64_t, SkRect> view_rects = {
-      {1, SkRect::MakeLTRB(0, 0, 50, 50)},      //
-      {2, SkRect::MakeLTRB(50, 50, 100, 100)},  //
+  std::unordered_map<int64_t, DlRect> view_rects = {
+      {1, DlRect::MakeLTRB(0, 0, 50, 50)},      //
+      {2, DlRect::MakeLTRB(50, 50, 100, 100)},  //
   };
 
   auto computed_overlays =
@@ -96,15 +96,15 @@ TEST(ViewSlicerTest, ComputesOverlapWith2PV) {
   auto overlay = computed_overlays.find(1);
   ASSERT_NE(overlay, computed_overlays.end());
 
-  EXPECT_EQ(overlay->second, SkRect::MakeLTRB(0, 0, 50, 50));
+  EXPECT_EQ(overlay->second, DlRect::MakeLTRB(0, 0, 50, 50));
 
   overlay = computed_overlays.find(2);
   ASSERT_NE(overlay, computed_overlays.end());
-  EXPECT_EQ(overlay->second, SkRect::MakeLTRB(50, 50, 100, 100));
+  EXPECT_EQ(overlay->second, DlRect::MakeLTRB(50, 50, 100, 100));
 }
 
 TEST(ViewSlicerTest, OverlappingTwoPVs) {
-  DisplayListBuilder builder(SkRect::MakeLTRB(0, 0, 100, 100));
+  DisplayListBuilder builder(DlRect::MakeLTRB(0, 0, 100, 100));
 
   std::vector<int64_t> composition_order = {1, 2};
   std::unordered_map<int64_t, std::unique_ptr<EmbedderViewSlice>> slices;
@@ -114,12 +114,12 @@ TEST(ViewSlicerTest, OverlappingTwoPVs) {
   //   [_____[ C ]]
   //   [  B  [   ]]
   //   [          ]
-  AddSliceOfSize(slices, 1, SkRect::MakeLTRB(0, 0, 0, 0));
-  AddSliceOfSize(slices, 2, SkRect::MakeLTRB(0, 0, 100, 100));
+  AddSliceOfSize(slices, 1, DlRect::MakeLTRB(0, 0, 0, 0));
+  AddSliceOfSize(slices, 2, DlRect::MakeLTRB(0, 0, 100, 100));
 
-  std::unordered_map<int64_t, SkRect> view_rects = {
-      {1, SkRect::MakeLTRB(0, 0, 50, 50)},      //
-      {2, SkRect::MakeLTRB(50, 50, 100, 100)},  //
+  std::unordered_map<int64_t, DlRect> view_rects = {
+      {1, DlRect::MakeLTRB(0, 0, 50, 50)},      //
+      {2, DlRect::MakeLTRB(50, 50, 100, 100)},  //
   };
 
   auto computed_overlays =
@@ -131,7 +131,7 @@ TEST(ViewSlicerTest, OverlappingTwoPVs) {
   ASSERT_NE(overlay, computed_overlays.end());
 
   // We create a single overlay for both overlapping sections.
-  EXPECT_EQ(overlay->second, SkRect::MakeLTRB(0, 0, 100, 100));
+  EXPECT_EQ(overlay->second, DlRect::MakeLTRB(0, 0, 100, 100));
 }
 
 }  // namespace testing

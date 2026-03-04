@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import 'package:ui/ui_web/src/ui_web.dart' as ui_web;
+import 'dart:js_interop';
 
 import '../dom.dart';
 
@@ -37,14 +37,13 @@ class TextCapitalizationConfig {
     : textCapitalization = TextCapitalization.none;
 
   const TextCapitalizationConfig.fromInputConfiguration(String inputConfiguration)
-    : textCapitalization =
-          inputConfiguration == 'TextCapitalization.words'
-              ? TextCapitalization.words
-              : inputConfiguration == 'TextCapitalization.characters'
-              ? TextCapitalization.characters
-              : inputConfiguration == 'TextCapitalization.sentences'
-              ? TextCapitalization.sentences
-              : TextCapitalization.none;
+    : textCapitalization = inputConfiguration == 'TextCapitalization.words'
+          ? TextCapitalization.words
+          : inputConfiguration == 'TextCapitalization.characters'
+          ? TextCapitalization.characters
+          : inputConfiguration == 'TextCapitalization.sentences'
+          ? TextCapitalization.sentences
+          : TextCapitalization.none;
 
   final TextCapitalization textCapitalization;
 
@@ -59,17 +58,10 @@ class TextCapitalizationConfig {
   /// See: https://developers.google.com/web/updates/2015/04/autocapitalize
   /// https://developer.mozilla.org/en-US/docs/Web/HTML/Global_attributes/autocapitalize
   void setAutocapitalizeAttribute(DomHTMLElement domElement) {
-    String autocapitalize = '';
+    var autocapitalize = '';
     switch (textCapitalization) {
       case TextCapitalization.words:
-        // TODO(mdebbar): There is a bug for `words` level capitalization in IOS now.
-        // For now go back to default. Remove the check after bug is resolved.
-        // https://bugs.webkit.org/show_bug.cgi?id=148504
-        if (ui_web.browser.browserEngine == ui_web.BrowserEngine.webkit) {
-          autocapitalize = 'sentences';
-        } else {
-          autocapitalize = 'words';
-        }
+        autocapitalize = 'words';
       case TextCapitalization.characters:
         autocapitalize = 'characters';
       case TextCapitalization.sentences:
@@ -77,11 +69,11 @@ class TextCapitalizationConfig {
       case TextCapitalization.none:
         autocapitalize = 'off';
     }
-    if (domInstanceOfString(domElement, 'HTMLInputElement')) {
-      final DomHTMLInputElement element = domElement as DomHTMLInputElement;
+    if (domElement.isA<DomHTMLInputElement>()) {
+      final element = domElement as DomHTMLInputElement;
       element.setAttribute('autocapitalize', autocapitalize);
-    } else if (domInstanceOfString(domElement, 'HTMLTextAreaElement')) {
-      final DomHTMLTextAreaElement element = domElement as DomHTMLTextAreaElement;
+    } else if (domElement.isA<DomHTMLTextAreaElement>()) {
+      final element = domElement as DomHTMLTextAreaElement;
       element.setAttribute('autocapitalize', autocapitalize);
     }
   }

@@ -2,7 +2,6 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -38,7 +37,7 @@ void main() {
   group('MenuStyle', () {
     test('MenuStyle lerp special cases', () {
       expect(MenuStyle.lerp(null, null, 0), null);
-      const MenuStyle data = MenuStyle();
+      const data = MenuStyle();
       expect(identical(MenuStyle.lerp(data, data, 0.5), data), true);
     });
 
@@ -78,14 +77,11 @@ void main() {
       expect(tester.getRect(findMenuPanels().first).size, equals(const Size(600.0, 60.0)));
 
       // MenuTheme affects menus.
-      if (!kIsWeb || isSkiaWeb) {
-        // https://github.com/flutter/flutter/issues/99933
-        expect(
-          tester.getRect(findMenuPanels().at(1)),
-          equals(const Rect.fromLTRB(104.0, 54.0, 204.0, 154.0)),
-        );
-        expect(tester.getRect(findMenuPanels().at(1)).size, equals(const Size(100.0, 100.0)));
-      }
+      expect(
+        tester.getRect(findMenuPanels().at(1)),
+        equals(const Rect.fromLTRB(104.0, 54.0, 204.0, 154.0)),
+      );
+      expect(tester.getRect(findMenuPanels().at(1)).size, equals(const Size(100.0, 100.0)));
     });
 
     testWidgets('maximumSize affects geometry', (WidgetTester tester) async {
@@ -291,7 +287,7 @@ void main() {
       );
       expect(
         tester.getRect(find.text(TestMenu.subMenu10.label)),
-        equals(const Rect.fromLTRB(372.0, 68.0, 565.0, 82.0)),
+        equals(const Rect.fromLTRB(372.0, 70.0, 565.0, 84.0)),
       );
       expect(
         tester.getRect(
@@ -299,7 +295,7 @@ void main() {
               .ancestor(of: find.text(TestMenu.subMenu10.label), matching: find.byType(Material))
               .at(1),
         ),
-        equals(const Rect.fromLTRB(352.0, 48.0, 585.0, 186.0)),
+        equals(const Rect.fromLTRB(352.0, 48.0, 585.0, 190.0)),
       );
     });
   });
@@ -313,7 +309,7 @@ List<Widget> createTestMenus({
   bool includeStandard = false,
   bool includeExtraGroups = false,
 }) {
-  final List<Widget> result = <Widget>[
+  final result = <Widget>[
     SubmenuButton(
       onOpen: onOpen != null ? () => onOpen(TestMenu.mainMenu0) : null,
       onClose: onClose != null ? () => onClose(TestMenu.mainMenu0) : null,

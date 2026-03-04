@@ -9,6 +9,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -23,6 +24,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4;
 import io.flutter.embedding.engine.dart.DartExecutor;
 import io.flutter.embedding.engine.mutatorsstack.FlutterMutatorsStack;
 import io.flutter.embedding.engine.renderer.FlutterUiDisplayListener;
+import io.flutter.embedding.engine.renderer.FlutterUiResizeListener;
 import io.flutter.embedding.engine.systemchannels.LocalizationChannel;
 import io.flutter.plugin.localization.LocalizationPlugin;
 import io.flutter.plugin.platform.PlatformViewsController;
@@ -31,9 +33,7 @@ import java.util.Locale;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import org.robolectric.annotation.Config;
 
-@Config(manifest = Config.NONE)
 @RunWith(AndroidJUnit4.class)
 @TargetApi(API_LEVELS.API_24) // LocaleList and scriptCode are API 24+.
 public class FlutterJNITest {
@@ -80,7 +80,10 @@ public class FlutterJNITest {
     Configuration config = mock(Configuration.class);
     DartExecutor dartExecutor = mock(DartExecutor.class);
     LocaleList localeList =
-        new LocaleList(new Locale("es", "MX"), new Locale("zh", "CN"), new Locale("en", "US"));
+        new LocaleList(
+            new Locale.Builder().setLanguage("es").setRegion("MX").build(),
+            new Locale.Builder().setLanguage("zh").setRegion("CN").build(),
+            new Locale.Builder().setLanguage("en").setRegion("US").build());
     when(context.getResources()).thenReturn(resources);
     when(resources.getConfiguration()).thenReturn(config);
     when(config.getLocales()).thenReturn(localeList);
@@ -94,10 +97,10 @@ public class FlutterJNITest {
           "en", "CA", ""
         };
     String[] result = flutterJNI.computePlatformResolvedLocale(supportedLocales);
-    assertEquals(result.length, 3);
-    assertEquals(result[0], "zh");
-    assertEquals(result[1], "");
-    assertEquals(result[2], "");
+    assertEquals(3, result.length);
+    assertEquals("zh", result[0]);
+    assertEquals("", result[1]);
+    assertEquals("", result[2]);
 
     supportedLocales =
         new String[] {
@@ -106,10 +109,10 @@ public class FlutterJNITest {
           "en", "CA", ""
         };
     result = flutterJNI.computePlatformResolvedLocale(supportedLocales);
-    assertEquals(result.length, 3);
-    assertEquals(result[0], "en");
-    assertEquals(result[1], "CA");
-    assertEquals(result[2], "");
+    assertEquals(3, result.length);
+    assertEquals("en", result[0]);
+    assertEquals("CA", result[1]);
+    assertEquals("", result[2]);
 
     supportedLocales =
         new String[] {
@@ -118,10 +121,10 @@ public class FlutterJNITest {
           "en", "US", ""
         };
     result = flutterJNI.computePlatformResolvedLocale(supportedLocales);
-    assertEquals(result.length, 3);
-    assertEquals(result[0], "en");
-    assertEquals(result[1], "US");
-    assertEquals(result[2], "");
+    assertEquals(3, result.length);
+    assertEquals("en", result[0]);
+    assertEquals("US", result[1]);
+    assertEquals("", result[2]);
 
     supportedLocales =
         new String[] {
@@ -130,15 +133,15 @@ public class FlutterJNITest {
           "en", "US", ""
         };
     result = flutterJNI.computePlatformResolvedLocale(supportedLocales);
-    assertEquals(result.length, 3);
-    assertEquals(result[0], "es");
-    assertEquals(result[1], "MX");
-    assertEquals(result[2], "");
+    assertEquals(3, result.length);
+    assertEquals("es", result[0]);
+    assertEquals("MX", result[1]);
+    assertEquals("", result[2]);
 
     // Empty supportedLocales.
     supportedLocales = new String[] {};
     result = flutterJNI.computePlatformResolvedLocale(supportedLocales);
-    assertEquals(result.length, 0);
+    assertEquals(0, result.length);
 
     // Empty preferredLocales.
     supportedLocales =
@@ -151,10 +154,10 @@ public class FlutterJNITest {
     when(config.getLocales()).thenReturn(localeList);
     result = flutterJNI.computePlatformResolvedLocale(supportedLocales);
     // The first locale is default.
-    assertEquals(result.length, 3);
-    assertEquals(result[0], "fr");
-    assertEquals(result[1], "FR");
-    assertEquals(result[2], "");
+    assertEquals(3, result.length);
+    assertEquals("fr", result[0]);
+    assertEquals("FR", result[1]);
+    assertEquals("", result[2]);
   }
 
   @Test
@@ -164,7 +167,7 @@ public class FlutterJNITest {
     int expectedFlag = 100;
 
     flutterJNI.setAccessibilityFeatures(expectedFlag);
-    assertEquals(flutterJNI.flags, expectedFlag);
+    assertEquals(expectedFlag, flutterJNI.flags);
 
     flutterJNI.setSemanticsEnabled(true);
     assertTrue(flutterJNI.semanticsEnabled);
@@ -177,7 +180,7 @@ public class FlutterJNITest {
     int flags = 100;
 
     flutterJNI.setAccessibilityFeatures(flags);
-    assertEquals(flutterJNI.flags, 0);
+    assertEquals(0, flutterJNI.flags);
 
     flutterJNI.setSemanticsEnabled(true);
     assertFalse(flutterJNI.semanticsEnabled);
@@ -273,6 +276,36 @@ public class FlutterJNITest {
     verify(platformViewsController, times(1)).createOverlaySurface();
   }
 
+  @Test
+  public void setSemanticsTreeEnabled_callsAccessibilityDelegate() {
+    FlutterJNI.AccessibilityDelegate accessibilityDelegate =
+        mock(FlutterJNI.AccessibilityDelegate.class);
+
+    FlutterJNI flutterJNI = new FlutterJNI();
+    flutterJNI.setAccessibilityDelegate(accessibilityDelegate);
+
+    // --- Execute Test ---
+    flutterJNI.setSemanticsTreeEnabled(true);
+
+    // --- Verify Results ---
+    verify(accessibilityDelegate, never()).resetSemantics();
+  }
+
+  @Test
+  public void setSemanticsTreeEnabled_callsAccessibilityDelegateWhenFalse() {
+    FlutterJNI.AccessibilityDelegate accessibilityDelegate =
+        mock(FlutterJNI.AccessibilityDelegate.class);
+
+    FlutterJNI flutterJNI = new FlutterJNI();
+    flutterJNI.setAccessibilityDelegate(accessibilityDelegate);
+
+    // --- Execute Test ---
+    flutterJNI.setSemanticsTreeEnabled(false);
+
+    // --- Verify Results ---
+    verify(accessibilityDelegate, times(1)).resetSemantics();
+  }
+
   @Test(expected = IllegalArgumentException.class)
   public void invokePlatformMessageResponseCallback_wantsDirectBuffer() {
     FlutterJNI flutterJNI = new FlutterJNI();
@@ -287,6 +320,27 @@ public class FlutterJNITest {
     flutterJNI.setRefreshRateFPS(120.0f);
     // --- Verify Results ---
     verify(flutterJNI, times(1)).updateRefreshRate();
+  }
+
+  @Test
+  public void addAndRemoveFlutterUiResizeListener() {
+    // Setup test.
+    FlutterJNI flutterJNI = new FlutterJNI();
+    FlutterUiResizeListener listener = mock(FlutterUiResizeListener.class);
+
+    // Execute behavior under test.
+    flutterJNI.addResizingFlutterUiListener(listener);
+    flutterJNI.maybeResizeSurfaceView(100, 200);
+
+    // Verify results.
+    verify(listener, times(1)).resizeEngineView(100, 200);
+
+    // Execute behavior under test.
+    flutterJNI.removeResizingFlutterUiListener(listener);
+    flutterJNI.maybeResizeSurfaceView(100, 200);
+
+    // Verify results.
+    verify(listener, times(1)).resizeEngineView(100, 200);
   }
 
   static class FlutterJNITester extends FlutterJNI {

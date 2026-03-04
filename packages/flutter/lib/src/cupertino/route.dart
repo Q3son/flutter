@@ -138,8 +138,9 @@ mixin CupertinoRouteTransitionMixin<T> on PageRoute<T> {
 
   @override
   void didChangePrevious(Route<dynamic>? previousRoute) {
-    final String? previousTitleString =
-        previousRoute is CupertinoRouteTransitionMixin ? previousRoute.title : null;
+    final String? previousTitleString = previousRoute is CupertinoRouteTransitionMixin
+        ? previousRoute.title
+        : null;
     if (_previousTitle == null) {
       _previousTitle = ValueNotifier<String?>(previousTitleString);
     } else {
@@ -148,9 +149,13 @@ mixin CupertinoRouteTransitionMixin<T> on PageRoute<T> {
     super.didChangePrevious(previousRoute);
   }
 
+  /// The duration of the page transition.
+  ///
+  /// A relatively rigorous eyeball estimation.
+  static const Duration kTransitionDuration = Duration(milliseconds: 500);
+
   @override
-  // A relatively rigorous eyeball estimation.
-  Duration get transitionDuration => const Duration(milliseconds: 500);
+  Duration get transitionDuration => kTransitionDuration;
 
   @override
   Color? get barrierColor => fullscreenDialog ? null : _kCupertinoPageTransitionBarrierColor;
@@ -178,7 +183,7 @@ mixin CupertinoRouteTransitionMixin<T> on PageRoute<T> {
 
   @override
   bool canTransitionFrom(TransitionRoute<dynamic> previousRoute) {
-    // Supress previous route from transitioning if this is a fullscreenDialog route.
+    // Suppress previous route from transitioning if this is a fullscreenDialog route.
     return previousRoute is PageRoute && !fullscreenDialog;
   }
 
@@ -341,7 +346,7 @@ class _PageBasedCupertinoPageRoute<T> extends PageRoute<T> with CupertinoRouteTr
 
   @override
   DelegatedTransitionBuilder? get delegatedTransition =>
-      this.fullscreenDialog ? null : CupertinoPageTransition.delegatedTransition;
+      fullscreenDialog ? null : CupertinoPageTransition.delegatedTransition;
 
   CupertinoPage<T> get _page => settings as CupertinoPage<T>;
 
@@ -455,7 +460,7 @@ class CupertinoPageTransition extends StatefulWidget {
     bool allowSnapshotting,
     Widget? child,
   ) {
-    final CurvedAnimation animation = CurvedAnimation(
+    final animation = CurvedAnimation(
       parent: secondaryAnimation,
       curve: Curves.linearToEaseOut,
       reverseCurve: Curves.easeInToLinear,
@@ -648,21 +653,21 @@ class _CupertinoFullscreenDialogTransitionState extends State<CupertinoFullscree
 
   void _setupAnimation() {
     _primaryPositionAnimation = (_primaryPositionCurve = CurvedAnimation(
-          parent: widget.primaryRouteAnimation,
-          curve: Curves.linearToEaseOut,
-          // The curve must be flipped so that the reverse animation doesn't play
-          // an ease-in curve, which iOS does not use.
-          reverseCurve: Curves.linearToEaseOut.flipped,
-        ))
-        .drive(_kBottomUpTween);
-    _secondaryPositionAnimation = (widget.linearTransition
-            ? widget.secondaryRouteAnimation
-            : _secondaryPositionCurve = CurvedAnimation(
-              parent: widget.secondaryRouteAnimation,
-              curve: Curves.linearToEaseOut,
-              reverseCurve: Curves.easeInToLinear,
-            ))
-        .drive(_kMiddleLeftTween);
+      parent: widget.primaryRouteAnimation,
+      curve: Curves.linearToEaseOut,
+      // The curve must be flipped so that the reverse animation doesn't play
+      // an ease-in curve, which iOS does not use.
+      reverseCurve: Curves.linearToEaseOut.flipped,
+    )).drive(_kBottomUpTween);
+    _secondaryPositionAnimation =
+        (widget.linearTransition
+                ? widget.secondaryRouteAnimation
+                : _secondaryPositionCurve = CurvedAnimation(
+                    parent: widget.secondaryRouteAnimation,
+                    curve: Curves.linearToEaseOut,
+                    reverseCurve: Curves.easeInToLinear,
+                  ))
+            .drive(_kMiddleLeftTween);
   }
 
   @override
@@ -715,12 +720,11 @@ class _CupertinoBackGestureDetectorState<T> extends State<_CupertinoBackGestureD
   @override
   void initState() {
     super.initState();
-    _recognizer =
-        HorizontalDragGestureRecognizer(debugOwner: this)
-          ..onStart = _handleDragStart
-          ..onUpdate = _handleDragUpdate
-          ..onEnd = _handleDragEnd
-          ..onCancel = _handleDragCancel;
+    _recognizer = HorizontalDragGestureRecognizer(debugOwner: this)
+      ..onStart = _handleDragStart
+      ..onUpdate = _handleDragUpdate
+      ..onEnd = _handleDragEnd
+      ..onCancel = _handleDragCancel;
   }
 
   @override
@@ -963,15 +967,15 @@ class _CupertinoEdgeShadowDecoration extends Decoration {
       return b!._colors == null
           ? b
           : _CupertinoEdgeShadowDecoration._(
-            b._colors!.map<Color>((Color color) => Color.lerp(null, color, t)!).toList(),
-          );
+              b._colors!.map<Color>((Color color) => Color.lerp(null, color, t)!).toList(),
+            );
     }
     if (b == null) {
       return a._colors == null
           ? a
           : _CupertinoEdgeShadowDecoration._(
-            a._colors.map<Color>((Color color) => Color.lerp(null, color, 1.0 - t)!).toList(),
-          );
+              a._colors.map<Color>((Color color) => Color.lerp(null, color, 1.0 - t)!).toList(),
+            );
     }
     assert(b._colors != null || a._colors != null);
     // If it ever becomes necessary, we could allow decorations with different
@@ -1070,19 +1074,17 @@ class _CupertinoEdgeShadowPainter extends BoxPainter {
       TextDirection.ltr => (-1, offset.dx),
     };
 
-    int bandColorIndex = 0;
-    for (int dx = 0; dx < shadowWidth; dx += 1) {
+    var bandColorIndex = 0;
+    for (var dx = 0; dx < shadowWidth; dx += 1) {
       if (dx ~/ bandWidth != bandColorIndex) {
         bandColorIndex += 1;
       }
-      final Paint paint =
-          Paint()
-            ..color =
-                Color.lerp(
-                  colors[bandColorIndex],
-                  colors[bandColorIndex + 1],
-                  (dx % bandWidth) / bandWidth,
-                )!;
+      final paint = Paint()
+        ..color = Color.lerp(
+          colors[bandColorIndex],
+          colors[bandColorIndex + 1],
+          (dx % bandWidth) / bandWidth,
+        )!;
       final double x = start + shadowDirection * dx;
       canvas.drawRect(Rect.fromLTWH(x - 1.0, offset.dy, 1.0, shadowHeight), paint);
     }
@@ -1198,7 +1200,7 @@ class CupertinoModalPopupRoute<T> extends PopupRoute<T> {
   @override
   Simulation createSimulation({required bool forward}) {
     assert(!debugTransitionCompleted(), 'Cannot reuse a $runtimeType after disposing it.');
-    final double end = forward ? 1.0 : 0.0;
+    final end = forward ? 1.0 : 0.0;
     return SpringSimulation(
       _kStandardSpring,
       controller!.value,
@@ -1217,7 +1219,10 @@ class CupertinoModalPopupRoute<T> extends PopupRoute<T> {
   ) {
     return CupertinoUserInterfaceLevel(
       data: CupertinoUserInterfaceLevelData.elevated,
-      child: DisplayFeatureSubScreen(anchorPoint: anchorPoint, child: Builder(builder: builder)),
+      child: DisplayFeatureSubScreen(
+        anchorPoint: anchorPoint,
+        child: Builder(builder: builder),
+      ),
     );
   }
 
@@ -1273,6 +1278,10 @@ class CupertinoModalPopupRoute<T> extends PopupRoute<T> {
 /// [StatefulBuilder] or a custom [StatefulWidget] if the widget needs to
 /// update dynamically.
 ///
+/// The [requestFocus] parameter is used to specify whether the popup should
+/// request focus when shown.
+/// {@macro flutter.widgets.navigator.Route.requestFocus}
+///
 /// {@macro flutter.widgets.RawDialogRoute}
 ///
 /// Returns a `Future` that resolves to the value that was passed to
@@ -1314,6 +1323,7 @@ Future<T?> showCupertinoModalPopup<T>({
   bool semanticsDismissible = false,
   RouteSettings? routeSettings,
   Offset? anchorPoint,
+  bool? requestFocus,
 }) {
   return Navigator.of(context, rootNavigator: useRootNavigator).push(
     CupertinoModalPopupRoute<T>(
@@ -1324,6 +1334,7 @@ Future<T?> showCupertinoModalPopup<T>({
       semanticsDismissible: semanticsDismissible,
       settings: routeSettings,
       anchorPoint: anchorPoint,
+      requestFocus: requestFocus,
     ),
   );
 }
@@ -1356,6 +1367,9 @@ Widget _buildCupertinoDialogTransitions(
 /// dialog to the [Navigator] furthest from or nearest to the given `context`.
 /// By default, `useRootNavigator` is `true` and the dialog route created by
 /// this method is pushed to the root navigator.
+///
+/// {@macro flutter.material.dialog.requestFocus}
+/// {@macro flutter.widgets.navigator.Route.requestFocus}
 ///
 /// {@macro flutter.widgets.RawDialogRoute}
 ///
@@ -1397,10 +1411,12 @@ Future<T?> showCupertinoDialog<T>({
   required BuildContext context,
   required WidgetBuilder builder,
   String? barrierLabel,
+  Color? barrierColor,
   bool useRootNavigator = true,
   bool barrierDismissible = false,
   RouteSettings? routeSettings,
   Offset? anchorPoint,
+  bool? requestFocus,
 }) {
   return Navigator.of(context, rootNavigator: useRootNavigator).push<T>(
     CupertinoDialogRoute<T>(
@@ -1408,9 +1424,10 @@ Future<T?> showCupertinoDialog<T>({
       context: context,
       barrierDismissible: barrierDismissible,
       barrierLabel: barrierLabel,
-      barrierColor: CupertinoDynamicColor.resolve(kCupertinoModalBarrierColor, context),
+      barrierColor: barrierColor,
       settings: routeSettings,
       anchorPoint: anchorPoint,
+      requestFocus: requestFocus,
     ),
   );
 }
@@ -1467,13 +1484,14 @@ class CupertinoDialogRoute<T> extends RawDialogRoute<T> {
     super.requestFocus,
     super.anchorPoint,
   }) : super(
-         pageBuilder: (
-           BuildContext context,
-           Animation<double> animation,
-           Animation<double> secondaryAnimation,
-         ) {
-           return builder(context);
-         },
+         pageBuilder:
+             (
+               BuildContext context,
+               Animation<double> animation,
+               Animation<double> secondaryAnimation,
+             ) {
+               return builder(context);
+             },
          transitionBuilder: transitionBuilder ?? _buildCupertinoDialogTransitions,
          barrierLabel: barrierLabel ?? CupertinoLocalizations.of(context).modalBarrierDismissLabel,
          barrierColor:
@@ -1488,7 +1506,7 @@ class CupertinoDialogRoute<T> extends RawDialogRoute<T> {
   @override
   Simulation createSimulation({required bool forward}) {
     assert(!debugTransitionCompleted(), 'Cannot reuse a $runtimeType after disposing it.');
-    final double end = forward ? 1.0 : 0.0;
+    final end = forward ? 1.0 : 0.0;
     return SpringSimulation(
       _kStandardSpring,
       controller!.value,

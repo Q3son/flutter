@@ -17,9 +17,6 @@
 #include "flutter/testing/assertions_skia.h"
 #include "flutter/testing/canvas_test.h"
 #include "flutter/testing/display_list_testing.h"
-#include "third_party/skia/include/core/SkCanvas.h"
-#include "third_party/skia/include/core/SkImageInfo.h"
-#include "third_party/skia/include/utils/SkNWayCanvas.h"
 
 namespace flutter {
 namespace testing {
@@ -40,7 +37,7 @@ template <typename BaseT>
 class LayerTestBase : public CanvasTestBase<BaseT> {
   using TestT = CanvasTestBase<BaseT>;
 
-  const SkRect k_dl_bounds_ = SkRect::MakeWH(500, 500);
+  const DlRect k_dl_bounds_ = DlRect::MakeWH(500, 500);
 
  public:
   LayerTestBase()

@@ -5,7 +5,7 @@
 @TestOn('browser')
 library;
 
-import 'package:js/js_util.dart' as js_util;
+import 'dart:js_interop';
 
 import 'package:test/bootstrap/browser.dart';
 import 'package:test/test.dart';
@@ -20,14 +20,14 @@ void main() {
 void testMain() {
   group('FlutterConfiguration', () {
     test('initializes with null', () async {
-      final FlutterConfiguration config = FlutterConfiguration.legacy(null);
+      final config = FlutterConfiguration.legacy(null);
 
       expect(config.canvasKitBaseUrl, 'canvaskit/'); // _defaultCanvasKitBaseUrl
     });
 
     test('legacy constructor initializes with a Js Object', () async {
-      final FlutterConfiguration config = FlutterConfiguration.legacy(
-        js_util.jsify(<String, Object?>{'canvasKitBaseUrl': '/some_other_url/'})
+      final config = FlutterConfiguration.legacy(
+        <String, Object?>{'canvasKitBaseUrl': '/some_other_url/'}.jsify()!
             as JsFlutterConfiguration,
       );
 
@@ -37,36 +37,35 @@ void testMain() {
 
   group('setUserConfiguration', () {
     test('throws assertion error if already initialized from JS', () async {
-      final FlutterConfiguration config = FlutterConfiguration.legacy(
-        js_util.jsify(<String, Object?>{'canvasKitBaseUrl': '/some_other_url/'})
+      final config = FlutterConfiguration.legacy(
+        <String, Object?>{'canvasKitBaseUrl': '/some_other_url/'}.jsify()!
             as JsFlutterConfiguration,
       );
 
       expect(() {
         config.setUserConfiguration(
-          js_util.jsify(<String, Object?>{'canvasKitBaseUrl': '/yet_another_url/'})
+          <String, Object?>{'canvasKitBaseUrl': '/yet_another_url/'}.jsify()!
               as JsFlutterConfiguration,
         );
       }, throwsAssertionError);
     });
 
     test('stores config if JS configuration was null', () async {
-      final FlutterConfiguration config = FlutterConfiguration.legacy(null);
+      final config = FlutterConfiguration.legacy(null);
 
       config.setUserConfiguration(
-        js_util.jsify(<String, Object?>{'canvasKitBaseUrl': '/one_more_url/'})
-            as JsFlutterConfiguration,
+        <String, Object?>{'canvasKitBaseUrl': '/one_more_url/'}.jsify()! as JsFlutterConfiguration,
       );
 
       expect(config.canvasKitBaseUrl, '/one_more_url/');
     });
 
     test('can receive non-existing properties without crashing', () async {
-      final FlutterConfiguration config = FlutterConfiguration.legacy(null);
+      final config = FlutterConfiguration.legacy(null);
 
       expect(() {
         config.setUserConfiguration(
-          js_util.jsify(<String, Object?>{'nonexistentProperty': 32.0}) as JsFlutterConfiguration,
+          <String, Object?>{'nonexistentProperty': 32.0}.jsify()! as JsFlutterConfiguration,
         );
       }, returnsNormally);
     });
@@ -76,9 +75,7 @@ void testMain() {
     late FlutterConfiguration defaultConfig;
     setUp(() {
       defaultConfig = FlutterConfiguration();
-      defaultConfig.setUserConfiguration(
-        js_util.jsify(<String, Object?>{}) as JsFlutterConfiguration,
-      );
+      defaultConfig.setUserConfiguration(<String, Object?>{}.jsify()! as JsFlutterConfiguration);
     });
 
     test('canvasKitVariant', () {
@@ -93,45 +90,44 @@ void testMain() {
   group('setUserConfiguration (values)', () {
     group('canvasKitVariant', () {
       test('value undefined - defaults to "auto"', () {
-        final FlutterConfiguration config = FlutterConfiguration();
+        final config = FlutterConfiguration();
         config.setUserConfiguration(
           // With an empty map, the canvasKitVariant is undefined in JS.
-          js_util.jsify(<String, Object?>{}) as JsFlutterConfiguration,
+          <String, Object?>{}.jsify()! as JsFlutterConfiguration,
         );
 
         expect(config.canvasKitVariant, CanvasKitVariant.auto);
       });
 
       test('value - converts to CanvasKitVariant enum (or throw)', () {
-        final FlutterConfiguration config = FlutterConfiguration();
+        final config = FlutterConfiguration();
 
         config.setUserConfiguration(
-          js_util.jsify(<String, Object?>{'canvasKitVariant': 'foo'}) as JsFlutterConfiguration,
+          <String, Object?>{'canvasKitVariant': 'foo'}.jsify()! as JsFlutterConfiguration,
         );
         expect(() => config.canvasKitVariant, throwsArgumentError);
 
         config.setUserConfiguration(
-          js_util.jsify(<String, Object?>{'canvasKitVariant': 'auto'}) as JsFlutterConfiguration,
+          <String, Object?>{'canvasKitVariant': 'auto'}.jsify()! as JsFlutterConfiguration,
         );
         expect(config.canvasKitVariant, CanvasKitVariant.auto);
 
         config.setUserConfiguration(
-          js_util.jsify(<String, Object?>{'canvasKitVariant': 'full'}) as JsFlutterConfiguration,
+          <String, Object?>{'canvasKitVariant': 'full'}.jsify()! as JsFlutterConfiguration,
         );
         expect(config.canvasKitVariant, CanvasKitVariant.full);
 
         config.setUserConfiguration(
-          js_util.jsify(<String, Object?>{'canvasKitVariant': 'chromium'})
-              as JsFlutterConfiguration,
+          <String, Object?>{'canvasKitVariant': 'chromium'}.jsify()! as JsFlutterConfiguration,
         );
         expect(config.canvasKitVariant, CanvasKitVariant.chromium);
       });
     });
 
     test('multiViewEnabled', () {
-      final FlutterConfiguration config = FlutterConfiguration();
+      final config = FlutterConfiguration();
       config.setUserConfiguration(
-        js_util.jsify(<String, Object?>{'multiViewEnabled': true}) as JsFlutterConfiguration,
+        <String, Object?>{'multiViewEnabled': true}.jsify()! as JsFlutterConfiguration,
       );
       expect(config.multiViewEnabled, isTrue);
     });

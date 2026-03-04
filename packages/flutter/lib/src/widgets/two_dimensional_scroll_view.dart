@@ -13,6 +13,7 @@ import 'focus_scope.dart';
 import 'framework.dart';
 import 'notification_listener.dart';
 import 'primary_scroll_controller.dart';
+import 'scroll_configuration.dart';
 import 'scroll_controller.dart';
 import 'scroll_delegate.dart';
 import 'scroll_notification.dart';
@@ -61,9 +62,10 @@ abstract class TwoDimensionalScrollView extends StatelessWidget {
     this.horizontalDetails = const ScrollableDetails.horizontal(),
     required this.delegate,
     this.cacheExtent,
+    this.cacheExtentStyle,
     this.diagonalDragBehavior = DiagonalDragBehavior.none,
     this.dragStartBehavior = DragStartBehavior.start,
-    this.keyboardDismissBehavior = ScrollViewKeyboardDismissBehavior.manual,
+    this.keyboardDismissBehavior,
     this.clipBehavior = Clip.hardEdge,
     this.hitTestBehavior = HitTestBehavior.opaque,
   });
@@ -73,6 +75,9 @@ abstract class TwoDimensionalScrollView extends StatelessWidget {
 
   /// {@macro flutter.rendering.RenderViewportBase.cacheExtent}
   final double? cacheExtent;
+
+  /// {@macro flutter.rendering.RenderViewportBase.cacheExtentStyle}
+  final CacheExtentStyle? cacheExtentStyle;
 
   /// Whether scrolling gestures should lock to one axes, allow free movement
   /// in both axes, or be evaluated on a weighted scale.
@@ -109,7 +114,10 @@ abstract class TwoDimensionalScrollView extends StatelessWidget {
   final DragStartBehavior dragStartBehavior;
 
   /// {@macro flutter.widgets.scroll_view.keyboardDismissBehavior}
-  final ScrollViewKeyboardDismissBehavior keyboardDismissBehavior;
+  ///
+  /// If [keyboardDismissBehavior] is null then it will fallback to the inherited
+  /// [ScrollBehavior.getKeyboardDismissBehavior].
+  final ScrollViewKeyboardDismissBehavior? keyboardDismissBehavior;
 
   /// {@macro flutter.widgets.scrollable.hitTestBehavior}
   ///
@@ -166,7 +174,7 @@ abstract class TwoDimensionalScrollView extends StatelessWidget {
       mainAxisDetails = mainAxisDetails.copyWith(controller: PrimaryScrollController.of(context));
     }
 
-    final TwoDimensionalScrollable scrollable = TwoDimensionalScrollable(
+    final scrollable = TwoDimensionalScrollable(
       horizontalDetails: switch (mainAxis) {
         Axis.horizontal => mainAxisDetails,
         Axis.vertical => horizontalDetails,
@@ -181,13 +189,16 @@ abstract class TwoDimensionalScrollView extends StatelessWidget {
       hitTestBehavior: hitTestBehavior,
     );
 
-    final Widget scrollableResult =
-        effectivePrimary
-            // Further descendant ScrollViews will not inherit the same PrimaryScrollController
-            ? PrimaryScrollController.none(child: scrollable)
-            : scrollable;
+    final Widget scrollableResult = effectivePrimary
+        // Further descendant ScrollViews will not inherit the same PrimaryScrollController
+        ? PrimaryScrollController.none(child: scrollable)
+        : scrollable;
 
-    if (keyboardDismissBehavior == ScrollViewKeyboardDismissBehavior.onDrag) {
+    final ScrollViewKeyboardDismissBehavior effectiveKeyboardDismissBehavior =
+        keyboardDismissBehavior ??
+        ScrollConfiguration.of(context).getKeyboardDismissBehavior(context);
+
+    if (effectiveKeyboardDismissBehavior == ScrollViewKeyboardDismissBehavior.onDrag) {
       return NotificationListener<ScrollUpdateNotification>(
         child: scrollableResult,
         onNotification: (ScrollUpdateNotification notification) {

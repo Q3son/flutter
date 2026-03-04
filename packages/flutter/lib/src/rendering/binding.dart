@@ -9,6 +9,7 @@
 /// @docImport 'layer.dart';
 library;
 
+import 'dart:async';
 import 'dart:ui' as ui show PictureRecorder, SceneBuilder, SemanticsUpdate;
 
 import 'package:flutter/foundation.dart';
@@ -85,43 +86,49 @@ mixin RendererBinding
         setter: (bool value) async {
           if (debugInvertOversizedImages != value) {
             debugInvertOversizedImages = value;
-            return _forceRepaint();
+            // We don't want to block the vm service response on the frame
+            // actually rendering, just schedule it and return;
+            unawaited(_forceRepaint());
           }
-          return Future<void>.value();
         },
       );
       registerBoolServiceExtension(
         name: RenderingServiceExtensions.debugPaint.name,
         getter: () async => debugPaintSizeEnabled,
-        setter: (bool value) {
+        setter: (bool value) async {
           if (debugPaintSizeEnabled == value) {
-            return Future<void>.value();
+            return;
           }
           debugPaintSizeEnabled = value;
-          return _forceRepaint();
+          // We don't want to block the vm service response on the frame
+          // actually rendering, just schedule it and return;
+          unawaited(_forceRepaint());
         },
       );
       registerBoolServiceExtension(
         name: RenderingServiceExtensions.debugPaintBaselinesEnabled.name,
         getter: () async => debugPaintBaselinesEnabled,
-        setter: (bool value) {
+        setter: (bool value) async {
           if (debugPaintBaselinesEnabled == value) {
-            return Future<void>.value();
+            return;
           }
           debugPaintBaselinesEnabled = value;
-          return _forceRepaint();
+          // We don't want to block the vm service response on the frame
+          // actually rendering, just schedule it and return;
+          unawaited(_forceRepaint());
         },
       );
       registerBoolServiceExtension(
         name: RenderingServiceExtensions.repaintRainbow.name,
         getter: () async => debugRepaintRainbowEnabled,
-        setter: (bool value) {
+        setter: (bool value) async {
           final bool repaint = debugRepaintRainbowEnabled && !value;
           debugRepaintRainbowEnabled = value;
           if (repaint) {
-            return _forceRepaint();
+            // We don't want to block the vm service response on the frame
+            // actually rendering, just schedule it and return;
+            unawaited(_forceRepaint());
           }
-          return Future<void>.value();
         },
       );
       registerServiceExtension(
@@ -133,34 +140,40 @@ mixin RendererBinding
       registerBoolServiceExtension(
         name: RenderingServiceExtensions.debugDisableClipLayers.name,
         getter: () async => debugDisableClipLayers,
-        setter: (bool value) {
+        setter: (bool value) async {
           if (debugDisableClipLayers == value) {
-            return Future<void>.value();
+            return;
           }
           debugDisableClipLayers = value;
-          return _forceRepaint();
+          // We don't want to block the vm service response on the frame
+          // actually rendering, just schedule it and return;
+          unawaited(_forceRepaint());
         },
       );
       registerBoolServiceExtension(
         name: RenderingServiceExtensions.debugDisablePhysicalShapeLayers.name,
         getter: () async => debugDisablePhysicalShapeLayers,
-        setter: (bool value) {
+        setter: (bool value) async {
           if (debugDisablePhysicalShapeLayers == value) {
-            return Future<void>.value();
+            return;
           }
           debugDisablePhysicalShapeLayers = value;
-          return _forceRepaint();
+          // We don't want to block the vm service response on the frame
+          // actually rendering, just schedule it and return;
+          unawaited(_forceRepaint());
         },
       );
       registerBoolServiceExtension(
         name: RenderingServiceExtensions.debugDisableOpacityLayers.name,
         getter: () async => debugDisableOpacityLayers,
-        setter: (bool value) {
+        setter: (bool value) async {
           if (debugDisableOpacityLayers == value) {
-            return Future<void>.value();
+            return;
           }
           debugDisableOpacityLayers = value;
-          return _forceRepaint();
+          // We don't want to block the vm service response on the frame
+          // actually rendering, just schedule it and return;
+          unawaited(_forceRepaint());
         },
       );
       return true;
@@ -389,7 +402,7 @@ mixin RendererBinding
   @protected
   @visibleForTesting
   void handleMetricsChanged() {
-    bool forceFrame = false;
+    var forceFrame = false;
     for (final RenderView view in renderViews) {
       forceFrame = forceFrame || view.child != null;
       view.configuration = createViewConfigurationFor(view);
@@ -442,7 +455,7 @@ mixin RendererBinding
     _mouseTracker =
         tracker ??
         MouseTracker((Offset position, int viewId) {
-          final HitTestResult result = HitTestResult();
+          final result = HitTestResult();
           hitTestInView(result, position, viewId);
           return result;
         });
@@ -474,7 +487,7 @@ mixin RendererBinding
 
   void _handleWebFirstFrame(Duration _) {
     assert(kIsWeb);
-    const MethodChannel methodChannel = MethodChannel('flutter/service_worker');
+    const methodChannel = MethodChannel('flutter/service_worker');
     methodChannel.invokeMethod<void>('first-frame');
   }
 
@@ -704,18 +717,18 @@ String _debugCollectSemanticsTrees(DebugSemanticsDumpOrder childOrder) {
   if (RendererBinding.instance.renderViews.isEmpty) {
     return 'No render tree root was added to the binding.';
   }
-  const String explanation =
+  const explanation =
       'For performance reasons, the framework only generates semantics when asked to do so by the platform.\n'
       'Usually, platforms only ask for semantics when assistive technologies (like screen readers) are running.\n'
       'To generate semantics, try turning on an assistive technology (like VoiceOver or TalkBack) on your device.';
-  final List<String> trees = <String>[];
-  bool printedExplanation = false;
+  final trees = <String>[];
+  var printedExplanation = false;
   for (final RenderView renderView in RendererBinding.instance.renderViews) {
     final String? tree = renderView.debugSemantics?.toStringDeep(childOrder: childOrder);
     if (tree != null) {
       trees.add(tree);
     } else {
-      String message = 'Semantics not generated for $renderView.';
+      var message = 'Semantics not generated for $renderView.';
       if (!printedExplanation) {
         printedExplanation = true;
         message = '$message\n$explanation';
@@ -827,7 +840,7 @@ class _BindingPipelineManifold extends ChangeNotifier implements PipelineManifol
 }
 
 // A [PipelineOwner] that cannot have a root node.
-class _DefaultRootPipelineOwner extends PipelineOwner {
+final class _DefaultRootPipelineOwner extends PipelineOwner {
   _DefaultRootPipelineOwner() : super(onSemanticsUpdate: _onSemanticsUpdate);
 
   @override

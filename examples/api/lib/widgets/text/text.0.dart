@@ -15,7 +15,6 @@ class DefaultTextStyleApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       theme: ThemeData(
-        useMaterial3: true,
         brightness: Brightness.light,
         colorSchemeSeed: Colors.purple,
       ),

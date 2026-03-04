@@ -20,8 +20,8 @@ import '../base/version.dart';
 import '../build_info.dart';
 import '../reporting/reporting.dart';
 
-final RegExp _settingExpr = RegExp(r'(\w+)\s*=\s*(.*)$');
-final RegExp _varExpr = RegExp(r'\$\(([^)]*)\)');
+final _settingExpr = RegExp(r'(\w+)\s*=\s*(.*)$');
+final _varExpr = RegExp(r'\$\(([^)]*)\)');
 
 /// Interpreter of Xcode projects.
 class XcodeProjectInterpreter {
@@ -30,7 +30,6 @@ class XcodeProjectInterpreter {
     required ProcessManager processManager,
     required Logger logger,
     required FileSystem fileSystem,
-    required Usage usage,
     required Analytics analytics,
   }) {
     return XcodeProjectInterpreter._(
@@ -38,7 +37,6 @@ class XcodeProjectInterpreter {
       processManager: processManager,
       logger: logger,
       fileSystem: fileSystem,
-      usage: usage,
       analytics: analytics,
     );
   }
@@ -48,7 +46,6 @@ class XcodeProjectInterpreter {
     required ProcessManager processManager,
     required Logger logger,
     required FileSystem fileSystem,
-    required Usage usage,
     required Analytics analytics,
     Version? version,
     String? build,
@@ -65,7 +62,6 @@ class XcodeProjectInterpreter {
        _version = version,
        _build = build,
        _versionText = version?.toString(),
-       _usage = usage,
        _analytics = analytics;
 
   /// Create an [XcodeProjectInterpreter] for testing.
@@ -88,7 +84,6 @@ class XcodeProjectInterpreter {
       fileSystem: MemoryFileSystem.test(),
       platform: platform,
       processManager: processManager,
-      usage: TestUsage(),
       logger: BufferLogger.test(),
       version: version,
       build: build,
@@ -101,9 +96,8 @@ class XcodeProjectInterpreter {
   final ProcessUtils _processUtils;
   final OperatingSystemUtils _operatingSystemUtils;
   final Logger _logger;
-  final Usage _usage;
   final Analytics _analytics;
-  static final RegExp _versionRegex = RegExp(r'Xcode ([0-9.]+).*Build version (\w+)');
+  static final _versionRegex = RegExp(r'Xcode ([0-9.]+).*Build version (\w+)');
 
   void _updateVersion() {
     if (!_platform.isMacOS || !_fileSystem.file('/usr/bin/xcodebuild').existsSync()) {
@@ -170,7 +164,7 @@ class XcodeProjectInterpreter {
   /// Returns `/usr/bin/arch -arm64e xcrun` on ARM macOS to force Xcode commands
   /// to run outside the x86 Rosetta translation, which may cause crashes.
   List<String> xcrunCommand() {
-    final List<String> xcrunCommand = <String>[];
+    final xcrunCommand = <String>[];
     if (_operatingSystemUtils.hostPlatform == HostPlatform.darwin_arm64) {
       // Force Xcode commands to run outside Rosetta.
       xcrunCommand.addAll(<String>['/usr/bin/arch', '-arm64e']);
@@ -182,8 +176,8 @@ class XcodeProjectInterpreter {
   /// Asynchronously retrieve xcode build settings. This one is preferred for
   /// new call-sites.
   ///
-  /// If [scheme] is null, xcodebuild will return build settings for the first discovered
-  /// target (by default this is Runner).
+  /// If [XcodeProjectBuildContext.scheme] is `null`, `xcodebuild` will
+  /// return build settings for the first discovered target (by default this is Runner).
   Future<Map<String, String>> getBuildSettings(
     String projectPath, {
     required XcodeProjectBuildContext buildContext,
@@ -199,7 +193,7 @@ class XcodeProjectInterpreter {
       XcodeSdk.IPhoneOS || XcodeSdk.IPhoneSimulator => getIosBuildDirectory(),
       XcodeSdk.WatchOS || XcodeSdk.WatchSimulator => getIosBuildDirectory(),
     };
-    final List<String> showBuildSettingsCommand = <String>[
+    final showBuildSettingsCommand = <String>[
       ...xcrunCommand(),
       'xcodebuild',
       '-project',
@@ -207,18 +201,12 @@ class XcodeProjectInterpreter {
       if (scheme != null) ...<String>['-scheme', scheme],
       if (configuration != null) ...<String>['-configuration', configuration],
       if (target != null) ...<String>['-target', target],
-      if (buildContext.sdk == XcodeSdk.IPhoneSimulator) ...<String>['-sdk', 'iphonesimulator'],
+      if (buildContext.sdk == XcodeSdk.IPhoneSimulator) ...<String>[
+        '-sdk',
+        XcodeSdk.IPhoneSimulator.platformName,
+      ],
       '-destination',
-      if (deviceId != null)
-        'id=$deviceId'
-      else
-        switch (buildContext.sdk) {
-          XcodeSdk.IPhoneOS => 'generic/platform=iOS',
-          XcodeSdk.IPhoneSimulator => 'generic/platform=iOS Simulator',
-          XcodeSdk.MacOSX => 'generic/platform=macOS',
-          XcodeSdk.WatchOS => 'generic/platform=watchOS',
-          XcodeSdk.WatchSimulator => 'generic/platform=watchOS Simulator',
-        },
+      if (deviceId != null) 'id=$deviceId' else buildContext.sdk.genericPlatform,
       '-showBuildSettings',
       'BUILD_DIR=${_fileSystem.path.absolute(buildDir)}',
       ...environmentVariablesAsXcodeBuildSettings(_platform),
@@ -243,12 +231,6 @@ class XcodeProjectInterpreter {
           XcodeSdk.IPhoneOS || XcodeSdk.IPhoneSimulator => 'ios',
           XcodeSdk.WatchOS || XcodeSdk.WatchSimulator => 'watchos',
         };
-        BuildEvent(
-          'xcode-show-build-settings-timeout',
-          type: eventType,
-          command: showBuildSettingsCommand.join(' '),
-          flutterUsage: _usage,
-        ).send();
         _analytics.send(
           Event.flutterBuildInfo(
             label: 'xcode-show-build-settings-timeout',
@@ -277,12 +259,12 @@ class XcodeProjectInterpreter {
     }
     final Status status = _logger.startSpinner();
     final String buildDirectory = _fileSystem.path.absolute(getIosBuildDirectory());
-    final List<String> showBuildSettingsCommand = <String>[
+    final showBuildSettingsCommand = <String>[
       ...xcrunCommand(),
       'xcodebuild',
       '-alltargets',
       '-sdk',
-      'iphonesimulator',
+      XcodeSdk.IPhoneSimulator.platformName,
       '-project',
       podXcodeProject.path,
       '-showBuildSettings',
@@ -306,12 +288,6 @@ class XcodeProjectInterpreter {
       return result.stdout.trim();
     } on Exception catch (error) {
       if (error is ProcessException && error.toString().contains('timed out')) {
-        BuildEvent(
-          'xcode-show-build-settings-timeout',
-          type: 'ios',
-          command: showBuildSettingsCommand.join(' '),
-          flutterUsage: _usage,
-        ).send();
         _analytics.send(
           Event.flutterBuildInfo(
             label: 'xcode-show-build-settings-timeout',
@@ -345,9 +321,9 @@ class XcodeProjectInterpreter {
     // The exit code returned by 'xcodebuild -list' when either:
     // * -project is passed and the given project isn't there, or
     // * no -project is passed and there isn't a project.
-    const int missingProjectExitCode = 66;
+    const missingProjectExitCode = 66;
     // The exit code returned by 'xcodebuild -list' when the project is corrupted.
-    const int corruptedProjectExitCode = 74;
+    const corruptedProjectExitCode = 74;
     bool allowedFailures(int c) => c == missingProjectExitCode || c == corruptedProjectExitCode;
     final RunResult result = await _processUtils.run(
       <String>[
@@ -373,7 +349,7 @@ class XcodeProjectInterpreter {
 /// for or be aware of each one. This could be used to set code signing build settings in a CI
 /// environment without requiring settings changes in the Xcode project.
 List<String> environmentVariablesAsXcodeBuildSettings(Platform platform) {
-  const String xcodeBuildSettingPrefix = 'FLUTTER_XCODE_';
+  const xcodeBuildSettingPrefix = 'FLUTTER_XCODE_';
   return platform.environment.entries
       .where((MapEntry<String, String> mapEntry) {
         return mapEntry.key.startsWith(xcodeBuildSettingPrefix);
@@ -389,10 +365,9 @@ List<String> environmentVariablesAsXcodeBuildSettings(Platform platform) {
 }
 
 Map<String, String> parseXcodeBuildSettings(String showBuildSettingsOutput) {
-  final Map<String, String> settings = <String, String>{};
-  for (final Match? match in showBuildSettingsOutput
-      .split('\n')
-      .map<Match?>(_settingExpr.firstMatch)) {
+  final settings = <String, String>{};
+  for (final Match? match
+      in showBuildSettingsOutput.split('\n').map<Match?>(_settingExpr.firstMatch)) {
     if (match != null) {
       settings[match[1]!] = match[2]!;
     }
@@ -413,7 +388,34 @@ String substituteXcodeVariables(String str, Map<String, String> xcodeBuildSettin
 
 /// Xcode SDKs. Corresponds to undocumented Xcode SUPPORTED_PLATFORMS values.
 /// Use `xcodebuild -showsdks` to get a list of SDKs installed on your machine.
-enum XcodeSdk { IPhoneOS, IPhoneSimulator, MacOSX, WatchOS, WatchSimulator }
+enum XcodeSdk {
+  IPhoneOS(displayName: 'iOS', platformName: 'iphoneos', sdkType: EnvironmentType.physical),
+  IPhoneSimulator(
+    displayName: 'iOS Simulator',
+    platformName: 'iphonesimulator',
+    sdkType: EnvironmentType.simulator,
+  ),
+  MacOSX(displayName: 'macOS', platformName: 'macosx', sdkType: EnvironmentType.physical),
+  WatchOS(displayName: 'watchOS', platformName: 'watchos', sdkType: EnvironmentType.physical),
+  WatchSimulator(
+    displayName: 'watchOS Simulator',
+    platformName: 'watchsimulator',
+    sdkType: EnvironmentType.simulator,
+  );
+
+  const XcodeSdk({required this.displayName, required this.platformName, required this.sdkType});
+
+  /// Corresponds to Xcode value PLATFORM_DISPLAY_NAME.
+  final String displayName;
+
+  /// Corresponds to Xcode value PLATFORM_NAME.
+  final String platformName;
+
+  /// The [EnvironmentType] for the sdk (simulator, physical).
+  final EnvironmentType sdkType;
+
+  String get genericPlatform => 'generic/platform=$displayName';
+}
 
 @immutable
 class XcodeProjectBuildContext {
@@ -456,9 +458,9 @@ class XcodeProjectInfo {
     : _logger = logger;
 
   factory XcodeProjectInfo.fromXcodeBuildOutput(String output, Logger logger) {
-    final List<String> targets = <String>[];
-    final List<String> buildConfigurations = <String>[];
-    final List<String> schemes = <String>[];
+    final targets = <String>[];
+    final buildConfigurations = <String>[];
+    final schemes = <String>[];
     List<String>? collector;
     for (final String line in output.split('\n')) {
       if (line.isEmpty) {
@@ -506,14 +508,14 @@ class XcodeProjectInfo {
 
   /// Checks whether the [buildConfigurations] contains the specified string, without
   /// regard to case.
-  bool hasBuildConfigurationForBuildMode(String buildMode) {
+  String? _existingBuildConfigurationForBuildMode(String buildMode) {
     buildMode = buildMode.toLowerCase();
     for (final String name in buildConfigurations) {
       if (name.toLowerCase() == buildMode) {
-        return true;
+        return name;
       }
     }
-    return false;
+    return null;
   }
 
   /// Returns unique scheme matching [buildInfo], or null, if there is no unique
@@ -547,8 +549,11 @@ class XcodeProjectInfo {
       return null;
     }
     final String expectedConfiguration = expectedBuildConfigurationFor(buildInfo, scheme);
-    if (hasBuildConfigurationForBuildMode(expectedConfiguration)) {
-      return expectedConfiguration;
+    final String? buildConfigurationForBuildMode = _existingBuildConfigurationForBuildMode(
+      expectedConfiguration,
+    );
+    if (buildConfigurationForBuildMode != null) {
+      return buildConfigurationForBuildMode;
     }
     final String baseConfiguration = _baseConfigurationFor(buildInfo);
     return _uniqueMatch(buildConfigurations, (String candidate) {
